@@ -1,0 +1,35 @@
+services:
+  arcadebox:
+    build:
+      context: ..                        # dossier parent = workspace/
+      dockerfile: ArcadeBox/Dockerfile
+    image: arcadebox:latest
+    container_name: arcadebox
+    hostname: ArcadeBox
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - TITLE=ArcadeBox
+      - RESOLUTION=1920x1080x60         # WxHxRefreshRate
+      - DISPLAY_CDEPTH=24
+      # PIXELFLUX_WAYLAND n'est PAS défini → mode X11 / Openbox
+    volumes:
+      - ./config:/config                 # configs + home utilisateur
+      - ./userdata:/userdata               # ROMs, BIOS, saves (Batocera layout)
+    ports:
+      - "3001:3001"                      # Selkies HTTPS — accès navigateur
+      - "3000:3000"                      # Selkies HTTP (proxy)
+    devices:
+      - /dev/dri:/dev/dri                # GPU (Intel / AMD)
+      - /dev/fuse:/dev/fuse              # FUSE pour wsquashfs-launcher
+      - /dev/uinput:/dev/uinput          # Steam Link — création manettes virtuelles
+    device_cgroup_rules:
+      - 'c 13:* rmw'                     # Accès à tout /dev/input/* (major 13 = input)
+    cap_add:
+      - SYS_ADMIN                        # nécessaire pour fuse-overlayfs
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    shm_size: "1gb"
+    restart: unless-stopped

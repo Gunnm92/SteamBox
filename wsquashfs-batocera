@@ -1,0 +1,814 @@
+#!/bin/bash
+# wsquashfs-batocera — Lanceur wsquashfs ArcadeBox / Batocera
+#
+# Réutilise les Wine runners et les bottles dans /userdata/system/ (Batocera layout).
+# Les sauvegardes sont partagées entre Batocera et ArcadeBox.
+#
+# Bottle : BATOCERA_BOTTLES_DIR/<runner>/<jeu>.wsquashfs.wine
+# Runner  : BATOCERA_WINE_DIR/<runner>/bin/wine
+
+BATOCERA_WINE_DIR="${WSQUASHFS_WINE_DIR:-/userdata/system/wine/custom}"
+BATOCERA_BOTTLES_DIR="${WSQUASHFS_BOTTLES_DIR:-/userdata/system/wine-bottles/windows}"
+BATOCERA_CONF="${WSQUASHFS_BATOCERA_CONF:-/userdata/system/batocera.conf}"
+# Cache dans /tmp (par uid) pour éviter les conflits de propriété entre users/sessions
+CACHE_DIR="${WSQUASHFS_CACHE:-/tmp/wsquashfs-batocera-$(id -u)}"
+
+# ── Fonctions utilitaires ─────────────────────────────────────────────────────
+
+do_umount() {
+    fusermount -u "$1" 2>/dev/null || fusermount3 -u "$1" 2>/dev/null || umount -l "$1" 2>/dev/null || umount "$1" 2>/dev/null || true
+}
+
+read_autorun_var() {
+    local file="$1" key="$2" default="${3:-}"
+    local val
+    val=$(grep "^${key}=" "$file" 2>/dev/null | head -1 | sed "s/^${key}=//" | tr -d '\r')
+    echo "${val:-$default}"
+}
+
+# Lecture batocera.conf : priorité per-game > system > global
+# read_batocera_conf <system> <game_filename> <key>
+read_batocera_conf() {
+    local system="$1" game_file="$2" key="$3"
+    local conf="$BATOCERA_CONF"
+    [[ -f "$conf" ]] || return
+    # Per-game : system["game.wsquashfs"].key=val
+    local per_game
+    per_game=$(grep -F "${system}[\"${game_file}\"].${key}=" "$conf" 2>/dev/null \
+               | tail -1 | sed "s/.*${key}=//" | tr -d '\r # ' | cut -d'#' -f1)
+    [[ -n "$per_game" ]] && echo "$per_game" && return
+    # System-level : system.key=val
+    local sys_val
+    sys_val=$(grep "^${system}\.${key}=" "$conf" 2>/dev/null \
+              | tail -1 | sed "s/.*${key}=//" | tr -d '\r # ' | cut -d'#' -f1)
+    [[ -n "$sys_val" ]] && echo "$sys_val" && return
+    # Global : global.key=val
+    local global_val
+    global_val=$(grep "^global\.${key}=" "$conf" 2>/dev/null \
+                 | tail -1 | sed "s/.*${key}=//" | tr -d '\r # ' | cut -d'#' -f1)
+    echo "$global_val"
+}
+
+# /usr/wine/ge-custom/bin/wine → ge-custom
+runner_from_path() {
+    basename "$(dirname "$(dirname "$1")")"
+}
+
+# Cherche le binaire wine : système si runner=wine/wine-staging, sinon custom puis fallback système
+find_wine_binary() {
+    local runner_name="$1"
+    # "wine" ou "wine-staging" = Wine système explicitement demandé → skip custom
+    case "$runner_name" in
+        wine|wine-staging|system)
+            for fb in /opt/wine-staging/bin/wine /usr/bin/wine; do
+                [[ -x "$fb" ]] && echo "$fb" && return
+            done
+            command -v wine; return
+            ;;
+    esac
+    # Chemin exact dans custom
+    local exact="${BATOCERA_WINE_DIR}/${runner_name}/bin/wine"
+    [[ -x "$exact" ]] && echo "$exact" && return
+    # Glob partiel (ex: wine-9.17 dans wine-9.17-amd64)
+    local found
+    found=$(find "$BATOCERA_WINE_DIR" -maxdepth 2 -name "wine" -path "*/bin/wine" 2>/dev/null \
+            | grep -i "$runner_name" | head -1)
+    [[ -n "$found" && -x "$found" ]] && echo "$found" && return
+    # Runner inconnu dans custom : fallback Wine système
+    for fb in /opt/wine-staging/bin/wine /usr/bin/wine; do
+        [[ -x "$fb" ]] && echo "$fb" && return
+    done
+    command -v wine
+}
+
+detect_prefix_arch() {
+    grep -q '"#arch"="win32"' "${WINEPOINT}/system.reg" 2>/dev/null && echo "win32" || echo "win64"
+}
+
+detect_wine_username() {
+    local users_dir="${WINEPOINT}/drive_c/users"
+    [[ -d "$users_dir" ]] || return
+    local name
+    for d in "$users_dir"/*/; do
+        name=$(basename "$d")
+        case "$name" in Public|"All Users"|"Default User"|LocalService|NetworkService) continue ;; esac
+        [[ -d "$d" ]] && echo "$name" && return
+    done
+}
+
+apply_wine_env() {
+    local pair
+    while IFS= read -r pair; do
+        [[ "$pair" =~ ^[A-Za-z_][A-Za-z0-9_]*=.* ]] && export "$pair" || true
+    done <<< "$(tr ' ' '\n' <<< "$1")"
+}
+
+stop_wineserver() {
+    # Utilise le wineserver système : stable sur tous les runners, compatible cross-version.
+    local prefix="${WINEPOINT:-${BOTTLE:-}}"
+    WINEPREFIX="$prefix" /usr/bin/wineserver -k 2>/dev/null || true
+    local i=0
+    while (( i++ < 10 )); do
+        WINEPREFIX="$prefix" /usr/bin/wineserver -w 2>/dev/null && return
+        sleep 1
+    done
+}
+
+# Copie les DLLs Wine manquantes depuis le runner vers la bottle (upperdir fuse-overlayfs).
+# Vérifie d'abord dans BOTTLE (upperdir, rapide). Si absent de BOTTLE, vérifie via l'overlay
+# (inclut le lower squashfs) pour ne pas écraser les DLLs déjà fournies par le jeu.
+# Premier lancement : copie initiale (~2000 DLLs). Suivants : tout dans BOTTLE → skip rapide.
+sync_wine_stubs() {
+    local wine_bin="$1" target_root="$2"
+    local wine_root
+    wine_root=$(dirname "$(dirname "$(readlink -f "$wine_bin")")")
+    local src_dirs=(
+        "${wine_root}/lib/wine/x86_64-windows:system32"
+        "${wine_root}/lib64/wine/x86_64-windows:system32"
+        "${wine_root}/lib/wine/i386-windows:syswow64"
+        "/usr/lib/x86_64-linux-gnu/wine/x86_64-windows:system32"
+        "/usr/lib/x86_64-linux-gnu/wine/i386-windows:syswow64"
+    )
+    for entry in "${src_dirs[@]}"; do
+        local src_dir="${entry%%:*}" dst_subdir="${entry##*:}"
+        [[ -d "$src_dir" ]] || continue
+        local dst_dir="${target_root}/drive_c/windows/${dst_subdir}"
+        mkdir -p "$dst_dir" 2>/dev/null || true
+        for src in "$src_dir"/*.dll; do
+            [[ -f "$src" ]] || continue
+            local name="${src##*/}"
+            # 1. Check dans BOTTLE (upperdir) — copie si runner est plus grand (stub ou version périmée)
+            if [[ -f "${dst_dir}/${name}" ]]; then
+                local bot_size src_size_b
+                bot_size=$(stat -c '%s' "${dst_dir}/${name}" 2>/dev/null || echo 0)
+                src_size_b=$(stat -c '%s' "$src" 2>/dev/null || echo 0)
+                [[ "$src_size_b" -le "$bot_size" ]] && continue
+                rm -f "${dst_dir}/${name}" 2>/dev/null || true
+            fi
+            # 2. Check via overlay (lower squashfs inclus).
+            # Ne copie que si le runner fournit une version plus grande (stubs 4KB ou DLLs périmées).
+            # Ne jamais écraser une DLL Windows native ("for MS Windows") avec une DLL built-in wine
+            # ("for WINE") — le loader Wine échoue à charger un built-in en mode natif.
+            local ovl_file="${WINEPOINT}/drive_c/windows/${dst_subdir}/${name}"
+            if [[ -f "$ovl_file" ]]; then
+                if file "$ovl_file" 2>/dev/null | grep -q "for MS Windows"; then
+                    continue
+                fi
+                local ovl_size src_size
+                ovl_size=$(stat -c '%s' "$ovl_file" 2>/dev/null || echo 0)
+                src_size=$(stat -c '%s' "$src" 2>/dev/null || echo 0)
+                [[ "$src_size" -le "$ovl_size" ]] && continue
+            fi
+            [[ -L "${dst_dir}/${name}" ]] && rm -f "${dst_dir}/${name}" 2>/dev/null || true
+            cp "$src" "${dst_dir}/${name}" 2>/dev/null || true
+        done
+    done
+
+    # Fix stubs comctl32 dans WinSxS (le loader Wine préfère WinSxS à system32/syswow64).
+    # Le squashfs peut contenir de vieilles versions (253KB) qui échouent à charger.
+    local winsxs_root="${WINEPOINT}/drive_c/windows/winsxs"
+    if [[ -d "$winsxs_root" ]]; then
+        local winsxs_dir
+        while IFS= read -r -d '' winsxs_dir; do
+            local dir_name arch_prefix src_dll
+            dir_name=$(basename "$winsxs_dir")
+            arch_prefix="${dir_name%%_*}"
+            case "$arch_prefix" in
+                x86)   src_dll="${wine_root}/lib/wine/i386-windows/comctl32.dll" ;;
+                amd64) src_dll="${wine_root}/lib/wine/x86_64-windows/comctl32.dll" ;;
+                *)     continue ;;
+            esac
+            [[ -f "$src_dll" ]] || continue
+            local target_winsxs="${target_root}/drive_c/windows/winsxs/${dir_name}"
+            mkdir -p "$target_winsxs" 2>/dev/null || true
+            local target_dll="${target_winsxs}/comctl32.dll"
+            if [[ -f "$target_dll" ]]; then
+                local tw_size tw_src_size
+                tw_size=$(stat -c '%s' "$target_dll" 2>/dev/null || echo 0)
+                tw_src_size=$(stat -c '%s' "$src_dll" 2>/dev/null || echo 0)
+                [[ "$tw_src_size" -le "$tw_size" ]] && continue
+                rm -f "$target_dll" 2>/dev/null || true
+            fi
+            # Supprimer le whiteout éventuel pour éviter le conflit fuse-overlayfs
+            rm -f "${target_winsxs}/.wh.comctl32.dll" 2>/dev/null || true
+            cp "$src_dll" "$target_dll" 2>/dev/null || true
+        done < <(find "$winsxs_root" -maxdepth 1 -type d -iname "*common-controls*" -print0 2>/dev/null)
+    fi
+}
+
+# Copie les DLL natives winetricks de la base prefix dans la BOTTLE (upperdir).
+# Nécessaire car fuse-overlayfs avec lowerdir=squashfs:base_prefix ne fusionne pas les fichiers —
+# les stubs wine du squashfs cachent les DLL natives de la base prefix.
+sync_base_prefix_natives() {
+    local base_prefix="$1" bottle="$2" winepoint="$3"
+    [[ -d "$base_prefix" && -f "${base_prefix}/user.reg" ]] || return 0
+
+    # Récupérer la liste des DLL marquées "native" dans la base prefix
+    local native_dlls
+    native_dlls=$(sed -n '/^\[Software\\\\Wine\\\\DllOverrides\]/,/^\[/{
+        /^\[Software\\\\Wine\\\\DllOverrides\]/d
+        /^\[/d
+        /^"/p
+    }' "${base_prefix}/user.reg" \
+    | sed 's/^"\*\?\([^"]*\)"="\([^"]*\)".*/\1/' \
+    | grep -iv "^api-ms-\|^atl\|^concrt\|^cscript\|^mfc\|^msvcr\|^msvcp\|^ucrt\|^pidgen")
+
+    # Vérifie si un fichier est une DLL Windows native (pas wine built-in)
+    _is_native() { file "$1" 2>/dev/null | grep -q "for MS Windows"; }
+
+    for dll in $native_dlls; do
+        local src_is_native=false
+        for subdir in system32 syswow64; do
+            local src="${base_prefix}/drive_c/windows/${subdir}/${dll}.dll"
+            [[ -f "$src" ]] || continue
+            # Ne copier que les DLL natives (pas les built-ins wine de la base prefix)
+            _is_native "$src" || continue
+            local dst_dir="${bottle}/drive_c/windows/${subdir}"
+            local dst="${dst_dir}/${dll}.dll"
+            # Remplacer si la BOTTLE a un built-in wine (toujours perdant face à une vraie native)
+            if [[ -f "$dst" ]]; then
+                _is_native "$dst" && continue  # déjà une native → skip
+                rm -f "$dst" 2>/dev/null || true  # built-in wine → on le remplace
+            fi
+            # Skip si l'overlay expose déjà une native >= taille src
+            local ovl="${winepoint}/drive_c/windows/${subdir}/${dll}.dll"
+            if [[ -f "$ovl" ]] && _is_native "$ovl"; then
+                local ovl_sz src_sz
+                ovl_sz=$(stat -c '%s' "$ovl" 2>/dev/null || echo 0)
+                src_sz=$(stat -c '%s' "$src" 2>/dev/null || echo 0)
+                [[ "$src_sz" -le "$ovl_sz" ]] && continue
+            fi
+            mkdir -p "$dst_dir" 2>/dev/null || true
+            cp "$src" "$dst" 2>/dev/null || true
+        done
+    done
+    unset -f _is_native
+
+    # Copier aussi les entrées WinSxS (gdiplus, etc.)
+    local winsxs_src="${base_prefix}/drive_c/windows/winsxs"
+    local winsxs_dst_root="${bottle}/drive_c/windows/winsxs"
+    if [[ -d "$winsxs_src" ]]; then
+        for dll in $native_dlls; do
+            while IFS= read -r -d '' src_winsxs_dir; do
+                local dir_name
+                dir_name=$(basename "$src_winsxs_dir")
+                local dst_winsxs="${winsxs_dst_root}/${dir_name}"
+                local src_dll="${src_winsxs_dir}/${dll}.dll"
+                local dst_dll="${dst_winsxs}/${dll}.dll"
+                [[ -f "$src_dll" ]] || continue
+                [[ -f "$dst_dll" ]] && continue
+                mkdir -p "$dst_winsxs" 2>/dev/null || true
+                cp "$src_dll" "$dst_dll" 2>/dev/null || true
+            done < <(find "$winsxs_src" -maxdepth 1 -type d -iname "*${dll}*" -print0 2>/dev/null)
+        done
+    fi
+}
+
+
+# ── Variables globales ─────────────────────────────────────────────────────────
+
+MOUNTED=false
+MOUNT_ONLY=false
+SQUASHFSPOINT=""
+WINEPOINT=""
+WORKPOINT=""
+
+cleanup() {
+    local exit_code=$?
+    trap - EXIT INT TERM
+    if [[ "$MOUNTED" == true ]]; then
+        stop_wineserver
+
+        # Contournement EXDEV fuse-overlayfs : wineserver ne peut pas renommer reg*.tmp → *.reg
+        # via l'overlay. On applique les saves directement dans BOTTLE (répertoire réel) après
+        # que wineserver a libéré les fichiers.
+        for tmp in "${BOTTLE}"/reg*.tmp; do
+            [[ -f "$tmp" ]] || continue
+            # Identifier le fichier cible d'après la 2e ligne de l'en-tête WINE REGISTRY
+            local hdr; hdr=$(sed -n '2p' "$tmp" 2>/dev/null)
+            if [[ "$hdr" == *'\\Machine'* ]]; then
+                mv -f "$tmp" "${BOTTLE}/system.reg"  2>/dev/null || true
+            elif [[ "$hdr" == *'\.Default'* ]]; then
+                mv -f "$tmp" "${BOTTLE}/userdef.reg" 2>/dev/null || true
+            elif [[ "$hdr" == *'\\User'* ]]; then
+                mv -f "$tmp" "${BOTTLE}/user.reg"    2>/dev/null || true
+            else
+                rm -f "$tmp" 2>/dev/null || true
+            fi
+        done
+
+        do_umount "$WINEPOINT"
+        do_umount "$SQUASHFSPOINT"
+        [[ -d "$WORKPOINT" ]] && rm -rf "$WORKPOINT"
+    fi
+    exit $exit_code
+}
+
+trap cleanup EXIT INT TERM
+
+# ── Arguments ─────────────────────────────────────────────────────────────────
+
+while [[ "${1:-}" == --* ]]; do
+    case "$1" in
+        --help|-h)
+            cat <<'HELP'
+Usage: wsquashfs-batocera [options] <fichier.wsquashfs>
+
+Lance un jeu .wsquashfs en réutilisant les Wine runners et bottles Batocera.
+Les sauvegardes sont partagées avec Batocera.
+
+Options :
+  --runner <nom>           Force le runner Wine pour ce lancement
+                           ex: --runner wine-tkg
+                               --runner wine-ge-proton10-34
+  --mount                  Monte l'image et ouvre un shell interactif (sans lancer le jeu)
+  --gamescope              Active gamescope pour ce lancement
+  --no-gamescope           Désactive gamescope pour ce lancement
+
+Variables d'environnement :
+  WSQUASHFS_RUNNER         Force le runner Wine (priorité sur autorun.cmd et batocera.conf)
+  WSQUASHFS_GAMESCOPE      Active gamescope (1=activé)
+  WSQUASHFS_GAMESCOPE_ARGS Arguments gamescope supplémentaires (ex: "--hdr-enabled")
+  WSQUASHFS_WINE_DIR       Répertoire des Wine runners (défaut: /userdata/system/wine/custom)
+  WSQUASHFS_BOTTLES_DIR    Répertoire des bottles (défaut: /userdata/system/wine-bottles/windows)
+  WSQUASHFS_VIRTUAL_DESKTOP  Bureau virtuel Wine pour tous les jeux (ex: 1920x1080)
+  WSQUASHFS_CACHE          Répertoire temporaire (défaut: /tmp/wsquashfs-batocera-<uid>)
+HELP
+            exit 0
+            ;;
+        --mount)
+            MOUNT_ONLY=true
+            shift
+            ;;
+        --runner)
+            [[ -z "${2:-}" ]] && { echo "Erreur : --runner attend un nom de runner"; exit 1; }
+            WSQUASHFS_RUNNER="$2"
+            shift 2
+            ;;
+        --gamescope)
+            WSQUASHFS_GAMESCOPE=1
+            shift
+            ;;
+        --no-gamescope)
+            WSQUASHFS_GAMESCOPE=0
+            shift
+            ;;
+        *)
+            echo "Option inconnue : $1"
+            echo "Usage : $0 [--runner <runner>] [--mount] [--gamescope] <fichier.wsquashfs>"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage : $0 [--runner <runner>] [--mount] [--gamescope] <fichier.wsquashfs>"
+    exit 1
+fi
+
+WSQUASHFS_FILE=$(realpath "$1" 2>/dev/null) || { echo "Erreur : chemin introuvable : $1"; exit 1; }
+[[ "${WSQUASHFS_FILE##*.}" == "wsquashfs" ]] || { echo "Erreur : extension .wsquashfs attendue"; exit 1; }
+[[ -f "$WSQUASHFS_FILE" ]] || { echo "Erreur : fichier introuvable : $WSQUASHFS_FILE"; exit 1; }
+
+if ! command -v squashfuse &>/dev/null && ! command -v unsquashfs &>/dev/null; then
+    echo "Erreur : squashfuse ou unsquashfs requis"
+    exit 1
+fi
+if ! command -v fuse-overlayfs &>/dev/null; then
+    echo "Erreur : fuse-overlayfs requis (cap_add: [SYS_ADMIN] dans docker-compose)"
+    exit 1
+fi
+
+GAME_NAME=$(basename "$WSQUASHFS_FILE" .wsquashfs)
+# Système Batocera déduit du chemin du fichier (roms/<system>/game.wsquashfs)
+GAME_SYSTEM=$(basename "$(dirname "$WSQUASHFS_FILE")")
+SQUASHFSPOINT="${CACHE_DIR}/mnt/${GAME_NAME}"
+WORKPOINT="${CACHE_DIR}/work/${GAME_NAME}"
+WINEPOINT="${CACHE_DIR}/wine/${GAME_NAME}"
+
+# ── Phase 1 : montage squashfs pour lecture de autorun.cmd ────────────────────
+
+# Nettoyage systématique des mounts stale (session précédente interrompue)
+do_umount "$WINEPOINT"
+do_umount "$SQUASHFSPOINT"
+# Nettoyer aussi les mounts stale des autres jeux dans le cache (pattern générique par uid)
+grep -oP "(?<= )/tmp/wsquashfs-batocera-[0-9]+/(wine|mnt)/[^ ]+" /proc/mounts 2>/dev/null | while read -r mp; do
+    do_umount "$mp"
+done
+
+# Recréer les mount points pour garantir la propriété correcte (évite Permission denied si
+# une session précédente les avait créés sous un autre uid)
+rm -rf "$SQUASHFSPOINT" "$WINEPOINT"
+mkdir -p "$SQUASHFSPOINT" "$WINEPOINT"
+
+SQUASHFUSE_UID=$(id -u)
+SQUASHFUSE_GID=$(id -g)
+# uid/gid : remplace les propriétaires squashfs (souvent steamuser/1000 Batocera) par l'utilisateur courant
+# Nécessaire pour que Wine accepte le WINEPREFIX (vérifie la propriété du répertoire)
+if ! squashfuse -o "uid=${SQUASHFUSE_UID},gid=${SQUASHFUSE_GID}" \
+        "$WSQUASHFS_FILE" "$SQUASHFSPOINT" 2>&1 | grep -v "^$"; then
+    if ! mountpoint -q "$SQUASHFSPOINT" 2>/dev/null; then
+        echo "Erreur : squashfuse échoué sur $WSQUASHFS_FILE"
+        exit 1
+    fi
+fi
+if ! mountpoint -q "$SQUASHFSPOINT" 2>/dev/null; then
+    echo "Erreur : squashfuse échoué sur $WSQUASHFS_FILE"
+    exit 1
+fi
+
+AUTORUN_FILE="${SQUASHFSPOINT}/autorun.cmd"
+[[ -f "$AUTORUN_FILE" ]] || { echo "Erreur : autorun.cmd introuvable dans le wsquashfs"; exit 1; }
+
+# ── Phase 2 : lecture autorun.cmd et résolution du runner ─────────────────────
+
+RUNNER_RAW=$(read_autorun_var "$AUTORUN_FILE" "RUNNER")
+WINE_VAL=$(read_autorun_var   "$AUTORUN_FILE" "WINE")
+CMD=$(read_autorun_var        "$AUTORUN_FILE" "CMD")
+DIR=$(read_autorun_var        "$AUTORUN_FILE" "DIR")
+WINE_ARCH=$(read_autorun_var  "$AUTORUN_FILE" "ARCH")
+DXVK=$(read_autorun_var      "$AUTORUN_FILE" "DXVK"  "")
+VKD3D=$(read_autorun_var     "$AUTORUN_FILE" "VKD3D" "")
+ESYNC=$(read_autorun_var     "$AUTORUN_FILE" "ESYNC" "")
+FSYNC=$(read_autorun_var     "$AUTORUN_FILE" "FSYNC" "")
+WINE_LANG=$(read_autorun_var "$AUTORUN_FILE" "LANG")
+WINE_ENV=$(read_autorun_var  "$AUTORUN_FILE" "ENV")
+VIRTUAL_DESKTOP=$(read_autorun_var "$AUTORUN_FILE" "VIRTUAL_DESKTOP" "${WSQUASHFS_VIRTUAL_DESKTOP:-}")
+VGL=$(read_autorun_var             "$AUTORUN_FILE" "VGL" "")
+GAMESCOPE=$(read_autorun_var       "$AUTORUN_FILE" "GAMESCOPE" "${WSQUASHFS_GAMESCOPE:-0}")
+GAMESCOPE_ARGS_RAW=$(read_autorun_var "$AUTORUN_FILE" "GAMESCOPE_ARGS" "${WSQUASHFS_GAMESCOPE_ARGS:-}")
+
+# Runner name : extrait du chemin RUNNER= ou de WINE=, défaut wine système
+if [[ -n "$RUNNER_RAW" ]]; then
+    RUNNER_NAME=$(runner_from_path "$RUNNER_RAW")
+elif [[ -n "$WINE_VAL" ]]; then
+    RUNNER_NAME="$WINE_VAL"
+else
+    RUNNER_NAME="wine"
+fi
+
+# Lecture batocera.conf — applique les réglages système/globaux si non définis par autorun.cmd
+GAME_FILE=$(basename "$WSQUASHFS_FILE")
+BC_RUNNER=$(read_batocera_conf "$GAME_SYSTEM" "$GAME_FILE" "wine-runner")
+BC_DXVK=$(read_batocera_conf   "$GAME_SYSTEM" "$GAME_FILE" "dxvk")
+BC_VKD3D=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "vkd3d")
+BC_ESYNC=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "esync")
+BC_FSYNC=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "fsync")
+BC_VGL=$(read_batocera_conf    "$GAME_SYSTEM" "$GAME_FILE" "vgl")
+
+# autorun.cmd a priorité ; batocera.conf complète si non défini
+[[ -z "$RUNNER_RAW" && -z "$WINE_VAL" && -n "$BC_RUNNER" ]] && RUNNER_NAME="$BC_RUNNER"
+
+# WSQUASHFS_RUNNER : priorité absolue sur autorun.cmd et batocera.conf
+[[ -n "${WSQUASHFS_RUNNER:-}" ]] && RUNNER_NAME="$WSQUASHFS_RUNNER"
+[[ -z "$DXVK"  && -n "$BC_DXVK"  ]] && DXVK="$BC_DXVK"
+[[ -z "$VKD3D" && -n "$BC_VKD3D" ]] && VKD3D="$BC_VKD3D"
+[[ -z "$ESYNC" && -n "$BC_ESYNC" ]] && ESYNC="$BC_ESYNC"
+[[ -z "$FSYNC" && -n "$BC_FSYNC" ]] && FSYNC="$BC_FSYNC"
+[[ -z "$VGL"   && -n "$BC_VGL"   ]] && VGL="$BC_VGL"
+# Valeur par défaut si ni autorun.cmd ni batocera.conf ne définissent
+DXVK="${DXVK:-0}"; VKD3D="${VKD3D:-0}"; ESYNC="${ESYNC:-0}"; FSYNC="${FSYNC:-0}"
+
+[[ -z "$CMD" ]] && { echo "Erreur : CMD non défini dans autorun.cmd"; exit 1; }
+
+# ── Phase 3 : chemins définitifs ──────────────────────────────────────────────
+
+BOTTLE="${BATOCERA_BOTTLES_DIR}/${RUNNER_NAME}/${GAME_NAME}.wsquashfs.wine"
+WINE_BINARY=$(find_wine_binary "$RUNNER_NAME")
+
+[[ -n "$WINE_BINARY" && -x "$WINE_BINARY" ]] || {
+    echo "Erreur : aucun binaire Wine trouvé pour le runner '${RUNNER_NAME}'"
+    echo "  → Runners disponibles : $(ls "$BATOCERA_WINE_DIR" 2>/dev/null | tr '\n' ' ')"
+    exit 1
+}
+
+echo "========================================="
+echo "WSquashFS Batocera Launcher"
+echo "========================================="
+echo "Jeu           : $GAME_NAME"
+echo "Runner        : $RUNNER_NAME"
+echo "Wine          : $WINE_BINARY"
+echo "Bottle        : $BOTTLE"
+
+# ── Phase 3b : arch et pré-initialisation du préfixe ──────────────────────────
+
+# Résoudre WINE_ARCH maintenant (avant overlay) pour que wineboot init soit correct
+if [[ -z "$WINE_ARCH" ]]; then
+    if grep -q '"#arch"="win32"' "${SQUASHFSPOINT}/system.reg" 2>/dev/null; then
+        WINE_ARCH="win32"
+    else
+        WINE_ARCH="win64"
+    fi
+fi
+
+mkdir -p "$BOTTLE"
+
+if [[ "$MOUNT_ONLY" != "true" ]]; then
+    # Vérifier que la bottle appartient à l'utilisateur courant.
+    BOTTLE_UID=$(stat -c %u "$BOTTLE" 2>/dev/null)
+    if [[ -n "$BOTTLE_UID" && "$BOTTLE_UID" != "$(id -u)" ]]; then
+        if ! chown -R "$(id -u):$(id -g)" "$BOTTLE" 2>/dev/null; then
+            echo "Erreur : bottle appartient à uid ${BOTTLE_UID}, utilisateur courant : $(id -u)"
+            echo "  → Corriger avec : sudo chown -R $(id -u):$(id -g) \"${BOTTLE}\""
+            echo "  → Ou relancer le conteneur (le script d'init corrige les permissions)"
+            exit 1
+        fi
+    fi
+
+    # Si le squashfs ne contient PAS un prefix Wine ET que la bottle est vierge →
+    # initialiser le prefix directement dans BOTTLE (répertoire réel, pas fuse-overlayfs)
+    if [[ ! -f "${SQUASHFSPOINT}/system.reg" && ! -f "${BOTTLE}/system.reg" ]]; then
+        echo "Initialisation du préfixe Wine ($WINE_ARCH) dans la bottle..."
+        DISPLAY= WINEPREFIX="$BOTTLE" WINEARCH="$WINE_ARCH" WINEDLLOVERRIDES="mscoree,mshtml=" \
+            "$WINE_BINARY" wineboot 2>&1 | grep -v "^fixme:" || true
+        DISPLAY= WINEPREFIX="$BOTTLE" "$WINE_BINARY" wineserver -w 2>/dev/null || true
+        if [[ ! -f "${BOTTLE}/system.reg" ]]; then
+            echo "Avertissement : wineboot n'a pas créé system.reg — prefix peut être incomplet"
+        fi
+    fi
+fi
+
+# ── Phase 4 : montage overlay ─────────────────────────────────────────────────
+
+if [[ "$MOUNT_ONLY" != "true" ]]; then
+    # Tuer tout wineserver résiduel avant de monter l'overlay.
+    # On utilise le wineserver système (stable) car wine-ge wineserver crashe sur préfixe inexistant.
+    WINEPREFIX="$BOTTLE"    /usr/bin/wineserver -k 2>/dev/null || true
+    WINEPREFIX="$WINEPOINT" /usr/bin/wineserver -k 2>/dev/null || true
+    rm -f "${BOTTLE}/wineserver" "${BOTTLE}/.wineserver-lock" 2>/dev/null || true
+    rm -f "${BOTTLE}"/reg*.tmp 2>/dev/null || true
+
+    # Si le squashfs EST un prefix Wine : copier les .reg dans la BOTTLE avant overlay
+    # (wineserver rename reg*.tmp→*.reg échoue avec EXDEV si la cible est dans le lower)
+    if [[ -f "${SQUASHFSPOINT}/system.reg" && ! -f "${BOTTLE}/system.reg" ]]; then
+        cp "${SQUASHFSPOINT}/system.reg"  "${BOTTLE}/system.reg"  2>/dev/null || true
+        cp "${SQUASHFSPOINT}/user.reg"    "${BOTTLE}/user.reg"    2>/dev/null || true
+        cp "${SQUASHFSPOINT}/userdef.reg" "${BOTTLE}/userdef.reg" 2>/dev/null || true
+    fi
+
+    # Pré-créer drive_c/users/ dans la BOTTLE pour éviter EXDEV lors des copy-up fuse-overlayfs.
+    # Sans ça, wine ne peut pas écrire dans C:\users\<username>\ si ce dossier vient du squashfs (lower).
+    if [[ -d "${SQUASHFSPOINT}/drive_c/users" ]]; then
+        while IFS= read -r -d '' dir; do
+            rel="${dir#${SQUASHFSPOINT}/}"
+            dst="${BOTTLE}/${rel}"
+            [[ -d "$dst" ]] || mkdir -p "$dst" 2>/dev/null || true
+        done < <(find "${SQUASHFSPOINT}/drive_c/users" -mindepth 1 -type d -print0 2>/dev/null)
+    fi
+
+    # Résoudre les conflits de casse DLL : le squashfs peut avoir WMASF.dll (majuscule, native Windows)
+    # tandis que la base_prefix a wmasf.dll (minuscule, wine built-in). Fuse-overlayfs expose les deux ;
+    # wine charge le mauvais. Fix : copier les DLL natives Windows du squashfs dans la BOTTLE en minuscule
+    # pour qu'elles prennent priorité (upper > lower) sous le nom canonique attendu par wine.
+    for win_subdir in drive_c/windows/system32 drive_c/windows/syswow64; do
+        sq_dir="${SQUASHFSPOINT}/${win_subdir}"
+        [[ -d "$sq_dir" ]] || continue
+        while IFS= read -r -d '' sq_dll; do
+            sq_name=$(basename "$sq_dll")
+            lc_name="${sq_name,,}"
+            [[ "$sq_name" == "$lc_name" ]] && continue  # déjà en minuscule, pas de conflit
+            file "$sq_dll" 2>/dev/null | grep -q "for MS Windows" || continue  # seulement les natives
+            dst="${BOTTLE}/${win_subdir}/${lc_name}"
+            [[ -f "$dst" ]] && continue  # déjà dans la bottle
+            mkdir -p "${BOTTLE}/${win_subdir}" 2>/dev/null || true
+            cp "$sq_dll" "$dst" 2>/dev/null || true
+        done < <(find "$sq_dir" -maxdepth 1 -name "*.dll" -print0 2>/dev/null)
+    done
+
+    # Nettoyer les whiteouts (.wh.X) qui coexistent avec le fichier réel X
+    for search_dir in "${BOTTLE}" "${BOTTLE}/dosdevices"; do
+        [[ -d "$search_dir" ]] || continue
+        while IFS= read -r -d '' wh_path; do
+            wh_name=$(basename "$wh_path")
+            real_path="${search_dir}/${wh_name#.wh.}"
+            [[ -e "$real_path" || -L "$real_path" ]] && rm -f "$wh_path"
+        done < <(find "$search_dir" -maxdepth 1 -name '.wh.*' -print0)
+    done
+fi
+
+mountpoint -q "$WINEPOINT" 2>/dev/null && do_umount "$WINEPOINT"
+rm -rf "$WORKPOINT" && mkdir -p "$WORKPOINT"
+
+# Prefix de base (d3dx9, xinput, vcrun…) comme couche basse supplémentaire si disponible
+BASE_PREFIX=/opt/wine-base-prefix
+if [[ -d "$BASE_PREFIX" ]]; then
+    LOWER_DIRS="${SQUASHFSPOINT}:${BASE_PREFIX}"
+else
+    LOWER_DIRS="${SQUASHFSPOINT}"
+fi
+
+if fuse-overlayfs \
+       -o "lowerdir=${LOWER_DIRS},upperdir=${BOTTLE},workdir=${WORKPOINT}" \
+       "$WINEPOINT" 2>/dev/null; then
+    MOUNTED=true
+    echo "Mode          : overlay (squashfuse + fuse-overlayfs)"
+    echo "Sauvegardes   : $BOTTLE"
+else
+    do_umount "$SQUASHFSPOINT"
+    echo "Erreur : fuse-overlayfs échoué"
+    echo "  → Vérifier : cap_add: [SYS_ADMIN] et devices: [/dev/fuse] dans docker-compose"
+    exit 1
+fi
+
+# ── Phase 5 : configuration Wine ──────────────────────────────────────────────
+
+[[ -z "$WINE_ARCH" ]] && WINE_ARCH=$(detect_prefix_arch)
+
+# Si le squashfs contient un prefix Wine → WINEPREFIX=WINEPOINT (overlay)
+# Sinon → WINEPREFIX=BOTTLE (répertoire réel, évite EXDEV sur rename .reg)
+if [[ -f "${SQUASHFSPOINT}/system.reg" ]]; then
+    export WINEPREFIX="$WINEPOINT"
+else
+    export WINEPREFIX="$BOTTLE"
+fi
+export WINEARCH="$WINE_ARCH"
+
+# Libs système accessibles au Wine custom (FreeType, ALSA...)
+WINE_ROOT=$(dirname "$(dirname "$(readlink -f "$WINE_BINARY")")")
+WINE_LIB="${WINE_ROOT}/lib"
+export LD_LIBRARY_PATH="${WINE_LIB}:${WINE_ROOT}/lib64:/usr/lib/x86_64-linux-gnu:/usr/lib/i386-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+
+# Propager les vars d'affichage et audio depuis s6 (absentes hors session with-contenv)
+S6_ENV=/var/run/s6/container_environment
+[[ -z "$DISPLAY"         && -f "${S6_ENV}/DISPLAY"         ]] && export DISPLAY=$(cat "${S6_ENV}/DISPLAY")
+# WAYLAND_DISPLAY absent de l'env s6 : labwc crée toujours wayland-0 dans XDG_RUNTIME_DIR
+[[ -z "$WAYLAND_DISPLAY" ]] && export WAYLAND_DISPLAY=wayland-0
+[[ -z "$PULSE_RUNTIME_PATH" && -f "${S6_ENV}/PULSE_RUNTIME_PATH" ]] && \
+    export PULSE_RUNTIME_PATH=$(cat "${S6_ENV}/PULSE_RUNTIME_PATH")
+[[ -z "$AUDIODRIVER"     && -f "${S6_ENV}/AUDIODRIVER"      ]] && export AUDIODRIVER=$(cat "${S6_ENV}/AUDIODRIVER")
+[[ -z "$SDL_AUDIODRIVER" && -f "${S6_ENV}/SDL_AUDIODRIVER"  ]] && export SDL_AUDIODRIVER=$(cat "${S6_ENV}/SDL_AUDIODRIVER")
+
+PREFIX_USERNAME=$(detect_wine_username)
+if [[ -n "$PREFIX_USERNAME" && "$PREFIX_USERNAME" != "$USER" ]]; then
+    export WINEUSERNAME="$PREFIX_USERNAME"
+fi
+
+[[ "$ESYNC" == "1" ]] && export WINEESYNC=1
+[[ "$FSYNC" == "1" ]] && export WINEFSYNC=1
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}comctl32=n,b"
+[[ "$DXVK" == "1" ]] && export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}d3d11=n,b;d3d10core=n,b;d3d9=n,b;dxgi=n,b"
+[[ "$VKD3D" == "1" ]] && export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}d3d12=n,b"
+
+# Propager les overrides DLL installés dans la base prefix (native > builtin)
+# Nécessaire car fuse-overlayfs fusionne les répertoires mais le registry du squashfs prime sur
+# celui de la base prefix — les overrides "native" de winetricks ne seraient pas vus sinon.
+if [[ -d "$BASE_PREFIX" && -f "${BASE_PREFIX}/user.reg" ]]; then
+    _bp_overrides=$(
+        sed -n '/^\[Software\\\\Wine\\\\DllOverrides\]/,/^\[/{
+            /^\[Software\\\\Wine\\\\DllOverrides\]/d
+            /^\[/d
+            /^"/p
+        }' "${BASE_PREFIX}/user.reg" \
+        | sed 's/^"\*\?\([^"]*\)"="\([^"]*\)"/\1=\2/;s/native/n/g;s/builtin/b/g' \
+        | tr '\n' ';'
+    )
+    [[ -n "$_bp_overrides" ]] && export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}${_bp_overrides%%;}"
+    unset _bp_overrides
+fi
+[[ -n "$WINE_LANG" ]] && export LC_ALL="$WINE_LANG"
+[[ -n "$WINE_ENV" ]] && apply_wine_env "$WINE_ENV"
+
+if [[ "$MOUNT_ONLY" != "true" ]]; then
+    # Sync DLLs manquantes depuis le runner vers la bottle, puis remonte l'overlay
+    sync_wine_stubs "$WINE_BINARY" "$BOTTLE"
+    # Copier les DLL natives de la base prefix dans la bottle (priment sur les stubs du squashfs)
+    sync_base_prefix_natives "$BASE_PREFIX" "$BOTTLE" "$WINEPOINT"
+
+    do_umount "$WINEPOINT"
+    rm -rf "$WORKPOINT" && mkdir -p "$WORKPOINT"
+    if ! fuse-overlayfs \
+           -o "lowerdir=${LOWER_DIRS},upperdir=${BOTTLE},workdir=${WORKPOINT}" \
+           "$WINEPOINT" 2>/dev/null; then
+        echo "Erreur : rechargement overlay échoué"
+        exit 1
+    fi
+
+    if [[ -d "${WINEPOINT}/regs" ]]; then
+        echo "Import des fichiers de registre..."
+        while IFS= read -r -d '' regfile; do
+            echo "  → $(basename "$regfile")"
+            "$WINE_BINARY" regedit "//?/unix${regfile}" 2>/dev/null || true
+        done < <(find "${WINEPOINT}/regs" -maxdepth 1 -type f -iname "*.reg" -print0)
+    fi
+fi
+
+# ── Phase 6 : mode montage ou exécution ──────────────────────────────────────
+
+if [[ "$CMD" =~ ^\"([^\"]+)\"(.*)$ ]]; then
+    EXEC_NAME="${BASH_REMATCH[1]}"
+    EXEC_ARGS="${BASH_REMATCH[2]# }"
+else
+    EXEC_NAME=$(awk '{print $1}' <<< "$CMD")
+    EXEC_ARGS=$(cut -d' ' -f2- -s <<< "$CMD")
+fi
+
+EXEC_PATH="${WINEPOINT}${DIR:+/${DIR}}/${EXEC_NAME}"
+# Fallback case-insensitive si l'exe n'existe pas (squashfs créés sur Windows)
+if [[ ! -f "$EXEC_PATH" ]]; then
+    _dir="${WINEPOINT}${DIR:+/${DIR}}"
+    _found=$(find "$_dir" -maxdepth 1 -iname "$EXEC_NAME" -type f 2>/dev/null | head -1)
+    [[ -n "$_found" ]] && EXEC_PATH="$_found"
+    unset _dir _found
+fi
+EXT="${EXEC_PATH##*.}"
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/config/.XDG}"
+
+if [[ "$MOUNT_ONLY" == "true" ]]; then
+    echo "-----------------------------------------"
+    echo "Mode montage — shell interactif"
+    echo ""
+    echo "  WINEPREFIX  : $WINEPREFIX"
+    echo "  WINE_BINARY : $WINE_BINARY  ($WINE_ARCH)"
+    echo "  WINEPOINT   : $WINEPOINT  (overlay complet)"
+    echo "  BOTTLE      : $BOTTLE  (upperdir / sauvegardes)"
+    echo "  Jeu dir     : ${WINEPOINT}${DIR:+/${DIR}}"
+    echo ""
+    [[ -f "$EXEC_PATH" ]] && echo "  Exécutable  : $EXEC_PATH" || \
+        echo "  Exécutable  : $EXEC_PATH  (introuvable — CMD=$CMD)"
+    [[ "$DXVK"  == "1" ]] && echo "  DXVK        : activé"
+    [[ "$VKD3D" == "1" ]] && echo "  VKD3D       : activé"
+    [[ "$ESYNC" == "1" ]] && echo "  ESYNC       : activé"
+    [[ "$FSYNC" == "1" ]] && echo "  FSYNC       : activé"
+    echo ""
+    echo "Variables exportées : WINEPREFIX WINEARCH WINE_BINARY WINEPOINT BOTTLE GAME_NAME"
+    echo "Exemple : \$WINE_BINARY \"$EXEC_PATH\""
+    echo "Quitter  : exit  (démontage automatique)"
+    echo "========================================="
+    export WINE_BINARY WINEPOINT BOTTLE GAME_NAME
+    export PS1="[wsquashfs:${GAME_NAME}] \$ "
+    cd "${WINEPOINT}${DIR:+/${DIR}}" 2>/dev/null || cd "$WINEPOINT"
+    bash --norc --noprofile -i
+    EXIT_CODE=$?
+else
+    [[ -f "$EXEC_PATH" ]] || {
+        echo "Erreur : exécutable introuvable : $EXEC_PATH"
+        echo "  CMD : $CMD  |  DIR : ${DIR:-<vide>}"
+        exit 1
+    }
+
+    cd "${WINEPOINT}${DIR:+/${DIR}}" || exit 1
+
+    echo "-----------------------------------------"
+    echo "Exécutable    : $EXEC_PATH"
+    echo "Arguments     : ${EXEC_ARGS:-<aucun>}"
+    echo "Wine          : $WINE_BINARY ($WINE_ARCH)"
+    [[ -n "$WINEUSERNAME" ]] && echo "Utilisateur   : $WINEUSERNAME (adapté au prefix)"
+    [[ "$DXVK"  == "1" ]] && echo "DXVK          : activé"
+    [[ "$VKD3D" == "1" ]] && echo "VKD3D         : activé"
+    [[ "$ESYNC" == "1" ]] && echo "ESYNC         : activé"
+    [[ "$FSYNC" == "1" ]] && echo "FSYNC         : activé"
+    [[ -n "$VIRTUAL_DESKTOP" && "$USE_GAMESCOPE" == "false" ]] && echo "Bureau virtuel: $VIRTUAL_DESKTOP"
+    [[ "$USE_GAMESCOPE" == "true" ]] && echo "Gamescope     : activé"
+    echo "========================================="
+    echo ""
+
+    read -ra EXEC_ARGS_ARR <<< "$EXEC_ARGS"
+    declare -a RUN_CMD
+
+    # Gamescope gère le fenêtrage : VIRTUAL_DESKTOP inutile et contre-productif avec lui
+    USE_GAMESCOPE=false
+    if [[ "$GAMESCOPE" == "1" ]] && command -v gamescope &>/dev/null; then
+        USE_GAMESCOPE=true
+    fi
+
+    if [[ "$USE_GAMESCOPE" == "false" && -n "$VIRTUAL_DESKTOP" ]]; then
+        DESKTOP_NAME=$(tr ' ' '_' <<< "$GAME_NAME" | tr -cd 'a-zA-Z0-9_')
+        if [[ "$EXT" == "bat" ]]; then
+            RUN_CMD=("$WINE_BINARY" explorer "/desktop=${DESKTOP_NAME},${VIRTUAL_DESKTOP}" \
+                     cmd /c "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
+        else
+            RUN_CMD=("$WINE_BINARY" explorer "/desktop=${DESKTOP_NAME},${VIRTUAL_DESKTOP}" \
+                     "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
+        fi
+    elif [[ "$EXT" == "bat" ]]; then
+        RUN_CMD=("$WINE_BINARY" cmd /c "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
+    else
+        RUN_CMD=("$WINE_BINARY" "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
+    fi
+
+    if [[ "$USE_GAMESCOPE" == "true" ]]; then
+        # Résolution : GAMESCOPE_RES > VIRTUAL_DESKTOP > RESOLUTION env > 1920x1080
+        GS_RES="${GAMESCOPE_RES:-${VIRTUAL_DESKTOP:-${RESOLUTION:-1920x1080x60}}}"
+        GS_W=1920; GS_H=1080; GS_R=60
+        if [[ "$GS_RES" =~ ^([0-9]+)x([0-9]+)(x([0-9]+))?$ ]]; then
+            GS_W="${BASH_REMATCH[1]}"; GS_H="${BASH_REMATCH[2]}"
+            [[ -n "${BASH_REMATCH[4]}" ]] && GS_R="${BASH_REMATCH[4]}"
+        fi
+        read -ra GS_EXTRA <<< "${GAMESCOPE_ARGS_RAW:-}"
+        echo "Gamescope     : ${GS_W}x${GS_H}@${GS_R} (WAYLAND_DISPLAY=${WAYLAND_DISPLAY}) ${GS_EXTRA[*]}"
+        # DISPLAY=:0 : gamescope démarre son XWayland interne sur :0 (libre)
+        # :1 est pris par le XWayland système de labwc → conflit si hérité
+        RUN_CMD=(env DISPLAY=:0 gamescope -w "$GS_W" -h "$GS_H" -r "$GS_R" --backend=wayland -f "${GS_EXTRA[@]}" -- "${RUN_CMD[@]}")
+    fi
+
+    "${RUN_CMD[@]}"
+    EXIT_CODE=$?
+
+    echo ""
+    echo "========================================="
+    echo "Jeu terminé (code : $EXIT_CODE)"
+    echo "========================================="
+fi
+
+exit $EXIT_CODE

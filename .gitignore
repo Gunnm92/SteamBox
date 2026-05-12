@@ -1,0 +1,8 @@
+# Données runtime (non versionnées)
+config/
+userdata/
+
+# Fichiers système
+.DS_Store
+*.swp
+*.swo
