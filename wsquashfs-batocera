@@ -636,6 +636,13 @@ WINE_ROOT=$(dirname "$(dirname "$(readlink -f "$WINE_BINARY")")")
 WINE_LIB="${WINE_ROOT}/lib"
 export LD_LIBRARY_PATH="${WINE_LIB}:${WINE_ROOT}/lib64:/usr/lib/x86_64-linux-gnu:/usr/lib/i386-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
+# NLS fallback : si le runner custom n'a pas ses propres fichiers NLS, utiliser wine staging
+if [[ ! -f "${WINE_ROOT}/share/wine/nls/locale.nls" ]]; then
+    for nls_dir in /opt/wine-staging/share/wine /usr/share/wine; do
+        [[ -f "${nls_dir}/nls/locale.nls" ]] && export WINEDATADIR="$nls_dir" && break
+    done
+fi
+
 # Propager les vars d'affichage et audio depuis s6 (absentes hors session with-contenv)
 S6_ENV=/var/run/s6/container_environment
 [[ -z "$DISPLAY"         && -f "${S6_ENV}/DISPLAY"         ]] && export DISPLAY=$(cat "${S6_ENV}/DISPLAY")
