@@ -178,6 +178,7 @@ RUN \
   curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
   chmod +x /tmp/srm.AppImage && cd /tmp && ./srm.AppImage --appimage-extract && \
   mv /tmp/squashfs-root /opt/steam-rom-manager && \
+  chmod -R a+rX /opt/steam-rom-manager && \
   ln -sf /opt/steam-rom-manager/AppRun /usr/local/bin/steam-rom-manager && \
   SRM_ICON=$(find /opt/steam-rom-manager -name "*.png" | head -1) && \
   { [ -n "$SRM_ICON" ] && cp "$SRM_ICON" /usr/share/pixmaps/steam-rom-manager.png || true; } && \
