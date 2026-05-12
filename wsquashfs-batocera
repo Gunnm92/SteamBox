@@ -614,6 +614,14 @@ fi
 
 [[ -z "$WINE_ARCH" ]] && WINE_ARCH=$(detect_prefix_arch)
 
+# Prefix win64 + binaire wine 32-bit → basculer sur wine64 pour éviter l'erreur ntdll i386-unix
+if [[ "$WINE_ARCH" == "win64" ]]; then
+    wine64_candidate="${WINE_BINARY%wine}wine64"
+    if file "$WINE_BINARY" 2>/dev/null | grep -q "ELF 32-bit" && [[ -x "$wine64_candidate" ]]; then
+        WINE_BINARY="$wine64_candidate"
+    fi
+fi
+
 # Si le squashfs contient un prefix Wine → WINEPREFIX=WINEPOINT (overlay)
 # Sinon → WINEPREFIX=BOTTLE (répertoire réel, évite EXDEV sur rename .reg)
 if [[ -f "${SQUASHFSPOINT}/system.reg" ]]; then
