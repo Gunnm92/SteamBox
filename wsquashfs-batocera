@@ -636,10 +636,15 @@ WINE_ROOT=$(dirname "$(dirname "$(readlink -f "$WINE_BINARY")")")
 WINE_LIB="${WINE_ROOT}/lib"
 export LD_LIBRARY_PATH="${WINE_LIB}:${WINE_ROOT}/lib64:/usr/lib/x86_64-linux-gnu:/usr/lib/i386-linux-gnu${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
-# NLS fallback : si le runner custom n'a pas ses propres fichiers NLS, utiliser wine staging
+# NLS fallback : si le runner custom n'a pas ses propres fichiers NLS,
+# créer un symlink share/wine/nls → wine-staging (wine ignore WINEDATADIR au runtime)
 if [[ ! -f "${WINE_ROOT}/share/wine/nls/locale.nls" ]]; then
-    for nls_dir in /opt/wine-staging/share/wine /usr/share/wine; do
-        [[ -f "${nls_dir}/nls/locale.nls" ]] && export WINEDATADIR="$nls_dir" && break
+    for nls_src in /opt/wine-staging/share/wine/nls /usr/share/wine/nls; do
+        if [[ -f "${nls_src}/locale.nls" ]]; then
+            mkdir -p "${WINE_ROOT}/share/wine"
+            ln -sfn "$nls_src" "${WINE_ROOT}/share/wine/nls" 2>/dev/null || true
+            break
+        fi
     done
 fi
 
