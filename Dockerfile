@@ -154,6 +154,8 @@ RUN \
   [ -n "${HEROIC_DEB_URL}" ] || { echo "FATAL: HEROIC_DEB_URL vide"; exit 1; } && \
   curl -fSL --retry 3 -o /tmp/heroic.deb "${HEROIC_DEB_URL}" && \
   apt-get install -y /tmp/heroic.deb && \
+  sed -i 's|^Exec=/opt/Heroic/heroic|Exec=env ELECTRON_OZONE_PLATFORM_HINT=wayland /opt/Heroic/heroic|' \
+    /usr/share/applications/heroic.desktop && \
   PEGASUS_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/mmatyas/pegasus-frontend/releases" \
     | awk -F '"' '/browser_download_url.*x11-static\.zip/{print $4; exit}') && \
