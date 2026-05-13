@@ -155,6 +155,8 @@ RUN \
   add-apt-repository multiverse && apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     steam-installer steam-devices && \
+  sed -i 's|^Exec=/usr/games/steam|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=wayland /usr/games/steam|' \
+    /usr/share/applications/steam.desktop && \
   SUNSHINE_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/LizardByte/Sunshine/releases/latest" \
     | grep "browser_download_url.*ubuntu-24.04-amd64\.deb" | cut -d'"' -f4) && \
@@ -164,6 +166,7 @@ RUN \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 8. Heroic + Pegasus ───────────────────────────────────────────────────────
+# wayland-0 = socket labwc (compositor affiché) ; wayland-1 = Selkies (capture)
 RUN \
   HEROIC_DEB_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/Heroic-Games-Launcher/HeroicGamesLauncher/releases/latest" \
@@ -171,14 +174,17 @@ RUN \
   [ -n "${HEROIC_DEB_URL}" ] || { echo "FATAL: HEROIC_DEB_URL vide"; exit 1; } && \
   curl -fSL --retry 3 -o /tmp/heroic.deb "${HEROIC_DEB_URL}" && \
   apt-get install -y /tmp/heroic.deb && \
-  sed -i 's|^Exec=/opt/Heroic/heroic|Exec=env ELECTRON_OZONE_PLATFORM_HINT=wayland /opt/Heroic/heroic|' \
+  sed -i 's|^Exec=/opt/Heroic/heroic|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 ELECTRON_OZONE_PLATFORM_HINT=wayland /opt/Heroic/heroic|' \
     /usr/share/applications/heroic.desktop && \
   PEGASUS_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/mmatyas/pegasus-frontend/releases" \
-    | awk -F '"' '/browser_download_url.*x11-static\.zip/{print $4; exit}') && \
+    | awk -F '"' '/browser_download_url.*amd64\.deb/{print $4; exit}') && \
   [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
-  curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
-  unzip /tmp/pegasus.zip pegasus-fe -d /usr/local/bin/ && \
+  apt-get update && \
+  curl -fSL --retry 3 -o /tmp/pegasus.deb "${PEGASUS_URL}" && \
+  apt-get install -y --no-install-recommends qtwayland5 /tmp/pegasus.deb && \
+  sed -i 's|^Exec=pegasus-fe|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland pegasus-fe|' \
+    /usr/share/applications/pegasus-frontend.desktop 2>/dev/null || true && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 9. Decky Loader + Steam ROM Manager ──────────────────────────────────────
@@ -208,11 +214,6 @@ RUN \
 # ── 10. wsquashfs-batocera ────────────────────────────────────────────────────
 COPY ArcadeBox/wsquashfs-batocera /usr/local/bin/wsquashfs-batocera
 RUN chmod +x /usr/local/bin/wsquashfs-batocera
-
-# ── 11. Symlink custom-cont-init.d → /config (volume persistant) ─────────────
-# LinuxServer s6 lit uniquement /custom-cont-init.d ; /config est le volume
-# persistant → le symlink permet de stocker les scripts côté utilisateur.
-RUN ln -s /config/custom-cont-init.d /custom-cont-init.d
 
 EXPOSE 3001
 VOLUME /config
