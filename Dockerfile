@@ -183,6 +183,11 @@ RUN \
   apt-get update && \
   curl -fSL --retry 3 -o /tmp/pegasus.deb "${PEGASUS_URL}" && \
   apt-get install -y --no-install-recommends qtwayland5 /tmp/pegasus.deb && \
+  printf '#!/bin/bash\nDISPLAY=$(cat /var/run/s6/container_environment/DISPLAY 2>/dev/null || echo ":1")\nexport DISPLAY\nexec /usr/bin/pegasus-fe "$@"\n' \
+    > /usr/local/bin/pegasus-fe-launch && \
+  chmod +x /usr/local/bin/pegasus-fe-launch && \
+  sed -i 's|^Exec=/usr/bin/pegasus-fe|Exec=/usr/local/bin/pegasus-fe-launch|' \
+    /usr/share/applications/org.pegasus_frontend.Pegasus.desktop && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 9. Decky Loader + Steam ROM Manager ──────────────────────────────────────
