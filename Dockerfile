@@ -183,8 +183,8 @@ RUN \
   apt-get update && \
   curl -fSL --retry 3 -o /tmp/pegasus.deb "${PEGASUS_URL}" && \
   apt-get install -y --no-install-recommends qtwayland5 /tmp/pegasus.deb && \
-  sed -i 's|^Exec=pegasus-fe|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland pegasus-fe|' \
-    /usr/share/applications/pegasus-frontend.desktop 2>/dev/null || true && \
+  sed -i 's|^Exec=/usr/bin/pegasus-fe|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland /usr/bin/pegasus-fe|' \
+    /usr/share/applications/org.pegasus_frontend.Pegasus.desktop && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 9. Decky Loader + Steam ROM Manager ──────────────────────────────────────
