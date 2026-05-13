@@ -34,8 +34,12 @@ RUN \
     rsync \
     nano \
     xmlstarlet \
+    mangohud \
     cabextract \
-    p7zip-full && \
+    p7zip-full \
+    mpv \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-libav && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 2. Lindbergh Loader ───────────────────────────────────────────────────────
@@ -129,7 +133,20 @@ RUN \
   cd /tmp/skyscraper && qmake && make -j$(nproc) && make install && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# ── 6. Patch NvFBC ───────────────────────────────────────────────────────────
+# ── 6. NVIDIA Vulkan ICD + outils + Patch NvFBC ──────────────────────────────
+# Les libs NVIDIA (.so) sont injectées au runtime par nvidia-container-toolkit.
+# On installe ici uniquement les outils et les fichiers statiques nécessaires :
+#   - vulkan-tools     : vulkaninfo, vkcube (debug / vérification GPU)
+#   - libvulkan-dev    : headers + loader Vulkan (pour build DXVK/VKD3D si besoin)
+#   - nvidia_icd.json  : ICD Vulkan NVIDIA dans /usr/share/vulkan/icd.d/
+#     (le toolkit le crée dans /etc/vulkan/icd.d/ mais pas dans /usr/share/)
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+      vulkan-tools \
+      libvulkan-dev \
+      libvulkan1:i386 && \
+    apt-get autoclean && rm -rf /var/lib/apt/lists/*
+
 RUN curl -fsSL "https://raw.githubusercontent.com/keylase/nvidia-patch/master/patch-fbc.sh" \
       -o /usr/local/bin/patch-nvfbc.sh && chmod +x /usr/local/bin/patch-nvfbc.sh
 
@@ -191,6 +208,11 @@ RUN \
 # ── 10. wsquashfs-batocera ────────────────────────────────────────────────────
 COPY ArcadeBox/wsquashfs-batocera /usr/local/bin/wsquashfs-batocera
 RUN chmod +x /usr/local/bin/wsquashfs-batocera
+
+# ── 11. Symlink custom-cont-init.d → /config (volume persistant) ─────────────
+# LinuxServer s6 lit uniquement /custom-cont-init.d ; /config est le volume
+# persistant → le symlink permet de stocker les scripts côté utilisateur.
+RUN ln -s /config/custom-cont-init.d /custom-cont-init.d
 
 EXPOSE 3001
 VOLUME /config

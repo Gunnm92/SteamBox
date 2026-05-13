@@ -13,6 +13,9 @@ services:
       - TITLE=ArcadeBox
       - RESOLUTION=1920x1080x60         # WxHxRefreshRate
       - DISPLAY_CDEPTH=24
+      # Audio Selkies
+      - SELKIES_AUDIO_ENABLED=true
+      - SELKIES_AUDIO_DEVICE_NAME=output.monitor
       # PIXELFLUX_WAYLAND n'est PAS défini → mode X11 / Openbox
     volumes:
       - ./config:/config                 # configs + home utilisateur

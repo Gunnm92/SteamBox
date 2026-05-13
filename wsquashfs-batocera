@@ -49,6 +49,12 @@ read_batocera_conf() {
     echo "$global_val"
 }
 
+# Parse videomode batocera → WxH (formats: max-WxH, WxH, WxHxBPP, WxHxBPPxRR)
+parse_videomode() {
+    local vm="${1#max-}"
+    [[ "$vm" =~ ^([0-9]+)x([0-9]+) ]] && echo "${BASH_REMATCH[1]}x${BASH_REMATCH[2]}"
+}
+
 # /usr/wine/ge-custom/bin/wine → ge-custom
 runner_from_path() {
     basename "$(dirname "$(dirname "$1")")"
@@ -449,12 +455,15 @@ fi
 
 # Lecture batocera.conf — applique les réglages système/globaux si non définis par autorun.cmd
 GAME_FILE=$(basename "$WSQUASHFS_FILE")
-BC_RUNNER=$(read_batocera_conf "$GAME_SYSTEM" "$GAME_FILE" "wine-runner")
-BC_DXVK=$(read_batocera_conf   "$GAME_SYSTEM" "$GAME_FILE" "dxvk")
-BC_VKD3D=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "vkd3d")
-BC_ESYNC=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "esync")
-BC_FSYNC=$(read_batocera_conf  "$GAME_SYSTEM" "$GAME_FILE" "fsync")
-BC_VGL=$(read_batocera_conf    "$GAME_SYSTEM" "$GAME_FILE" "vgl")
+BC_RUNNER=$(read_batocera_conf    "$GAME_SYSTEM" "$GAME_FILE" "wine-runner")
+BC_DXVK=$(read_batocera_conf      "$GAME_SYSTEM" "$GAME_FILE" "dxvk")
+BC_VKD3D=$(read_batocera_conf     "$GAME_SYSTEM" "$GAME_FILE" "vkd3d")
+BC_ESYNC=$(read_batocera_conf     "$GAME_SYSTEM" "$GAME_FILE" "esync")
+BC_FSYNC=$(read_batocera_conf     "$GAME_SYSTEM" "$GAME_FILE" "fsync")
+BC_VGL=$(read_batocera_conf       "$GAME_SYSTEM" "$GAME_FILE" "vgl")
+BC_VIDEOMODE=$(read_batocera_conf "$GAME_SYSTEM" "$GAME_FILE" "videomode")
+BC_WINE_DEBUG=$(read_batocera_conf "$GAME_SYSTEM" "$GAME_FILE" "wine_debug")
+BC_HUD=$(read_batocera_conf       "$GAME_SYSTEM" "$GAME_FILE" "hud_support")
 
 # autorun.cmd a priorité ; batocera.conf complète si non défini
 [[ -z "$RUNNER_RAW" && -z "$WINE_VAL" && -n "$BC_RUNNER" ]] && RUNNER_NAME="$BC_RUNNER"
@@ -466,6 +475,9 @@ BC_VGL=$(read_batocera_conf    "$GAME_SYSTEM" "$GAME_FILE" "vgl")
 [[ -z "$ESYNC" && -n "$BC_ESYNC" ]] && ESYNC="$BC_ESYNC"
 [[ -z "$FSYNC" && -n "$BC_FSYNC" ]] && FSYNC="$BC_FSYNC"
 [[ -z "$VGL"   && -n "$BC_VGL"   ]] && VGL="$BC_VGL"
+[[ -z "${VIDEOMODE:-}"   && -n "$BC_VIDEOMODE"   ]] && VIDEOMODE="$BC_VIDEOMODE"
+[[ -z "${WINE_DEBUG:-}"  && -n "$BC_WINE_DEBUG"  ]] && WINE_DEBUG="$BC_WINE_DEBUG"
+[[ -z "${HUD_SUPPORT:-}" && -n "$BC_HUD"         ]] && HUD_SUPPORT="$BC_HUD"
 # Valeur par défaut si ni autorun.cmd ni batocera.conf ne définissent
 DXVK="${DXVK:-0}"; VKD3D="${VKD3D:-0}"; ESYNC="${ESYNC:-0}"; FSYNC="${FSYNC:-0}"
 
@@ -665,6 +677,23 @@ fi
 
 [[ "$ESYNC" == "1" ]] && export WINEESYNC=1
 [[ "$FSYNC" == "1" ]] && export WINEFSYNC=1
+
+# wine_debug=0 → supprimer tous les messages Wine (performances + logs propres)
+[[ "${WINE_DEBUG:-}" == "0" ]] && export WINEDEBUG=-all
+
+# videomode → résolution gamescope ou bureau virtuel Wine (si pas déjà défini par autorun.cmd)
+if [[ -n "${VIDEOMODE:-}" ]]; then
+    _vm_res=$(parse_videomode "$VIDEOMODE")
+    if [[ -n "$_vm_res" ]]; then
+        if [[ "$GAMESCOPE" == "1" ]]; then
+            [[ -z "${GAMESCOPE_RES:-}" ]] && GAMESCOPE_RES="$_vm_res"
+        else
+            [[ -z "${VIRTUAL_DESKTOP:-}" ]] && VIRTUAL_DESKTOP="$_vm_res"
+        fi
+    fi
+    unset _vm_res
+fi
+
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}comctl32=n,b"
 [[ "$DXVK" == "1" ]] && export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}d3d11=n,b;d3d10core=n,b;d3d9=n,b;dxgi=n,b"
 [[ "$VKD3D" == "1" ]] && export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}d3d12=n,b"
@@ -780,6 +809,9 @@ else
     [[ "$FSYNC" == "1" ]] && echo "FSYNC         : activé"
     [[ -n "$VIRTUAL_DESKTOP" && "$USE_GAMESCOPE" == "false" ]] && echo "Bureau virtuel: $VIRTUAL_DESKTOP"
     [[ "$USE_GAMESCOPE" == "true" ]] && echo "Gamescope     : activé"
+    [[ -n "${VIDEOMODE:-}" ]] && echo "Videomode     : $VIDEOMODE"
+    [[ "${WINE_DEBUG:-}" == "0" ]] && echo "WINEDEBUG     : -all (silencieux)"
+    [[ "${HUD_SUPPORT:-0}" == "1" ]] && echo "MangoHUD      : activé"
     echo "========================================="
     echo ""
 
@@ -805,6 +837,11 @@ else
         RUN_CMD=("$WINE_BINARY" cmd /c "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
     else
         RUN_CMD=("$WINE_BINARY" "$EXEC_PATH" "${EXEC_ARGS_ARR[@]}")
+    fi
+
+    # MangoHUD si hud_support=1 et mangohud disponible
+    if [[ "${HUD_SUPPORT:-0}" == "1" ]] && command -v mangohud &>/dev/null; then
+        RUN_CMD=(mangohud "${RUN_CMD[@]}")
     fi
 
     if [[ "$USE_GAMESCOPE" == "true" ]]; then
