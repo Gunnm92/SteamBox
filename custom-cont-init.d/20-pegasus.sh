@@ -169,18 +169,5 @@ done
 echo "[pegasus] ${generated} systèmes configurés, ${skipped} ignorés (pas de mapping ou pas de ROMs)"
 echo "[pegasus] game_dirs.txt : ${GAME_DIRS_FILE}"
 
-# ── Fichier .desktop pour le launcher Selkies / menu labwc ───────────────────
-cat > /usr/share/applications/pegasus-fe.desktop <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Pegasus Frontend
-Comment=Game launcher frontend
-Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 QT_QPA_PLATFORM=wayland pegasus-fe
-Icon=pegasus-fe
-Categories=Game;
-Terminal=false
-EOF
-echo "[pegasus] pegasus-fe.desktop créé"
-
 # ── Permissions ───────────────────────────────────────────────────────────────
 chown -R abc:users "${PEGASUS_CFG}" 2>/dev/null || true
