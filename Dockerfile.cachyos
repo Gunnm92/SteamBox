@@ -88,6 +88,13 @@ RUN update-mime-database /usr/share/mime
 RUN mkdir -p /usr/share/backgrounds && \
     magick -size 3840x2160 gradient:'#4a3a8a'-'#161028' /usr/share/backgrounds/arcadebox.png
 
+# ── 1a5. Palette officielle Catppuccin Mocha — plutôt que deviner des
+# couleurs à la main, on récupère la palette de référence (catppuccin/
+# waybar) : @import-able depuis waybar ET le dock (même fichier CSS).
+RUN mkdir -p /usr/share/catppuccin && \
+    curl -fsSL https://raw.githubusercontent.com/catppuccin/waybar/main/themes/mocha.css \
+      -o /usr/share/catppuccin/mocha.css
+
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \

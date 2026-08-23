@@ -48,15 +48,17 @@ cat > "${HOME}/.config/waybar/config.jsonc" <<'EOF'
 EOF
 
 cat > "${HOME}/.config/waybar/style.css" <<'EOF'
+@import url("file:///usr/share/catppuccin/mocha.css");
+
 * {
     font-family: "sans-serif";
     font-size: 14px;
     min-height: 0;
 }
 window#waybar {
-    background: rgba(30, 30, 46, 0.85);
-    color: #cdd6f4;
-    border-bottom: 2px solid rgba(203, 166, 247, 0.4);
+    background: alpha(@base, 0.85);
+    color: @text;
+    border-bottom: 2px solid alpha(@mauve, 0.4);
 }
 #workspaces {
     margin: 4px 6px;
@@ -64,33 +66,35 @@ window#waybar {
 #workspaces button {
     padding: 2px 12px;
     margin: 2px;
-    color: #cdd6f4;
+    color: @text;
     border-radius: 10px;
     background: transparent;
 }
 #workspaces button.active {
-    background: #cba6f7;
-    color: #1e1e2e;
+    background: @mauve;
+    color: @base;
 }
 #workspaces button:hover {
-    background: rgba(203, 166, 247, 0.3);
+    background: alpha(@mauve, 0.3);
 }
 #clock {
     font-weight: 600;
-    color: #f5c2e7;
+    color: @pink;
     padding: 0 14px;
 }
 #pulseaudio, #network {
     padding: 0 12px;
-    color: #a6e3a1;
+    color: @green;
 }
 EOF
 
 mkdir -p "${HOME}/.config/nwg-dock-hyprland"
 cat > "${HOME}/.config/nwg-dock-hyprland/style.css" <<'EOF'
+@import url("file:///usr/share/catppuccin/mocha.css");
+
 window {
-    background: rgba(30, 30, 46, 0.85);
-    border: 2px solid rgba(203, 166, 247, 0.4);
+    background: alpha(@base, 0.85);
+    border: 2px solid alpha(@mauve, 0.4);
     border-radius: 18px;
 }
 button {
@@ -98,7 +102,7 @@ button {
     padding: 4px;
 }
 button:hover {
-    background: rgba(203, 166, 247, 0.25);
+    background: alpha(@mauve, 0.25);
 }
 EOF
 
@@ -111,8 +115,11 @@ exec-once = hyprpaper
 exec-once = waybar
 # -l top (au lieu du défaut "overlay") : Hyprland masque la couche "top"
 # quand une fenêtre passe en plein écran (Steam Big Picture) — "overlay"
-# reste affichée par-dessus, quel que soit le premier plan.
-exec-once = nwg-dock-hyprland -p bottom -a center -i 96 -l top -d
+# reste affichée par-dessus, quel que soit le premier plan. Pas de -d
+# (auto-hide) : en VNC/Moonlight, viser précisément le pixel du bord bas
+# pour le faire réapparaître est peu pratique — le dock reste visible en
+# permanence hors plein écran, masqué seulement pendant Big Picture.
+exec-once = nwg-dock-hyprland -p bottom -a center -i 96 -l top
 
 input {
     kb_layout = fr
@@ -170,7 +177,7 @@ wireplumber &
 pipewire-pulse &
 sleep 1
 
-dbus-run-session -- start-hyprland &
+dbus-run-session -- Hyprland &
 HYPR_PID=$!
 
 # Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
