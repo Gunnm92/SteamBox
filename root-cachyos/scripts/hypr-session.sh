@@ -19,12 +19,50 @@ export SDL_JOYSTICK_DISABLE_UDEV=1
 # explicitement pour ne pas dépendre de ce comportement.
 export HYPRLAND_NO_SD_NOTIFY=1
 
-mkdir -p "${HOME}/.config/hypr"
+mkdir -p "${HOME}/.config/hypr" "${HOME}/.config/waybar"
+
+cat > "${HOME}/.config/hypr/hyprpaper.conf" <<'EOF'
+preload = /usr/share/backgrounds/arcadebox.png
+wallpaper = ,/usr/share/backgrounds/arcadebox.png
+EOF
+
+cat > "${HOME}/.config/waybar/config.jsonc" <<'EOF'
+{
+    "layer": "top",
+    "position": "top",
+    "height": 32,
+    "spacing": 6,
+    "modules-left": ["hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["pulseaudio", "network"],
+    "clock": { "format": "{:%H:%M — %A %d %B}" },
+    "network": {
+        "format-ethernet": "{ipaddr}",
+        "format-disconnected": "hors ligne"
+    },
+    "pulseaudio": { "format": "{volume}% {icon}", "format-icons": ["","",""] }
+}
+EOF
+
+cat > "${HOME}/.config/waybar/style.css" <<'EOF'
+* { font-family: sans-serif; font-size: 13px; }
+window#waybar {
+    background: rgba(20, 20, 30, 0.75);
+    color: #f0f0f0;
+}
+#workspaces button { padding: 0 8px; color: #f0f0f0; }
+#workspaces button.active { background: rgba(255,255,255,0.15); border-radius: 6px; }
+#clock, #pulseaudio, #network { padding: 0 10px; }
+EOF
+
 cat > "${HOME}/.config/hypr/hyprland.conf" <<'EOF'
 monitor=,preferred,auto,1
 
 # Pas d'auto-lancement de Steam ici — lancé à la demande via l'app
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
+exec-once = hyprpaper
+exec-once = waybar
+exec-once = nwg-dock-hyprland -p bottom -a center
 
 input {
     kb_layout = fr
