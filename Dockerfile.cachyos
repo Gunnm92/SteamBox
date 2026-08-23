@@ -26,15 +26,16 @@ RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
-      hyprland xdg-desktop-portal-hyprland foot \
-      hyprpaper waybar wofi nwg-dock-hyprland nwg-drawer imagemagick grim \
+      plasma-desktop kwin konsole dolphin kate \
+      xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent \
+      kscreen breeze breeze-gtk kdeplasma-addons spectacle \
+      imagemagick \
       xorg-xwayland \
       mesa vulkan-icd-loader vulkan-tools \
       vulkan-radeon lib32-vulkan-radeon \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
       pipewire pipewire-pulse wireplumber \
       lib32-pipewire lib32-libpulse \
-      wayvnc python-pip \
       ffmpeg \
       steam \
       heroic-games-launcher-bin \
@@ -53,14 +54,8 @@ RUN pacman -Syu --noconfirm && \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
       dolphin-emu scummvm \
-      adwaita-qt6 papirus-icon-theme \
+      papirus-icon-theme ttf-jetbrains-mono-nerd \
     && pacman -Scc --noconfirm
-
-# wayvnc --websocket (0.10.1) crashe (double free) au premier client
-# websocket — bug upstream connu (any1/wayvnc#319). websockify (absent des
-# dépôts Arch/CachyOS) sert de proxy websocket devant le RFB brut de wayvnc,
-# l'architecture noVNC classique/éprouvée.
-RUN pip install --break-system-packages --no-cache-dir websockify
 
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
@@ -396,21 +391,6 @@ RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases
     install -Dm755 flips /usr/local/bin/flips && \
     rm -rf /tmp/flips.zip /tmp/flips
 
-# ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
-RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
-      | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
-    mkdir -p /usr/share/webapps/novnc && \
-    curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
-
-# La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
-# (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
-# (l'utilisateur doit les saisir à la main dans le formulaire) — on redirige
-# en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
-# d'IP en dur) et le port websockify pour que l'URL de base se connecte
-# directement.
-RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
-      > /usr/share/webapps/novnc/index.html
-
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
 # Le paquet Arch nvidia-utils suit la dernière release, pas forcément celle du
 # host. On réutilise l'approche .run (agnostique à la distro, déjà éprouvée
@@ -472,6 +452,9 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     QT_QPA_PLATFORM=wayland \
     SDL_VIDEODRIVER=wayland \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
+    XDG_CURRENT_DESKTOP=KDE \
+    XDG_SESSION_TYPE=wayland \
+    KDE_SESSION_VERSION=6 \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
@@ -481,6 +464,6 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     S6_VERBOSITY=2
 
 VOLUME /config
-EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
+EXPOSE 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]

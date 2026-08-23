@@ -1,8 +1,13 @@
 #!/command/with-contenv bash
 # DISPLAY=:0 nécessaire même sous Wayland : Sunshine tourne indépendamment
-# de la session Hyprland (pas un enfant exec-once), donc n'hérite de rien
+# de la session KDE (pas un enfant lancé par elle), donc n'hérite de rien
 # d'autre que ce qu'on lui passe explicitement — sans DISPLAY, ses apps
 # "detached" (Steam Big Picture) plantent avec une erreur X.
+#
+# KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 : le backend de capture natif de
+# Sunshine sous KWin (kwingrab, via zkde_screencast_unstable_v1) refuse la
+# capture sans ça — confirmé en direct. Déjà posé côté compositeur
+# (svc-kde/kde-session.sh), redondant ici mais sans risque.
 #
 # s6-setuidgid change l'UID/GID mais PAS HOME — contrairement à runuser/su,
 # il ne fait rien de plus (pas de vraie session utilisateur). Sans le
@@ -12,9 +17,10 @@
 # denied [/root/.config/sunshine]" en boucle jusqu'à ce crash-loop soit fixé.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
-# Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
-# socket qu'il crée (observé : parfois wayland-1 alors que wayland-0 était
-# libre) — on détecte le socket réellement créé plutôt que de supposer son nom.
+# Le compositeur ne garantit pas le nom "wayland-0" pour le socket qu'il
+# crée (observé avec Hyprland comme avec KWin : parfois wayland-1 alors que
+# wayland-0 était libre) — on détecte le socket réellement créé plutôt que
+# de supposer son nom.
 SOCK=""
 while [ -z "${SOCK}" ]; do
     SOCK=$(find "${XDG_RUNTIME_DIR}" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' 2>/dev/null | head -n1)
@@ -22,5 +28,6 @@ while [ -z "${SOCK}" ]; do
 done
 
 exec s6-setuidgid arcade \
-    env HOME=/home/arcade WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
+    env HOME=/home/arcade WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        DISPLAY=:0 KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 \
     sunshine /config/.config/sunshine/sunshine.conf

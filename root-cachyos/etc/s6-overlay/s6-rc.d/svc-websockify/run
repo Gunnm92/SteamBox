@@ -1,6 +1,0 @@
-#!/command/with-contenv bash
-# Proxy websocket devant le RFB brut de wayvnc (127.0.0.1:5901) — architecture
-# noVNC classique, indépendante du websocket natif de wayvnc (buggy, cf.
-# svc-wayvnc/run). websockify se relance seul si la connexion échoue par
-# client, pas besoin d'attendre wayvnc explicitement ici.
-exec websockify 0.0.0.0:5900 127.0.0.1:5901
