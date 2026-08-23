@@ -25,7 +25,7 @@ ln -sfn /config /home/"${USER_NAME}"
 
 # ── 2. Nettoyage d'un boot précédent ───────────────────────────────────────────
 echo "--- [Boot] Nettoyage ---"
-killall -9 -q sunshine Hyprland steam seatd wayvnc pipewire wireplumber 2>/dev/null || true
+killall -9 -q sunshine Hyprland steam seatd wayvnc websockify pipewire wireplumber 2>/dev/null || true
 rm -rf "${XDG_RUNTIME_DIR}" /run/seatd.sock /tmp/.X* 2>/dev/null || true
 mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
@@ -73,9 +73,9 @@ fi
 while true; do
     echo "--- [Superviseur] Démarrage de la session ---"
 
-    killall -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
+    killall -q sunshine Hyprland steam seatd wayvnc websockify 2>/dev/null || true
     sleep 1
-    killall -9 -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
+    killall -9 -q sunshine Hyprland steam seatd wayvnc websockify 2>/dev/null || true
     rm -rf "${XDG_RUNTIME_DIR}"/wayland-* "${XDG_RUNTIME_DIR}/.wayland-socket-name" /run/seatd.sock
 
     udevadm trigger --action=change --subsystem-match=input 2>/dev/null || true
@@ -107,10 +107,9 @@ while true; do
     if [ -n "${WAYLAND_SOCK_NAME}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_SOCK_NAME}" ]; then
         sleep 2
         echo "    [Superviseur] Démarrage de Sunshine et wayvnc (${WAYLAND_SOCK_NAME})..."
-        # Sunshine/wayvnc peuvent crasher (observé : wayvnc meurt sur une
-        # requête websocket malformée) sans que ça ne tue la session Hyprland
-        # — on les respawn en boucle tant que la session tourne, plutôt que
-        # de les laisser morts jusqu'au prochain cycle complet.
+        # Sunshine/wayvnc peuvent crasher sans que ça ne tue la session
+        # Hyprland — on les respawn en boucle tant que la session tourne,
+        # plutôt que de les laisser morts jusqu'au prochain cycle complet.
         (
             while kill -0 "${SESSION_PID}" 2>/dev/null; do
                 runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
@@ -119,14 +118,26 @@ while true; do
             done
         ) &
         SUNSHINE_PID=$!
+        # wayvnc --websocket (0.10.1) crashe (double free) dès qu'un client
+        # websocket se connecte — bug upstream connu (any1/wayvnc#319). On
+        # sert le RFB brut en interne (5901) et on websocket-ifie via
+        # websockify, l'architecture noVNC classique/éprouvée, plutôt que
+        # de dépendre de l'implémentation websocket native de wayvnc.
         (
             while kill -0 "${SESSION_PID}" 2>/dev/null; do
                 runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-                    wayvnc --websocket --render-cursor --max-fps=60 0.0.0.0 5900
+                    wayvnc --render-cursor --max-fps=60 127.0.0.1 5901
                 kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
             done
         ) &
         WAYVNC_PID=$!
+        (
+            while kill -0 "${SESSION_PID}" 2>/dev/null; do
+                websockify 0.0.0.0:5900 127.0.0.1:5901
+                kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
+            done
+        ) &
+        WEBSOCKIFY_PID=$!
     else
         echo "    [Superviseur] ERREUR : aucun socket Wayland détecté, Hyprland n'a pas démarré."
     fi
@@ -139,7 +150,7 @@ while true; do
     done
 
     echo "--- [Superviseur] Fin de session, redémarrage... ---"
-    for pid in "${SUNSHINE_PID:-}" "${WAYVNC_PID:-}" "${NOVNC_PID:-}" "${SEATD_PID:-}"; do
+    for pid in "${SUNSHINE_PID:-}" "${WAYVNC_PID:-}" "${WEBSOCKIFY_PID:-}" "${NOVNC_PID:-}" "${SEATD_PID:-}"; do
         [ -n "${pid}" ] && kill "${pid}" 2>/dev/null || true
     done
     sleep 1
