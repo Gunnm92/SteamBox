@@ -107,12 +107,12 @@ button:hover {
 EOF
 
 cat > "${HOME}/.config/hypr/hyprland.conf" <<'EOF'
-# scale=1.5 : la résolution physique reste 3840x2160 (les jeux via Moonlight
+# scale=2 : la résolution physique reste 3840x2160 (les jeux via Moonlight
 # gardent le plein 4K), mais l'UI du bureau (barre, dock, texte des apps
-# HiDPI-aware comme Heroic/Pegasus) s'affiche 1.5x plus grande — à 1.0,
+# HiDPI-aware comme Heroic/Pegasus) s'affiche 2x plus grande — à 1.0,
 # tout est minuscule en VNC/noVNC (confirmé : lisible seulement en zoomant
 # le canevas, jamais au niveau des éléments eux-mêmes).
-monitor=,preferred,auto,1.5
+monitor=,preferred,auto,2
 
 # Pas d'auto-lancement de Steam ici — lancé à la demande via l'app
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
