@@ -48,14 +48,58 @@ cat > "${HOME}/.config/waybar/config.jsonc" <<'EOF'
 EOF
 
 cat > "${HOME}/.config/waybar/style.css" <<'EOF'
-* { font-family: sans-serif; font-size: 13px; }
-window#waybar {
-    background: rgba(20, 20, 30, 0.75);
-    color: #f0f0f0;
+* {
+    font-family: "sans-serif";
+    font-size: 14px;
+    min-height: 0;
 }
-#workspaces button { padding: 0 8px; color: #f0f0f0; }
-#workspaces button.active { background: rgba(255,255,255,0.15); border-radius: 6px; }
-#clock, #pulseaudio, #network { padding: 0 10px; }
+window#waybar {
+    background: rgba(30, 30, 46, 0.85);
+    color: #cdd6f4;
+    border-bottom: 2px solid rgba(203, 166, 247, 0.4);
+}
+#workspaces {
+    margin: 4px 6px;
+}
+#workspaces button {
+    padding: 2px 12px;
+    margin: 2px;
+    color: #cdd6f4;
+    border-radius: 10px;
+    background: transparent;
+}
+#workspaces button.active {
+    background: #cba6f7;
+    color: #1e1e2e;
+}
+#workspaces button:hover {
+    background: rgba(203, 166, 247, 0.3);
+}
+#clock {
+    font-weight: 600;
+    color: #f5c2e7;
+    padding: 0 14px;
+}
+#pulseaudio, #network {
+    padding: 0 12px;
+    color: #a6e3a1;
+}
+EOF
+
+mkdir -p "${HOME}/.config/nwg-dock-hyprland"
+cat > "${HOME}/.config/nwg-dock-hyprland/style.css" <<'EOF'
+window {
+    background: rgba(30, 30, 46, 0.85);
+    border: 2px solid rgba(203, 166, 247, 0.4);
+    border-radius: 18px;
+}
+button {
+    border-radius: 12px;
+    padding: 4px;
+}
+button:hover {
+    background: rgba(203, 166, 247, 0.25);
+}
 EOF
 
 cat > "${HOME}/.config/hypr/hyprland.conf" <<'EOF'
@@ -72,25 +116,44 @@ input {
 }
 
 general {
-    gaps_in = 0
-    gaps_out = 0
-    border_size = 0
+    gaps_in = 6
+    gaps_out = 12
+    border_size = 2
+    col.active_border = rgba(cba6f7ff) rgba(f5c2e7ff) 45deg
+    col.inactive_border = rgba(45475aaa)
 }
 
 decoration {
-    rounding = 0
+    rounding = 12
     shadow {
-        enabled = false
+        enabled = true
+        range = 20
+        render_power = 3
+        color = rgba(00000066)
+    }
+    blur {
+        enabled = true
+        size = 6
+        passes = 3
+        new_optimizations = true
+        ignore_opacity = true
     }
 }
 
 animations {
-    enabled = false
+    enabled = true
+    bezier = smoothOut, 0.36, 0, 0.66, -0.56
+    bezier = smoothIn, 0.25, 1, 0.5, 1
+    animation = windows, 1, 4, smoothIn
+    animation = windowsOut, 1, 4, smoothOut
+    animation = fade, 1, 4, smoothIn
+    animation = workspaces, 1, 4, smoothIn
 }
 
 misc {
     disable_splash_rendering = true
     disable_hyprland_logo = true
+    background_color = 0x161028
 }
 
 # Aucune barre/lanceur par défaut — sans ce bind, rien n'est joignable au
