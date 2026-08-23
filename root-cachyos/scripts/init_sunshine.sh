@@ -6,8 +6,11 @@ CONF_DIR="/config/.config/sunshine"
 mkdir -p "${CONF_DIR}"
 
 if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
+    # csrf_allowed_origins : la Web UI de Sunshine bloque par défaut toute
+    # origine hors localhost — nécessaire pour y accéder via l'IP LAN.
     cat > "${CONF_DIR}/sunshine.conf" <<'EOF'
 locale = fr
+csrf_allowed_origins = https://10.1.1.1:47990
 EOF
 fi
 
