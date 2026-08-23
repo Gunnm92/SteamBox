@@ -63,17 +63,28 @@ cat > "${HOME}/.config/waybar/config.jsonc" <<'EOF'
 {
     "layer": "top",
     "position": "top",
-    "height": 32,
-    "spacing": 6,
-    "modules-left": ["hyprland/workspaces"],
+    "height": 38,
+    "spacing": 4,
+    "margin-top": 6,
+    "margin-left": 10,
+    "margin-right": 10,
+    "modules-left": ["hyprland/workspaces", "hyprland/window"],
     "modules-center": ["clock"],
-    "modules-right": ["pulseaudio", "network"],
-    "clock": { "format": "{:%H:%M — %A %d %B}" },
+    "modules-right": ["cpu", "memory", "pulseaudio", "network"],
+    "hyprland/window": {
+        "format": "{title}",
+        "max-length": 40,
+        "separate-outputs": true
+    },
+    "clock": { "format": "{:%H:%M   %d/%m/%Y}" },
+    "cpu": { "format": "CPU {usage}%", "interval": 3 },
+    "memory": { "format": "RAM {percentage}%", "interval": 3 },
     "network": {
         "format-ethernet": "{ipaddr}",
+        "format-wifi": "{essid} ({signalStrength}%)",
         "format-disconnected": "hors ligne"
     },
-    "pulseaudio": { "format": "{volume}% {icon}", "format-icons": ["","",""] }
+    "pulseaudio": { "format": "VOL {volume}%", "format-muted": "muet" }
 }
 EOF
 
@@ -81,40 +92,62 @@ cat > "${HOME}/.config/waybar/style.css" <<'EOF'
 @import url("file:///usr/share/catppuccin/mocha.css");
 
 * {
-    font-family: "sans-serif";
+    font-family: "JetBrainsMono Nerd Font", "sans-serif";
     font-size: 14px;
     min-height: 0;
 }
 window#waybar {
-    background: alpha(@base, 0.85);
+    background: transparent;
     color: @text;
-    border-bottom: 2px solid alpha(@mauve, 0.4);
+}
+#workspaces, #window, #clock, #cpu, #memory, #pulseaudio, #network {
+    background: alpha(@base, 0.75);
+    border: 1px solid alpha(@mauve, 0.35);
+    border-radius: 14px;
+    margin: 0 3px;
+    padding: 0 12px;
 }
 #workspaces {
-    margin: 4px 6px;
+    padding: 0 6px;
 }
 #workspaces button {
-    padding: 2px 12px;
-    margin: 2px;
-    color: @text;
+    padding: 2px 10px;
+    margin: 4px 2px;
+    color: @subtext0;
     border-radius: 10px;
     background: transparent;
+    transition: background 0.15s ease-in-out;
 }
 #workspaces button.active {
     background: @mauve;
     color: @base;
 }
 #workspaces button:hover {
-    background: alpha(@mauve, 0.3);
+    background: alpha(@mauve, 0.35);
+    color: @text;
+}
+#window {
+    color: @subtext1;
+    font-style: italic;
 }
 #clock {
     font-weight: 600;
     color: @pink;
-    padding: 0 14px;
 }
-#pulseaudio, #network {
-    padding: 0 12px;
+#cpu, #memory {
+    color: @sky;
+}
+#pulseaudio {
     color: @green;
+}
+#pulseaudio.muted {
+    color: @overlay1;
+}
+#network {
+    color: @yellow;
+}
+#network.disconnected {
+    color: @red;
 }
 EOF
 
@@ -123,16 +156,17 @@ cat > "${HOME}/.config/nwg-dock-hyprland/style.css" <<'EOF'
 @import url("file:///usr/share/catppuccin/mocha.css");
 
 window {
-    background: alpha(@base, 0.85);
-    border: 2px solid alpha(@mauve, 0.4);
-    border-radius: 18px;
+    background: alpha(@base, 0.8);
+    border: 1px solid alpha(@mauve, 0.35);
+    border-radius: 20px;
 }
 button {
-    border-radius: 12px;
-    padding: 4px;
+    border-radius: 14px;
+    padding: 6px;
+    transition: background 0.15s ease-in-out;
 }
 button:hover {
-    background: alpha(@mauve, 0.25);
+    background: alpha(@mauve, 0.3);
 }
 EOF
 
