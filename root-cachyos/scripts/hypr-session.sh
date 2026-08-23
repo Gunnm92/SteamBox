@@ -18,6 +18,14 @@ export SDL_JOYSTICK_DISABLE_UDEV=1
 # (PID 1 = bash ici) c'est un no-op silencieux, mais on le désactive
 # explicitement pour ne pas dépendre de ce comportement.
 export HYPRLAND_NO_SD_NOTIFY=1
+# X11 n'a pas de notion native de mise à l'échelle par sortie, contrairement
+# à Wayland — sans ça, les apps Xwayland (Steam, Pegasus forcé en xcb faute
+# de plugin Wayland dans son build...) restent minuscules ou juste
+# upscalées en flou par Hyprland (xwayland:force_zero_scaling ci-dessous
+# évite justement ce flou, mais seulement combiné à ces variables : testé
+# en direct, Pegasus rendait net et à la bonne taille avec les deux).
+export GDK_SCALE=2
+export QT_SCALE_FACTOR=2
 
 mkdir -p "${HOME}/.config/hypr" "${HOME}/.config/waybar"
 
@@ -174,6 +182,14 @@ misc {
 # Aucune barre/lanceur par défaut — sans ce bind, rien n'est joignable au
 # clavier sur un bureau vide (Steam n'est plus lancé automatiquement).
 bind = SUPER, Return, exec, foot
+
+# Sans ça, Hyprland upscale le buffer Xwayland pour matcher l'échelle du
+# moniteur — flou, contrairement au rendu natif net obtenu en combinant ce
+# réglage avec GDK_SCALE/QT_SCALE_FACTOR (ci-dessus, avant le lancement de
+# Hyprland) qui font rendre les apps X11 nativement à la bonne taille.
+xwayland {
+    force_zero_scaling = true
+}
 EOF
 
 pipewire &
