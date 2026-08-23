@@ -38,7 +38,9 @@ general {
 
 decoration {
     rounding = 0
-    drop_shadow = false
+    shadow {
+        enabled = false
+    }
 }
 
 animations {
@@ -48,7 +50,6 @@ animations {
 misc {
     disable_splash_rendering = true
     disable_hyprland_logo = true
-    vfr = false
 }
 EOF
 
