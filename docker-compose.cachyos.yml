@@ -1,0 +1,36 @@
+services:
+  arcadebox-cachyos:
+    build:
+      context: ..
+      dockerfile: ArcadeBox/Dockerfile.cachyos
+    image: arcadebox-cachyos:latest
+    container_name: arcadebox-cachyos
+    hostname: ArcadeBox-CachyOS
+    runtime: nvidia
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      - NVIDIA_VISIBLE_DEVICES=GPU-993ff90a-304b-da13-1287-c533c1073ab4
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # Dossier SÉPARÉ de l'appdata ArcadeBox actuel — structure de fichiers
+      # incompatible (utilisateur arcade vs abc, pas de .XDG, chemins Steam/
+      # Sunshine différents). Ne jamais pointer vers /mnt/user/appdata/arcadebox.
+      - ./config-cachyos:/config
+      - ./userdata:/userdata               # ROMs, BIOS, saves — layout Batocera partagé, lecture seule prudente au départ
+    network_mode: host                     # requis pour seatd/udev et la découverte LAN Sunshine
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/uinput:/dev/uinput
+    device_cgroup_rules:
+      - 'c 13:* rmw'                       # /dev/input/*
+      - 'c 226:* rmw'                      # /dev/dri/*
+    cap_add:
+      - SYS_NICE                           # priorité temps réel audio/vidéo (sunshine, pipewire)
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    shm_size: "2gb"
+    restart: unless-stopped

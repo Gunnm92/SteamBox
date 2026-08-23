@@ -1,0 +1,84 @@
+# ArcadeBox — variante CachyOS + KDE Plasma (KWin), architecture proche SteamOS.
+#
+# Différence structurelle avec l'image webstation : KWin est le compositeur
+# RACINE (accès DRM/GPU direct via seatd+libinput), pas imbriqué dans un
+# backend de rendu tiers. Sunshine et wayvnc capturent donc directement le
+# vrai wl_output de KWin — pas de compositeur parent à contourner, pas besoin
+# du bridge evdev custom : seatd + libinput gèrent l'input normalement, comme
+# sur un vrai bureau.
+#
+# Steam Big Picture se lance en plein écran DANS cette session KDE (pas de
+# bascule vers un second compositeur type Gamescope).
+
+FROM cachyos/cachyos-v3:latest
+
+# ── 1. Base système + KDE Plasma minimal + seatd/libinput + GPU (Mesa/Vulkan) ─
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm --needed \
+      sudo vim openssh curl wget tar git jq unzip \
+      seatd libinput \
+      plasma-desktop plasma-workspace kwin kscreen \
+      konsole dolphin \
+      xorg-xwayland \
+      mesa vulkan-icd-loader vulkan-tools \
+      vulkan-radeon lib32-vulkan-radeon \
+      vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
+      pipewire pipewire-pulse wireplumber \
+      lib32-pipewire lib32-libpulse \
+      wayvnc \
+      ffmpeg \
+      steam \
+      gamemode mangohud \
+      dbus polkit \
+      xdg-desktop-portal xdg-desktop-portal-kde \
+    && pacman -Scc --noconfirm
+
+# ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
+RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
+      | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
+    mkdir -p /usr/share/webapps/novnc && \
+    curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
+
+# ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
+# Le paquet Arch nvidia-utils suit la dernière release, pas forcément celle du
+# host. On réutilise l'approche .run (agnostique à la distro, déjà éprouvée
+# sur l'image webstation) : installée au runtime par un script d'init, pas ici
+# au build (le driver du host n'est pas connu à ce stade).
+COPY ArcadeBox/root-cachyos/usr/local/bin/install-nvidia-userspace.sh /usr/local/bin/install-nvidia-userspace.sh
+RUN chmod +x /usr/local/bin/install-nvidia-userspace.sh
+
+# ── 3. Règles udev manettes (Xbox/PlayStation/Switch — mappings non standard) ─
+RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tmp/gdu && \
+    cp /tmp/gdu/src/*.rules /etc/udev/rules.d/ && \
+    rm -rf /tmp/gdu
+
+# ── 4. Utilisateur non-root pour la session bureau ────────────────────────────
+ARG PUID=1000
+ARG PGID=1000
+RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
+    useradd -m -u "${PUID}" -g "${PGID}" \
+      -G wheel,video,input,render,audio -s /bin/bash arcade && \
+    echo "arcade ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    mkdir -p /home/arcade/.config/sunshine && \
+    chown -R arcade:arcade /home/arcade
+
+RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
+    echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
+
+# ── 5. Scripts de démarrage ────────────────────────────────────────────────────
+COPY ArcadeBox/root-cachyos/entrypoint.sh /entrypoint.sh
+COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
+RUN chmod +x /entrypoint.sh /usr/local/bin/scripts/*.sh
+
+ENV XDG_RUNTIME_DIR=/run/user/1000 \
+    WAYLAND_DISPLAY=wayland-0 \
+    SEATD_VTBOUND=0 \
+    LIBSEAT_BACKEND=seatd \
+    QT_QPA_PLATFORM=wayland \
+    SDL_VIDEODRIVER=wayland \
+    SDL_JOYSTICK_DISABLE_UDEV=1
+
+VOLUME /config
+EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
+
+ENTRYPOINT ["/entrypoint.sh"]
