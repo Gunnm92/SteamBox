@@ -66,6 +66,18 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
 
+# ── 4b. kcminit_startup — bloque indéfiniment en headless, jamais un crash ───
+# plasma_session attend qu'il termine avant de lancer plasmashell : sur ce
+# rendu headless, un des modules KCM qu'il initialise (clavier, énergie,
+# etc. — non identifié précisément, ptrace indisponible dans le conteneur
+# pour tracer l'appel bloquant) ne rend jamais la main. Un wrapper avec
+# timeout court laisse ses inits non-essentielles une vraie chance sans
+# jamais bloquer le reste de la session au-delà de quelques secondes.
+RUN mv /usr/sbin/kcminit_startup /usr/sbin/kcminit_startup.real && \
+    printf '#!/bin/bash\ntimeout 5 /usr/sbin/kcminit_startup.real "$@"\nexit 0\n' \
+      > /usr/sbin/kcminit_startup && \
+    chmod +x /usr/sbin/kcminit_startup
+
 # ── 5. Scripts de démarrage ────────────────────────────────────────────────────
 COPY ArcadeBox/root-cachyos/entrypoint.sh /entrypoint.sh
 COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
