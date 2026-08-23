@@ -47,12 +47,21 @@ done
 # Sans démon udev tournant en continu, les périphériques uinput que Sunshine
 # crée à la connexion d'un client (ex: "Mouse passthrough") existent bien au
 # niveau noyau (/proc/bus/input/devices) mais libinput/Hyprland ne les
-# détecte jamais : udevadm trigger ponctuel au boot ne rejoue que les
-# uevents déjà existants, pas les hotplugs qui arrivent après.
+# détecte jamais : udevd tournant en continu les capte nativement via
+# netlink dès leur création, sans avoir besoin de rejouer quoi que ce soit.
+#
+# IMPORTANT : ne JAMAIS faire `udevadm trigger` sur le sous-système input.
+# /sys reflète le vrai matériel de l'hôte (non isolé par les namespaces
+# Docker), donc un trigger rejoue aussi les uevents des VRAIS clavier/souris
+# de l'hôte Unraid, qu'udevd matérialise alors comme périphériques dans le
+# conteneur — exactement l'incident déjà rencontré sur l'image webstation.
+# Sans trigger, seuls les nouveaux hotplugs (les devices virtuels créés
+# après coup par Sunshine) sont capturés ; le matériel déjà présent avant
+# le démarrage d'udevd n'est jamais découvert. Testé et confirmé en direct.
 if ! pgrep -f systemd-udevd >/dev/null; then
     /usr/lib/systemd/systemd-udevd --daemon
     sleep 1
-    udevadm trigger --action=add --type=devices 2>/dev/null || true
+    udevadm trigger --action=add --subsystem-match=drm 2>/dev/null || true
     udevadm settle --timeout=5 2>/dev/null || true
 fi
 
@@ -78,7 +87,6 @@ while true; do
     killall -9 -q sunshine Hyprland steam seatd wayvnc websockify 2>/dev/null || true
     rm -rf "${XDG_RUNTIME_DIR}"/wayland-* "${XDG_RUNTIME_DIR}/.wayland-socket-name" /run/seatd.sock
 
-    udevadm trigger --action=change --subsystem-match=input 2>/dev/null || true
     udevadm trigger --action=change --subsystem-match=drm 2>/dev/null || true
     sleep 0.5
 

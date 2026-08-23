@@ -22,8 +22,11 @@ export HYPRLAND_NO_SD_NOTIFY=1
 mkdir -p "${HOME}/.config/hypr" "${HOME}/.config/waybar"
 
 cat > "${HOME}/.config/hypr/hyprpaper.conf" <<'EOF'
-preload = /usr/share/backgrounds/arcadebox.png
-wallpaper = ,/usr/share/backgrounds/arcadebox.png
+wallpaper {
+    monitor = HDMI-A-1
+    path = /usr/share/backgrounds/arcadebox.png
+    fit_mode = cover
+}
 EOF
 
 cat > "${HOME}/.config/waybar/config.jsonc" <<'EOF'
