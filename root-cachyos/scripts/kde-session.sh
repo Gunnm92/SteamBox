@@ -52,11 +52,30 @@ kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group KDE --key LookAndFeelP
 kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group General --key ColorScheme BreezeDark 2>/dev/null || true
 kwriteconfig6 --file "${HOME}/.config/kwinrc" --group org.kde.kdecoration2 --key theme Breeze 2>/dev/null || true
 
+# Sans thème de curseur explicite, confirmé en direct : curseur invisible
+# sous KWin (contrairement à Hyprland, qui s'en sortait avec un défaut
+# raisonnable tout seul).
+kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorTheme breeze_cursors 2>/dev/null || true
+kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorSize 24 2>/dev/null || true
+
 # Reconstruit la base d'applications (kickoff/menu) — nécessaire pour que nos
 # .desktop personnalisés (Steam, Sunshine, Chrome, émulateurs...) apparaissent.
 [ -f /etc/xdg/menus/applications.menu ] || \
     cp /etc/xdg/menus/plasma-applications.menu /etc/xdg/menus/applications.menu 2>/dev/null || true
 kbuildsycoca6 2>/dev/null || true
+
+# PipeWire — requis par le backend de capture natif de Sunshine sous KWin
+# (kwingrab passe par zkde_screencast_unstable_v1 -> PipeWire, pas par
+# wlr-screencopy comme sous Hyprland). Sans ça : "[kwingrab] stream_output
+# failed: Impossible de se connecter à un contexte « PipeWire »" et Sunshine
+# échoue à trouver un encodeur — confirmé en direct après un redémarrage du
+# conteneur (oubli à la première version de ce script, jamais nécessaire
+# sous Hyprland qui capture sans PipeWire).
+pipewire &
+sleep 1
+wireplumber &
+pipewire-pulse &
+sleep 1
 
 # exec (pas de &+wait) : ce script EST le run d'un service longrun s6
 # (svc-kde) — s6 supervise directement le process remplacé ici.

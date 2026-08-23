@@ -13,10 +13,17 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # l'icône de zone de notification ("Cannot spawn a message bus when
     # AT_SECURE is set") — mène à un crash GTK différé (widget invalide).
     # Le tray n'a de toute façon aucun sens en headless.
+    # dd_hdr_option = disabled : sans ça, Sunshine tente de négocier du HEVC
+    # 10-bit (mode "display device" HDR automatique) même en contenu SDR —
+    # confirmé en direct, le client Moonlight refuse purement et simplement
+    # ("GPU ne prend pas en charge le décodage HEVC/AV1 10 bits pour le
+    # streaming HDR") si son GPU ne décode pas le 10-bit. "disabled" laisse
+    # l'affichage tel quel plutôt que de laisser Sunshine changer son état.
     cat > "${CONF_DIR}/sunshine.conf" <<'EOF'
 locale = fr
 csrf_allowed_origins = https://10.1.1.1:47990
 system_tray = 0
+dd_hdr_option = disabled
 EOF
 fi
 
