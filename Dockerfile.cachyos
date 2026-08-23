@@ -194,7 +194,7 @@ RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/
 # en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
 # d'IP en dur) et le port websockify pour que l'URL de base se connecte
 # directement.
-RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=remote&reconnect=true");</script>\n' \
+RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
