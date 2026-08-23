@@ -43,6 +43,19 @@ for script in init_system init_audio init_sunshine; do
     fi
 done
 
+# ── 2b. D-Bus système + NetworkManager (non-géré) ──────────────────────────────
+# Nécessaire uniquement pour que Steam trouve un client NetworkManager D-Bus
+# et sorte de "waiting for network" — NetworkManager.conf (unmanaged-devices=*)
+# l'empêche de toucher aux vraies interfaces de l'hôte (network_mode: host).
+[ -f /etc/machine-id ] || dbus-uuidgen --ensure=/etc/machine-id
+mkdir -p /run/dbus
+if [ ! -S /run/dbus/system_bus_socket ]; then
+    dbus-daemon --system --fork
+fi
+if ! pgrep -x NetworkManager >/dev/null; then
+    NetworkManager --no-daemon &
+fi
+
 # ── 3. Boucle superviseur ──────────────────────────────────────────────────────
 while true; do
     echo "--- [Superviseur] Démarrage de la session ---"

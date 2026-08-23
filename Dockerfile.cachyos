@@ -38,9 +38,20 @@ RUN pacman -Syu --noconfirm && \
       steam \
       sunshine \
       gamemode mangohud \
-      dbus polkit \
+      dbus polkit networkmanager \
       xdg-desktop-portal \
     && pacman -Scc --noconfirm
+
+# Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
+# et reste bloqué sur "waiting for network" sans ce service, même quand la
+# connectivité réelle est bonne (observé : ses propres tests de connectivité
+# HTTP passent, mais "Init: failed to create a NetworkManager client" bloque
+# quand même l'écran de login). unmanaged-devices=* est CRITIQUE en
+# network_mode: host : NetworkManager voit alors les vraies interfaces de
+# l'hôte Unraid — sans ce réglage il pourrait tenter de les gérer/reconfigurer.
+RUN mkdir -p /etc/NetworkManager && \
+    printf '[main]\nplugins=keyfile\n\n[keyfile]\nunmanaged-devices=*\n' \
+      > /etc/NetworkManager/NetworkManager.conf
 
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
