@@ -23,6 +23,10 @@ services:
     devices:
       - /dev/dri:/dev/dri
       - /dev/uinput:/dev/uinput
+      - /dev/uhid:/dev/uhid                # requis par libvirtualhid (Sunshine) pour l'émulation
+                                            # complète des manettes (vibrations/force-feedback) —
+                                            # /dev/uinput seul ne suffit pas, cf. gamepad_profiles
+                                            # dans virtualhid_input.cpp (LizardByte/Sunshine)
     device_cgroup_rules:
       - 'c 13:* rmw'                       # /dev/input/*
       - 'c 226:* rmw'                      # /dev/dri/*
