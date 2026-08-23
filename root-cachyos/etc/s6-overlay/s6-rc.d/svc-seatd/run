@@ -1,0 +1,4 @@
+#!/command/with-contenv bash
+# arcade est déjà dans le groupe "video" (useradd -G ... video ... au build) :
+# seatd -g video suffit à lui donner l'accès au socket sans chmod supplémentaire.
+exec seatd -g video

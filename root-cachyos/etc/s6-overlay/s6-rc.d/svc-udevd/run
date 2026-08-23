@@ -1,0 +1,15 @@
+#!/command/with-contenv bash
+# oneshot, pas longrun : systemd-udevd (ce build) quitte immédiatement sans
+# --daemon (testé en direct : le process exec'd sort avec exitcode 0 en
+# moins d'une seconde) plutôt que de rester au premier plan comme la plupart
+# des daemons — --daemon fait qu'il se détache lui-même dans sa propre
+# session et y reste, exactement le comportement déjà éprouvé en prod (`ps
+# aux` y montre systemd-udevd --daemon toujours résident). s6 ne supervise
+# donc pas directement ce process (il ne peut pas, il se détache), mais
+# aucune régression : ce n'était déjà pas supervisé sous l'ancien
+# entrypoint.sh bash.
+#
+# Nécessaire pour le hotplug (souris/clavier virtuels créés par Sunshine à
+# la connexion d'un client) : sans démon udev tournant en continu,
+# libinput/Hyprland ne détecte jamais ces périphériques uinput.
+exec /usr/lib/systemd/systemd-udevd --daemon

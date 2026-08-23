@@ -1,0 +1,11 @@
+#!/command/with-contenv bash
+# Oneshot déclenché une fois svc-udevd up : matérialise le matériel DRM déjà
+# présent (udevd tournant en continu ne capte que les hotplugs après coup).
+#
+# IMPORTANT : ne JAMAIS étendre ce trigger au sous-système input. /sys reflète
+# le vrai matériel de l'hôte (non isolé par les namespaces Docker) — un
+# trigger sur input rejouerait aussi les uevents des vrais clavier/souris de
+# l'hôte Unraid, qu'udevd matérialiserait alors comme périphériques dans le
+# conteneur (incident déjà rencontré sur l'image webstation).
+udevadm trigger --action=add --subsystem-match=drm 2>/dev/null || true
+udevadm settle --timeout=5 2>/dev/null || true

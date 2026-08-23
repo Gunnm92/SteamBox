@@ -1,0 +1,6 @@
+#!/command/with-contenv bash
+# Hyprland comme compositeur racine, session utilisateur arcade. Le script
+# génère toute la config (wallpaper/waybar/dock/GTK/hyprland.conf) puis exec
+# dans dbus-run-session -- start-hyprland — c'est ce process final que s6
+# supervise (redémarre automatiquement en cas de crash).
+exec runuser -u arcade -- /usr/local/bin/scripts/hypr-session.sh

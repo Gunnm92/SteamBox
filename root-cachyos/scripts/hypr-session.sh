@@ -30,6 +30,25 @@ export HYPRLAND_NO_SD_NOTIFY=1
 export GDK_SCALE=1
 export QT_SCALE_FACTOR=1
 
+# Thème sombre système — sans ça, seuls waybar/le dock (leur propre CSS
+# Catppuccin) sont stylés : toute VRAIE application (Dolphin, PCSX2, Steam,
+# nwg-drawer...) reste en thème clair par défaut (GTK Adwaita / Qt Fusion),
+# ce qui donne l'impression qu'aucun thème n'est appliqué puisque c'est là
+# que se passe l'essentiel du temps à l'écran. adwaita-qt6 fournit un style
+# Qt "adwaita-dark" tout fait (pas besoin de palette qt6ct écrite à la main) ;
+# GTK a un mode sombre intégré (gtk-application-prefer-dark-theme), testé en
+# direct sur Dolphin et nwg-drawer, tous les deux rendus sombres correctement.
+export QT_STYLE_OVERRIDE=adwaita-dark
+mkdir -p "${HOME}/.config/gtk-3.0" "${HOME}/.config/gtk-4.0"
+cat > "${HOME}/.config/gtk-3.0/settings.ini" <<'EOF'
+[Settings]
+gtk-application-prefer-dark-theme=1
+gtk-theme-name=Adwaita
+gtk-icon-theme-name=Papirus-Dark
+gtk-cursor-theme-name=Adwaita
+EOF
+cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
+
 mkdir -p "${HOME}/.config/hypr" "${HOME}/.config/waybar"
 
 cat > "${HOME}/.config/hypr/hyprpaper.conf" <<'EOF'
@@ -202,24 +221,9 @@ wireplumber &
 pipewire-pulse &
 sleep 1
 
-dbus-run-session -- start-hyprland &
-HYPR_PID=$!
-
-# Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
-# socket qu'il crée (observé : wayland-1 alors que wayland-0 était libre) —
-# on détecte le socket réellement créé plutôt que de supposer son nom.
-SOCK=""
-TIMEOUT=30
-while [ -z "${SOCK}" ] && [ "${TIMEOUT}" -gt 0 ]; do
-    SOCK=$(find "${XDG_RUNTIME_DIR}" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' 2>/dev/null | head -n1)
-    [ -z "${SOCK}" ] && sleep 0.5
-    TIMEOUT=$((TIMEOUT - 1))
-done
-
-if [ -z "${SOCK}" ]; then
-    echo "[hypr-session] ERREUR : pas de socket Wayland après démarrage de Hyprland."
-else
-    basename "${SOCK}" > "${XDG_RUNTIME_DIR}/.wayland-socket-name"
-fi
-
-wait "${HYPR_PID}"
+# exec (pas de &+wait) : ce script EST le run d'un service longrun s6
+# (svc-hyprland) — s6 supervise directement le process remplacé ici, plutôt
+# que ce script lui-même. svc-sunshine/svc-wayvnc détectent eux-mêmes le
+# socket Wayland réel une fois up (son nom n'est pas garanti "wayland-0",
+# observé : parfois wayland-1 alors que wayland-0 était libre).
+exec dbus-run-session -- start-hyprland

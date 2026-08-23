@@ -1,0 +1,4 @@
+#!/command/with-contenv bash
+# Bus système D-Bus — nécessaire pour que Steam trouve un client
+# NetworkManager D-Bus et sorte de "waiting for network".
+exec dbus-daemon --system --nofork

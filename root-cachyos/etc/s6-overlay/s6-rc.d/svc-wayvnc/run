@@ -1,0 +1,22 @@
+#!/command/with-contenv bash
+# wayvnc --websocket (0.10.1) crashe (double free) au premier client
+# websocket — bug upstream connu (any1/wayvnc#319). On sert le RFB brut en
+# interne (5901) et svc-websockify websocket-ifie devant, l'architecture
+# noVNC classique/éprouvée plutôt que l'implémentation websocket native.
+#
+# --keyboard=fr : le clavier virtuel créé par wayvnc (protocole
+# virtual-keyboard) fournit son propre keymap au client Wayland — il
+# n'hérite PAS de input:kb_layout de hyprland.conf (qui ne s'applique
+# qu'aux vrais périphériques). Sans ce flag, confirmé en direct :
+# "hl-virtual-keyboard-wayvnc" reste en English (US) même avec kb_layout=fr.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+SOCK=""
+while [ -z "${SOCK}" ]; do
+    SOCK=$(find "${XDG_RUNTIME_DIR}" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' 2>/dev/null | head -n1)
+    [ -z "${SOCK}" ] && sleep 0.5
+done
+
+exec s6-setuidgid arcade \
+    env WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    wayvnc --render-cursor --max-fps=60 --keyboard=fr 127.0.0.1 5901

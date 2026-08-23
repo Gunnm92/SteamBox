@@ -1,0 +1,4 @@
+#!/command/with-contenv bash
+# NetworkManager.conf (unmanaged-devices=*, écrit au build) l'empêche de
+# toucher aux vraies interfaces de l'hôte en network_mode: host.
+exec NetworkManager --no-daemon

@@ -1,0 +1,47 @@
+#!/command/with-contenv bash
+# Préparation système one-shot, avant tout service longrun.
+set -e
+
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
+
+echo "[init-system] Préparation système..."
+
+# ── Alignement UID/GID sur le volume /config monté ─────────────────────────
+if [ "$(id -u arcade)" != "${PUID}" ] || [ "$(id -g arcade)" != "${PGID}" ]; then
+    groupmod -o -g "${PGID}" arcade
+    usermod -o -u "${PUID}" -g "${PGID}" arcade
+fi
+mkdir -p /config
+chown "${PUID}:${PGID}" /config
+# Le home réel vit sur le volume /config (persistant), pas dans le rootfs image.
+if [ ! -d /config/.config ]; then
+    cp -a /home/arcade/. /config/ 2>/dev/null || true
+fi
+rm -rf /home/arcade
+ln -sfn /config /home/arcade
+
+# ── Driver NVIDIA userspace (matché au host) ───────────────────────────────
+/usr/local/bin/install-nvidia-userspace.sh || echo "[init-system] Continuer sans match NVIDIA (voir logs ci-dessus)"
+
+XDG_RUNTIME_DIR="/run/user/${PUID}"
+rm -rf "${XDG_RUNTIME_DIR}" /run/seatd.sock /tmp/.X* 2>/dev/null || true
+mkdir -p "${XDG_RUNTIME_DIR}"
+chmod 0700 "${XDG_RUNTIME_DIR}"
+chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
+
+# Permissions génériques input/GPU — device_cgroup_rules côté docker-compose
+# gère déjà l'accès cgroup, ceci couvre la permission Unix classique.
+chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
+
+for script in init_system init_audio init_sunshine; do
+    if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
+        "/usr/local/bin/scripts/${script}.sh"
+    fi
+done
+
+# D-Bus système : machine-id requis avant que svc-dbus-system démarre.
+[ -f /etc/machine-id ] || dbus-uuidgen --ensure=/etc/machine-id
+mkdir -p /run/dbus
+
+echo "[init-system] Terminé."

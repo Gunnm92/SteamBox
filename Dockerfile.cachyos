@@ -24,7 +24,7 @@ FROM cachyos/cachyos-v3:latest
 # ── 1. Base système + Hyprland minimal + seatd/libinput + GPU (Mesa/Vulkan) ──
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
-      sudo vim openssh curl wget tar git jq unzip \
+      sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       hyprland xdg-desktop-portal-hyprland foot \
       hyprpaper waybar wofi nwg-dock-hyprland nwg-drawer imagemagick grim \
@@ -53,6 +53,7 @@ RUN pacman -Syu --noconfirm && \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
       dolphin-emu scummvm \
+      adwaita-qt6 papirus-icon-theme \
     && pacman -Scc --noconfirm
 
 # wayvnc --websocket (0.10.1) crashe (double free) au premier client
@@ -418,6 +419,25 @@ RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&po
 COPY ArcadeBox/root-cachyos/usr/local/bin/install-nvidia-userspace.sh /usr/local/bin/install-nvidia-userspace.sh
 RUN chmod +x /usr/local/bin/install-nvidia-userspace.sh
 
+# ── 2b. s6-overlay — vrai supervisor de conteneur (comme l'ancienne image
+# webstation, basée sur linuxserver/baseimage-selkies qui l'embarque déjà).
+# Remplace les boucles bash artisanales de l'ancien entrypoint.sh : chaque
+# service (Hyprland, Sunshine, wayvnc, websockify...) est redémarré
+# automatiquement par s6 s'il crashe, avec ses propres logs, sans dépendre
+# d'un `while kill -0 $PID; do ...; done` maison — fragile, comme confirmé en
+# direct sur ce projet (un `pkill` a un jour tué le superviseur de wayvnc en
+# plus du service, sans que rien ne le relance). Version épinglée (pas
+# "latest") : composant d'infrastructure, la reproductibilité prime ici sur
+# la fraîcheur.
+ARG S6_OVERLAY_VERSION=3.2.3.2
+RUN curl -fsSL -o /tmp/s6-overlay-noarch.tar.xz \
+      "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" && \
+    tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && \
+    curl -fSL -o /tmp/s6-overlay-x86_64.tar.xz \
+      "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz" && \
+    tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz && \
+    rm -f /tmp/s6-overlay-*.tar.xz
+
 # ── 3. Règles udev manettes (Xbox/PlayStation/Switch — mappings non standard) ─
 RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tmp/gdu && \
     cp /tmp/gdu/src/*.rules /etc/udev/rules.d/ && \
@@ -437,9 +457,13 @@ RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
 
 # ── 5. Scripts de démarrage ────────────────────────────────────────────────────
-COPY ArcadeBox/root-cachyos/entrypoint.sh /entrypoint.sh
+# root-cachyos/etc/ apporte l'arborescence s6-rc.d (services) par-dessus les
+# fichiers déjà installés par s6-overlay lui-même (section 2b) — remplace
+# l'ancien entrypoint.sh (boucle bash artisanale) entièrement.
+COPY ArcadeBox/root-cachyos/etc/ /etc/
 COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
-RUN chmod +x /entrypoint.sh /usr/local/bin/scripts/*.sh
+RUN chmod +x /usr/local/bin/scripts/*.sh && \
+    find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \;
 
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
     WAYLAND_DISPLAY=wayland-0 \
@@ -451,9 +475,12 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
-    DOOMWADDIR=/usr/local/share/doom
+    DOOMWADDIR=/usr/local/share/doom \
+    S6_KEEP_ENV=1 \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
+    S6_VERBOSITY=2
 
 VOLUME /config
 EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/init"]

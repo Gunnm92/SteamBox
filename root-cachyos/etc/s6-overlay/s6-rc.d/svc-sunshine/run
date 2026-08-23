@@ -1,0 +1,19 @@
+#!/command/with-contenv bash
+# DISPLAY=:0 nécessaire même sous Wayland : Sunshine tourne indépendamment
+# de la session Hyprland (pas un enfant exec-once), donc n'hérite de rien
+# d'autre que ce qu'on lui passe explicitement — sans DISPLAY, ses apps
+# "detached" (Steam Big Picture) plantent avec une erreur X.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+# Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
+# socket qu'il crée (observé : parfois wayland-1 alors que wayland-0 était
+# libre) — on détecte le socket réellement créé plutôt que de supposer son nom.
+SOCK=""
+while [ -z "${SOCK}" ]; do
+    SOCK=$(find "${XDG_RUNTIME_DIR}" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' 2>/dev/null | head -n1)
+    [ -z "${SOCK}" ] && sleep 0.5
+done
+
+exec s6-setuidgid arcade \
+    env WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
+    sunshine /config/.config/sunshine/sunshine.conf
