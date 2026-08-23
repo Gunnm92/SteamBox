@@ -84,6 +84,16 @@ RUN glib-compile-schemas /usr/share/glib-2.0/schemas/
 # menu applications nwg-drawer) plante instantanément dessus.
 RUN update-mime-database /usr/share/mime
 
+# ── 1a3c. steam toujours avec -pipewire — Remote Play/Steam Link a besoin de
+# ce flag pour la capture vidéo (sinon : "Unable to capture video:
+# k_ECaptureFailedReasonPipewireRequired" après ~1 min de stream, confirmé
+# dans streaming_log.txt). On avait ce flag via l'auto-lancement Big Picture
+# retiré depuis — un wrapper le réapplique quel que soit le point d'entrée
+# (dock, menu applications, app Sunshine), /usr/local/bin passant avant
+# /usr/bin dans le PATH.
+RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire "$@"\n' > /usr/local/bin/steam && \
+    chmod +x /usr/local/bin/steam
+
 # ── 1a4. Fond d'écran par défaut — dégradé sombre, pas juste un écran noir.
 RUN mkdir -p /usr/share/backgrounds && \
     magick -size 3840x2160 gradient:'#4a3a8a'-'#161028' /usr/share/backgrounds/arcadebox.png
