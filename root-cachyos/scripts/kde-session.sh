@@ -1,13 +1,8 @@
 #!/bin/bash
-# Lance KWin (backend DRM, sortie virtuelle car pas de moniteur physique) puis
-# Steam en plein écran dedans.
-#
-# INCERTITUDE CONNUE : contrairement à wlroots (backend headless natif bien
-# supporté), le support de KWin pour un rendu GPU accéléré sans connecteur
-# DRM réel est moins mature — c'est le point le plus à risque de cette
-# architecture, à valider empiriquement. Si "--drm" ne produit pas de sortie
-# virtuelle exploitable, il faudra soit un dummy plug HDMI physique sur le
-# GPU (contournement classique), soit reconsidérer KWin pour ce rôle.
+# Lance KWin (backend DRM, sortie virtuelle car pas de moniteur physique) avec
+# Xwayland, PipeWire, puis Steam en plein écran — Steam est passé en argument
+# à kwin_wayland lui-même (pas lancé en process séparé) pour que KWin attende
+# que Xwayland soit prêt et lui fournisse un DISPLAY correct automatiquement.
 
 set -e
 
@@ -16,8 +11,21 @@ export WAYLAND_DISPLAY=wayland-0
 export QT_QPA_PLATFORM=wayland
 export SDL_VIDEODRIVER=wayland
 export SDL_JOYSTICK_DISABLE_UDEV=1
+# KWin bloque le protocole zkde_screencast_unstable_v1 derrière un système de
+# permission par app (pensé pour un utilisateur qui clique "autoriser") —
+# inapplicable en headless sans utilisateur pour répondre. Sunshine a un
+# fichier de permission système (dev.lizardbyte.app.Sunshine.kwin.desktop)
+# mais ça ne suffit pas seul ; ce flag désactive complètement le contrôle.
+export KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
 
-kwin_wayland --drm --no-lockscreen --no-global-shortcuts &
+pipewire &
+sleep 1
+wireplumber &
+pipewire-pulse &
+sleep 1
+
+kwin_wayland --drm --xwayland --no-lockscreen --no-global-shortcuts \
+  -- bash -c 'exec steam -gamepadui -pipewire' &
 KWIN_PID=$!
 
 TIMEOUT=20
@@ -28,19 +36,6 @@ done
 
 if [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
     echo "[kde-session] ERREUR : KWin n'a pas créé de socket Wayland."
-    wait "${KWIN_PID}"
-    exit 1
 fi
 
-# PipeWire côté session utilisateur (capture audio Sunshine + portails KDE)
-pipewire &
-sleep 1
-wireplumber &
-pipewire-pulse &
-
-sleep 2
-steam -gamepadui -pipewire &
-STEAM_PID=$!
-
 wait "${KWIN_PID}"
-kill "${STEAM_PID}" 2>/dev/null || true

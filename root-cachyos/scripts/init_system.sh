@@ -3,7 +3,7 @@
 set -e
 
 if [ ! -f /etc/locale.gen.done ]; then
-    echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+    printf 'fr_FR.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n' > /etc/locale.gen
     locale-gen
     touch /etc/locale.gen.done
 fi

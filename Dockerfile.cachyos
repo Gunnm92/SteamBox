@@ -28,6 +28,7 @@ RUN pacman -Syu --noconfirm && \
       wayvnc \
       ffmpeg \
       steam \
+      sunshine \
       gamemode mangohud \
       dbus polkit \
       xdg-desktop-portal xdg-desktop-portal-kde \
@@ -76,7 +77,10 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     LIBSEAT_BACKEND=seatd \
     QT_QPA_PLATFORM=wayland \
     SDL_VIDEODRIVER=wayland \
-    SDL_JOYSTICK_DISABLE_UDEV=1
+    SDL_JOYSTICK_DISABLE_UDEV=1 \
+    LANG=fr_FR.UTF-8 \
+    LANGUAGE=fr_FR:fr \
+    LC_ALL=fr_FR.UTF-8
 
 VOLUME /config
 EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010

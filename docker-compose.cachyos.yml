@@ -8,8 +8,8 @@ services:
     hostname: ArcadeBox-CachyOS
     runtime: nvidia
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=99
+      - PGID=100
       - TZ=Europe/Paris
       - NVIDIA_VISIBLE_DEVICES=GPU-993ff90a-304b-da13-1287-c533c1073ab4
       - NVIDIA_DRIVER_CAPABILITIES=all
