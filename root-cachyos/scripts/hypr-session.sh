@@ -51,6 +51,10 @@ misc {
     disable_splash_rendering = true
     disable_hyprland_logo = true
 }
+
+# Aucune barre/lanceur par défaut — sans ce bind, rien n'est joignable au
+# clavier sur un bureau vide (Steam n'est plus lancé automatiquement).
+bind = SUPER, Return, exec, foot
 EOF
 
 pipewire &
