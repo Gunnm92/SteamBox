@@ -25,7 +25,7 @@ ln -sfn /config /home/"${USER_NAME}"
 
 # ── 2. Nettoyage d'un boot précédent ───────────────────────────────────────────
 echo "--- [Boot] Nettoyage ---"
-killall -9 -q sunshine kwin_wayland steam seatd wayvnc pipewire wireplumber 2>/dev/null || true
+killall -9 -q sunshine Hyprland steam seatd wayvnc pipewire wireplumber 2>/dev/null || true
 rm -rf "${XDG_RUNTIME_DIR}" /run/seatd.sock /tmp/.X* 2>/dev/null || true
 mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
@@ -47,9 +47,9 @@ done
 while true; do
     echo "--- [Superviseur] Démarrage de la session ---"
 
-    killall -q sunshine kwin_wayland steam seatd wayvnc 2>/dev/null || true
+    killall -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
     sleep 1
-    killall -9 -q sunshine kwin_wayland steam seatd wayvnc 2>/dev/null || true
+    killall -9 -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
     rm -rf "${XDG_RUNTIME_DIR}/wayland-0" /run/seatd.sock
 
     udevadm trigger --action=change --subsystem-match=input 2>/dev/null || true
@@ -66,8 +66,8 @@ while true; do
     done
     chmod 777 /run/seatd.sock 2>/dev/null || true
 
-    echo "    [Superviseur] Lancement de la session KDE..."
-    runuser -u "${USER_NAME}" -- /usr/local/bin/scripts/kde-session.sh &
+    echo "    [Superviseur] Lancement de la session Hyprland..."
+    runuser -u "${USER_NAME}" -- /usr/local/bin/scripts/hypr-session.sh &
     SESSION_PID=$!
 
     TIMEOUT=30
@@ -86,7 +86,7 @@ while true; do
             wayvnc --websocket --render-cursor --max-fps=60 0.0.0.0 5900 &
         WAYVNC_PID=$!
     else
-        echo "    [Superviseur] ERREUR : socket wayland-0 introuvable, KWin n'a pas démarré."
+        echo "    [Superviseur] ERREUR : socket wayland-0 introuvable, Hyprland n'a pas démarré."
     fi
 
     runuser -u "${USER_NAME}" -- python3 -m http.server 6080 --directory /usr/share/webapps/novnc --bind 0.0.0.0 &

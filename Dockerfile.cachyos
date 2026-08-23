@@ -1,24 +1,32 @@
-# ArcadeBox — variante CachyOS + KDE Plasma (KWin), architecture proche SteamOS.
+# ArcadeBox — variante CachyOS + Hyprland, architecture proche SteamOS.
 #
-# Différence structurelle avec l'image webstation : KWin est le compositeur
+# Différence structurelle avec l'image webstation : Hyprland est le compositeur
 # RACINE (accès DRM/GPU direct via seatd+libinput), pas imbriqué dans un
 # backend de rendu tiers. Sunshine et wayvnc capturent donc directement le
-# vrai wl_output de KWin — pas de compositeur parent à contourner, pas besoin
-# du bridge evdev custom : seatd + libinput gèrent l'input normalement, comme
-# sur un vrai bureau.
+# vrai wl_output de Hyprland — pas de compositeur parent à contourner, pas
+# besoin du bridge evdev custom : seatd + libinput gèrent l'input normalement,
+# comme sur un vrai bureau. Hyprland étant wlroots, il implémente nativement
+# zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1 (wayvnc input
+# fonctionne directement, contrairement à KWin qui ne les implémente pas).
 #
-# Steam Big Picture se lance en plein écran DANS cette session KDE (pas de
-# bascule vers un second compositeur type Gamescope).
+# KDE Plasma/KWin a été essayé en premier (plus proche visuellement de
+# SteamOS) mais abandonné : Plasma 6 dépend de systemd --user pour lancer ses
+# composants, absent d'un conteneur sans systemd (PID 1 = bash). Chaîne de
+# blocages en cascade (kcminit_startup, plasma_waitforname/KSplash, kded6)
+# nécessitant des wrappers timeout au cas par cas — non soutenable. Hyprland
+# n'a pas cette dépendance et évite toute cette classe de problèmes.
+#
+# Steam Big Picture se lance en plein écran DANS cette session Hyprland (pas
+# de bascule vers un second compositeur type Gamescope).
 
 FROM cachyos/cachyos-v3:latest
 
-# ── 1. Base système + KDE Plasma minimal + seatd/libinput + GPU (Mesa/Vulkan) ─
+# ── 1. Base système + Hyprland minimal + seatd/libinput + GPU (Mesa/Vulkan) ──
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar git jq unzip \
       seatd libinput \
-      plasma-desktop plasma-workspace kwin kscreen \
-      konsole dolphin \
+      hyprland xdg-desktop-portal-hyprland foot \
       xorg-xwayland \
       mesa vulkan-icd-loader vulkan-tools \
       vulkan-radeon lib32-vulkan-radeon \
@@ -31,7 +39,7 @@ RUN pacman -Syu --noconfirm && \
       sunshine \
       gamemode mangohud \
       dbus polkit \
-      xdg-desktop-portal xdg-desktop-portal-kde \
+      xdg-desktop-portal \
     && pacman -Scc --noconfirm
 
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
@@ -65,18 +73,6 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 
 RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
-
-# ── 4b. kcminit_startup — bloque indéfiniment en headless, jamais un crash ───
-# plasma_session attend qu'il termine avant de lancer plasmashell : sur ce
-# rendu headless, un des modules KCM qu'il initialise (clavier, énergie,
-# etc. — non identifié précisément, ptrace indisponible dans le conteneur
-# pour tracer l'appel bloquant) ne rend jamais la main. Un wrapper avec
-# timeout court laisse ses inits non-essentielles une vraie chance sans
-# jamais bloquer le reste de la session au-delà de quelques secondes.
-RUN mv /usr/sbin/kcminit_startup /usr/sbin/kcminit_startup.real && \
-    printf '#!/bin/bash\ntimeout 5 /usr/sbin/kcminit_startup.real "$@"\nexit 0\n' \
-      > /usr/sbin/kcminit_startup && \
-    chmod +x /usr/sbin/kcminit_startup
 
 # ── 5. Scripts de démarrage ────────────────────────────────────────────────────
 COPY ArcadeBox/root-cachyos/entrypoint.sh /entrypoint.sh

@@ -41,7 +41,7 @@ logs:
 clean:
 	$(DOCKER) compose --file ArcadeBox/docker-compose.yml down --rmi local --volumes
 
-# ── Variante CachyOS + KDE (branche cachyos-kde, expérimentale) ──────────────
+# ── Variante CachyOS + Hyprland (branche cachyos-kde, expérimentale) ─────────
 build-cachyos:
 	$(BUILDX) $(BUILD_ARGS) \
 		--file Dockerfile.cachyos \
