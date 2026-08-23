@@ -37,6 +37,7 @@ RUN pacman -Syu --noconfirm && \
       wayvnc python-pip \
       ffmpeg \
       steam \
+      heroic-games-launcher-bin \
       sunshine \
       gamemode mangohud \
       dbus polkit networkmanager \
