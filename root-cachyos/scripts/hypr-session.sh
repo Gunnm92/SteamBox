@@ -60,14 +60,21 @@ sleep 1
 dbus-run-session -- Hyprland &
 HYPR_PID=$!
 
+# Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
+# socket qu'il crée (observé : wayland-1 alors que wayland-0 était libre) —
+# on détecte le socket réellement créé plutôt que de supposer son nom.
+SOCK=""
 TIMEOUT=30
-while [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "${TIMEOUT}" -gt 0 ]; do
-    sleep 0.5
+while [ -z "${SOCK}" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    SOCK=$(find "${XDG_RUNTIME_DIR}" -maxdepth 1 -name 'wayland-[0-9]*' ! -name '*.lock' 2>/dev/null | head -n1)
+    [ -z "${SOCK}" ] && sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
 
-if [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+if [ -z "${SOCK}" ]; then
     echo "[hypr-session] ERREUR : pas de socket Wayland après démarrage de Hyprland."
+else
+    basename "${SOCK}" > "${XDG_RUNTIME_DIR}/.wayland-socket-name"
 fi
 
 wait "${HYPR_PID}"

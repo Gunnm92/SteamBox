@@ -50,7 +50,7 @@ while true; do
     killall -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
     sleep 1
     killall -9 -q sunshine Hyprland steam seatd wayvnc 2>/dev/null || true
-    rm -rf "${XDG_RUNTIME_DIR}/wayland-0" /run/seatd.sock
+    rm -rf "${XDG_RUNTIME_DIR}"/wayland-* "${XDG_RUNTIME_DIR}/.wayland-socket-name" /run/seatd.sock
 
     udevadm trigger --action=change --subsystem-match=input 2>/dev/null || true
     udevadm trigger --action=change --subsystem-match=drm 2>/dev/null || true
@@ -67,26 +67,28 @@ while true; do
     chmod 777 /run/seatd.sock 2>/dev/null || true
 
     echo "    [Superviseur] Lancement de la session Hyprland..."
+    rm -f "${XDG_RUNTIME_DIR}/.wayland-socket-name"
     runuser -u "${USER_NAME}" -- /usr/local/bin/scripts/hypr-session.sh &
     SESSION_PID=$!
 
     TIMEOUT=30
-    while [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    while [ ! -f "${XDG_RUNTIME_DIR}/.wayland-socket-name" ] && [ "${TIMEOUT}" -gt 0 ]; do
         sleep 0.5
         TIMEOUT=$((TIMEOUT - 1))
     done
+    WAYLAND_SOCK_NAME=$(cat "${XDG_RUNTIME_DIR}/.wayland-socket-name" 2>/dev/null || true)
 
-    if [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+    if [ -n "${WAYLAND_SOCK_NAME}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_SOCK_NAME}" ]; then
         sleep 2
-        echo "    [Superviseur] Démarrage de Sunshine et wayvnc..."
-        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        echo "    [Superviseur] Démarrage de Sunshine et wayvnc (${WAYLAND_SOCK_NAME})..."
+        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
             sunshine "/config/.config/sunshine/sunshine.conf" &
         SUNSHINE_PID=$!
-        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
             wayvnc --websocket --render-cursor --max-fps=60 0.0.0.0 5900 &
         WAYVNC_PID=$!
     else
-        echo "    [Superviseur] ERREUR : socket wayland-0 introuvable, Hyprland n'a pas démarré."
+        echo "    [Superviseur] ERREUR : aucun socket Wayland détecté, Hyprland n'a pas démarré."
     fi
 
     runuser -u "${USER_NAME}" -- python3 -m http.server 6080 --directory /usr/share/webapps/novnc --bind 0.0.0.0 &
