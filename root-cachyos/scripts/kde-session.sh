@@ -50,7 +50,24 @@ wireplumber &
 pipewire-pulse &
 sleep 1
 
-dbus-run-session -- startplasma-wayland &
+# Bus D-Bus de session PERSISTANT (pas dbus-run-session, qui en crée un
+# scopé à sa seule commande) — systemd --user et startplasma-wayland doivent
+# partager le MÊME bus, pas deux bus séparés et incompatibles.
+eval "$(dbus-launch --sh-syntax)"
+export DBUS_SESSION_BUS_ADDRESS
+
+# Plasma 6 lance plasmashell et d'autres composants de session comme unités
+# systemd --user (changement d'architecture récent) — sans instance systemd
+# utilisateur, plasma_session reste bloqué indéfiniment à essayer de la
+# joindre, sans jamais planter ni logger d'erreur claire.
+/usr/lib/systemd/systemd --user &
+TIMEOUT=10
+while ! systemctl --user is-system-running --quiet 2>/dev/null && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
+
+startplasma-wayland &
 PLASMA_PID=$!
 
 TIMEOUT=30
