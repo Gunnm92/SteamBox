@@ -24,8 +24,11 @@ export HYPRLAND_NO_SD_NOTIFY=1
 # upscalées en flou par Hyprland (xwayland:force_zero_scaling ci-dessous
 # évite justement ce flou, mais seulement combiné à ces variables : testé
 # en direct, Pegasus rendait net et à la bonne taille avec les deux).
-export GDK_SCALE=2
-export QT_SCALE_FACTOR=2
+# Doit rester aligné sur le "scale" de la ligne monitor= ci-dessous — au 4K
+# c'était 2, en 1440p (densité de pixels plus faible) c'est 1 : sinon les
+# apps Xwayland sortent 2x plus grandes que le reste du bureau natif.
+export GDK_SCALE=1
+export QT_SCALE_FACTOR=1
 
 mkdir -p "${HOME}/.config/hypr" "${HOME}/.config/waybar"
 
@@ -115,12 +118,12 @@ button:hover {
 EOF
 
 cat > "${HOME}/.config/hypr/hyprland.conf" <<'EOF'
-# scale=2 : la résolution physique reste 3840x2160 (les jeux via Moonlight
-# gardent le plein 4K), mais l'UI du bureau (barre, dock, texte des apps
-# HiDPI-aware comme Heroic/Pegasus) s'affiche 2x plus grande — à 1.0,
-# tout est minuscule en VNC/noVNC (confirmé : lisible seulement en zoomant
-# le canevas, jamais au niveau des éléments eux-mêmes).
-monitor=,preferred,auto,2
+# 2560x1440@120 plutôt que le 4K natif de l'écran : la 3090 de l'utilisateur
+# ne tient pas le 4K confortablement en jeu, 1440p est son plafond réaliste.
+# scale=1 (et non plus 2 comme au 4K) : à cette densité de pixels, l'UI du
+# bureau est déjà lisible nativement — confirmé en direct via capture grim,
+# waybar/nwg-drawer nets et à la bonne taille sans mise à l'échelle.
+monitor=,2560x1440@120,auto,1
 
 # Pas d'auto-lancement de Steam ici — lancé à la demande via l'app
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
