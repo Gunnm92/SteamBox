@@ -6,3 +6,6 @@ userdata/
 .DS_Store
 *.swp
 *.swo
+
+# Clone de référence du dépôt source de l'image de base (pas un composant du projet)
+docker-webstation/
