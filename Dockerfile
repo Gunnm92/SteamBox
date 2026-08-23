@@ -155,11 +155,18 @@ RUN \
   add-apt-repository multiverse && apt-get update && \
   DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     steam-installer steam-devices && \
-  sed -i 's|^Exec=/usr/games/steam|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=wayland /usr/games/steam|' \
+  sed -i 's|^Exec=/usr/games/steam|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 SDL_VIDEODRIVER=wayland SDL_JOYSTICK_DISABLE_UDEV=1 /usr/games/steam|' \
     /usr/share/applications/steam.desktop && \
-  SUNSHINE_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
-    "https://api.github.com/repos/LizardByte/Sunshine/releases/latest" \
-    | grep "browser_download_url.*ubuntu-24.04-amd64\.deb" | cut -d'"' -f4) && \
+  UBUNTU_VER=$(. /etc/os-release && echo "${VERSION_ID}") && \
+  SUNSHINE_JSON=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
+    "https://api.github.com/repos/LizardByte/Sunshine/releases/latest") && \
+  SUNSHINE_URL=$(echo "${SUNSHINE_JSON}" \
+    | grep "browser_download_url.*ubuntu-${UBUNTU_VER}-amd64\.deb" | cut -d'"' -f4) && \
+  if [ -z "${SUNSHINE_URL}" ]; then \
+    SUNSHINE_URL=$(echo "${SUNSHINE_JSON}" \
+      | grep -o "https://[^\"]*ubuntu-[0-9.]*-amd64\.deb" | sort -V | tail -1); \
+    echo "Sunshine: aucun paquet pour Ubuntu ${UBUNTU_VER}, repli sur ${SUNSHINE_URL}"; \
+  fi && \
   [ -n "${SUNSHINE_URL}" ] || { echo "FATAL: SUNSHINE_URL vide"; exit 1; } && \
   curl -fSL --retry 3 -o /tmp/sunshine.deb "${SUNSHINE_URL}" && \
   DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/sunshine.deb && \
@@ -174,7 +181,7 @@ RUN \
   [ -n "${HEROIC_DEB_URL}" ] || { echo "FATAL: HEROIC_DEB_URL vide"; exit 1; } && \
   curl -fSL --retry 3 -o /tmp/heroic.deb "${HEROIC_DEB_URL}" && \
   apt-get install -y /tmp/heroic.deb && \
-  sed -i 's|^Exec=/opt/Heroic/heroic|Exec=env XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 ELECTRON_OZONE_PLATFORM_HINT=wayland /opt/Heroic/heroic|' \
+  sed -i 's|^Exec=/opt/Heroic/heroic|Exec=env DISPLAY=:0 XDG_RUNTIME_DIR=/config/.XDG WAYLAND_DISPLAY=wayland-0 ELECTRON_OZONE_PLATFORM_HINT=wayland /opt/Heroic/heroic|' \
     /usr/share/applications/heroic.desktop && \
   PEGASUS_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/mmatyas/pegasus-frontend/releases" \
@@ -183,11 +190,6 @@ RUN \
   apt-get update && \
   curl -fSL --retry 3 -o /tmp/pegasus.deb "${PEGASUS_URL}" && \
   apt-get install -y --no-install-recommends qtwayland5 /tmp/pegasus.deb && \
-  printf '#!/bin/bash\nDISPLAY=$(cat /var/run/s6/container_environment/DISPLAY 2>/dev/null || echo ":1")\nexport DISPLAY\nexec /usr/bin/pegasus-fe "$@"\n' \
-    > /usr/local/bin/pegasus-fe-launch && \
-  chmod +x /usr/local/bin/pegasus-fe-launch && \
-  sed -i 's|^Exec=/usr/bin/pegasus-fe|Exec=/usr/local/bin/pegasus-fe-launch|' \
-    /usr/share/applications/org.pegasus_frontend.Pegasus.desktop && \
   apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # ── 9. Decky Loader + Steam ROM Manager ──────────────────────────────────────
@@ -201,7 +203,7 @@ RUN \
   chmod +x /opt/decky-loader/PluginLoader && \
   SRM_URL=$(curl -K /etc/gh_curlrc --retry 2 -sX GET \
     "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
-    | awk -F '"' '/browser_download_url.*\.AppImage"/{print $4; exit}') && \
+    | awk -F '"' '/browser_download_url.*\.AppImage"/ && !/arm64/{print $4; exit}') && \
   [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
   curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
   chmod +x /tmp/srm.AppImage && cd /tmp && ./srm.AppImage --appimage-extract && \
@@ -214,9 +216,118 @@ RUN \
     > /usr/share/applications/steam-rom-manager.desktop && \
   rm -rf /tmp/* /var/tmp/*
 
+# ── 9b. PipeWire + portail xdg (capture d'écran Wayland) ─────────────────────
+# Permet à Steam Remote Play de capturer via PipeWire (option -pipewire) au lieu
+# de la capture X11 d'Xwayland, qui dépend de la fenêtre filmée.
+# Activé au runtime par ARCADEBOX_PIPEWIRE=true — sans quoi rien n'est démarré.
+#
+# pipewire-pulse est volontairement EXCLU : Selkies capture l'audio via
+# PulseAudio (output.monitor), les deux se disputeraient le socket.
+# xdg-desktop-portal est déjà présent dans l'image de base ; on ajoute le
+# backend wlroots, qui parle le zwlr_screencopy exposé par labwc.
+RUN \
+  apt-get update && \
+  DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    pipewire \
+    wireplumber \
+    xdg-desktop-portal-wlr \
+    dbus-bin && \
+  dpkg -l pipewire-pulse 2>/dev/null | grep -q '^ii' && \
+    { echo "FATAL: pipewire-pulse installé, conflit avec PulseAudio"; exit 1; } || true && \
+  apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# ── 9b2. Patch Selkies — ne pas détruire l'affichage sans client actif ───────
+# Quand le dernier client navigateur Selkies se déconnecte (ou passe en arrière
+# plan : la page envoie STOP_VIDEO via la Page Visibility API, même sans fermer
+# l'onglet), reconfigure_displays() réduit le bureau virtuel à 1x1 et supprime
+# tous les moniteurs xrandr. Sunshine (Moonlight) capture ce même moniteur
+# partagé — sans lien avec l'état d'un client Selkies — et se retrouve figé.
+# On neutralise uniquement ce nettoyage destructeur ; le reste de la logique
+# (arrêt des pipelines d'encodage Selkies) reste intact.
+RUN python3 - <<'PYEOF'
+import pathlib
+p = pathlib.Path("/lsiopy/lib/python3.14/site-packages/selkies/selkies.py")
+old = '''                if not self.display_clients:
+                    data_logger.warning("No display clients connected. Video pipelines remain stopped.")
+                    _, _, _, _, screen_name = await get_new_res("1x1")
+                    if screen_name:
+                        current_monitors = await self._get_current_monitors()
+                        for monitor_name in current_monitors:
+                            await self._run_command(["xrandr", "--delmonitor", monitor_name], f"cleanup monitor {monitor_name}")
+                    return'''
+new = '''                if not self.display_clients:
+                    # ArcadeBox: ne jamais réduire/supprimer l'affichage virtuel ici —
+                    # Sunshine (Moonlight) peut en dépendre indépendamment de tout
+                    # client Selkies actif.
+                    data_logger.warning("No display clients connected. Leaving display as-is (ArcadeBox patch).")
+                    return'''
+content = p.read_text()
+if old not in content:
+    raise SystemExit(
+        "FATAL: bloc de nettoyage selkies.py introuvable — le paquet selkies de "
+        "l'image de base a changé, ce patch doit être mis à jour"
+    )
+p.write_text(content.replace(old, new, 1))
+print("[arcadebox] Patch selkies.py appliqué (pas de reset d'affichage sans client)")
+PYEOF
+
+# ── 9b3. wayvnc + noVNC — accès bureau indépendant de Selkies ────────────────
+# Selkies (service Python) est couplé à la supervision des process du bureau :
+# l'arrêter fait tomber labwc/Sunshine/Steam en cascade (testé), donc on le
+# garde tel quel. Mais son cycle de vie côté client (connexion/déconnexion/mise
+# en arrière-plan) réduit ou détruit l'affichage virtuel partagé avec Sunshine.
+# wayvnc capture labwc via le même protocole wlr-screencopy que Sunshine, sans
+# dépendre d'aucun service Python — un second consommateur totalement
+# indépendant, pour l'accès bureau/config jeux à la place de l'UI web Selkies.
+RUN \
+  apt-get update && \
+  DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    wayvnc \
+    novnc && \
+  apt-get autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# ── 9c. evdev-bridge (injection input Wayland pour Sunshine) ─────────────────
+# Sunshine (version stable) n'injecte la souris/clavier que via uinput sur
+# Linux — le support natif zwlr_virtual_pointer/zwp_virtual_keyboard n'est
+# encore qu'une PR ouverte, non mergée (LizardByte/Sunshine#4972). Or labwc
+# tourne ici imbriqué dans selkies-desktop, sans backend libinput : rien ne
+# lit jamais les devices uinput "Mouse/Keyboard passthrough" créés par
+# Sunshine à la connexion d'un client Moonlight.
+#
+# evdev-bridge comble ce trou : il lit ces devices uinput directement et
+# rejoue les événements dans labwc via les protocoles Wayland
+# zwlr_virtual_pointer_manager_v1 / zwp_virtual_keyboard_manager_v1, que
+# labwc supporte nativement. Source : github.com/Desarso/evdev-bridge
+# (pas de licence explicite dans le dépôt — usage privé uniquement, jamais
+# republié).
+RUN \
+  apt-get update && \
+  DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    gcc \
+    libc6-dev \
+    libwayland-dev \
+    libxkbcommon-dev && \
+  apt-get autoclean && rm -rf /var/lib/apt/lists/*
+COPY ArcadeBox/evdev-bridge /tmp/evdev-bridge
+RUN \
+  make -C /tmp/evdev-bridge && \
+  install -Dm755 /tmp/evdev-bridge/evdev-bridge-native /usr/local/bin/evdev-bridge-native && \
+  rm -rf /tmp/evdev-bridge && \
+  apt-get purge -y gcc libc6-dev libwayland-dev libxkbcommon-dev && \
+  apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # ── 10. wsquashfs-batocera ────────────────────────────────────────────────────
 COPY ArcadeBox/wsquashfs-batocera /usr/local/bin/wsquashfs-batocera
 RUN chmod +x /usr/local/bin/wsquashfs-batocera
+
+# ── 11. Surcouche s6 + defaults ArcadeBox ────────────────────────────────────
+# init-arcadebox : oneshot s6-rc exécuté avant init-services (donc avant svc-de).
+COPY ArcadeBox/root/ /
+RUN chmod +x /etc/s6-overlay/s6-rc.d/init-arcadebox/run \
+             /etc/s6-overlay/s6-rc.d/svc-evdev-bridge/run \
+             /etc/s6-overlay/s6-rc.d/svc-wayvnc/run \
+             /etc/s6-overlay/s6-rc.d/svc-novnc-web/run \
+             /defaults/steam-gaming-mode.sh
 
 EXPOSE 3001
 VOLUME /config

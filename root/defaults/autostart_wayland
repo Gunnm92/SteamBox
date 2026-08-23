@@ -1,3 +1,75 @@
+# ARCADEBOX_DISPLAY_ENV_V2 — ne pas retirer ce marqueur (testé par init-arcadebox)
+#
+# labwc est lancé par /defaults/startwm_wayland.sh avec WAYLAND_DISPLAY=wayland-1
+# (le socket de Selkies, son compositeur parent). Les valeurs correctes pour les
+# applications ne sont exportées qu'ensuite, pour selkies-desktop uniquement :
+#
+#   export WAYLAND_DISPLAY=wayland-1
+#   labwc &                       <- hérite de wayland-1, et de DISPLAY du conteneur
+#   export WAYLAND_DISPLAY=wayland-0
+#   export DISPLAY=:0
+#   selkies-desktop
+#
+# Résultat : tout ce que labwc lance (cet autostart, son menu) hérite de
+# wayland-1 — le compositeur de capture, sans gestionnaire de fenêtres — et d'un
+# DISPLAY mort. On rétablit ici l'environnement applicatif pour cet autostart.
+XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/config/.XDG}"
+WAYLAND_DISPLAY=wayland-0
+DISPLAY=:0
+export XDG_RUNTIME_DIR WAYLAND_DISPLAY DISPLAY
+
+# Journalisation : /defaults/startwm_wayland.sh lance labwc avec "> /dev/null 2>&1",
+# donc la sortie de tout ce qu'il démarre — cet autostart, dex, Steam — est jetée.
+# On la récupère ici ; la redirection est héritée par tous les processus fils.
+# Un seul niveau de rotation, pour garder la trace du démarrage précédent.
+ARCADEBOX_LOG_DIR="${HOME}/logs"
+mkdir -p "${ARCADEBOX_LOG_DIR}"
+[ -f "${ARCADEBOX_LOG_DIR}/autostart.log" ] && \
+  mv -f "${ARCADEBOX_LOG_DIR}/autostart.log" "${ARCADEBOX_LOG_DIR}/autostart.log.1"
+exec >> "${ARCADEBOX_LOG_DIR}/autostart.log" 2>&1
+echo "=== autostart labwc $(date -u +%Y-%m-%dT%H:%M:%SZ) — DISPLAY=${DISPLAY} WAYLAND_DISPLAY=${WAYLAND_DISPLAY} ==="
+
+# labwc crée son socket juste avant de lancer l'autostart : petite attente de sûreté
+i=0
+while [ ! -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ] && [ "$i" -lt 40 ]; do
+  sleep 0.25
+  i=$((i + 1))
+done
+
+# ── Capture par PipeWire (optionnelle) ────────────────────────────────────────
+# Activée par ARCADEBOX_PIPEWIRE=true. Permet à Steam Remote Play de capturer la
+# sortie entière via le portail xdg (option -pipewire), au lieu de la capture X11
+# d'Xwayland qui dépend de la fenêtre filmée et retombe en écran noir quand elle
+# disparaît. Désactivée, rien de ce bloc ne démarre : comportement inchangé.
+if [ "${ARCADEBOX_PIPEWIRE}" = "true" ]; then
+  # Le portail exige un bus de session. On utilise le chemin standard
+  # ${XDG_RUNTIME_DIR}/bus, que D-Bus découvre seul même sans la variable —
+  # plus déterministe que dbus-launch, qui avait posé problème ici.
+  if [ ! -S "${XDG_RUNTIME_DIR}/bus" ]; then
+    dbus-daemon --session --nofork --nopidfile \
+      --address="unix:path=${XDG_RUNTIME_DIR}/bus" &
+    j=0
+    while [ ! -S "${XDG_RUNTIME_DIR}/bus" ] && [ "$j" -lt 20 ]; do
+      sleep 0.25
+      j=$((j + 1))
+    done
+  fi
+  DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+  # wlr.portal déclare UseIn=wlroots;sway;… sans labwc : sans cette valeur,
+  # xdg-desktop-portal ne sélectionnerait aucun backend de capture.
+  XDG_CURRENT_DESKTOP=wlroots
+  XDG_SESSION_TYPE=wayland
+  export DBUS_SESSION_BUS_ADDRESS XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+
+  pgrep -x pipewire    >/dev/null 2>&1 || pipewire &
+  sleep 1
+  pgrep -x wireplumber >/dev/null 2>&1 || wireplumber &
+
+  echo "[arcadebox] PipeWire activé — bus ${XDG_RUNTIME_DIR}/bus, portail wlroots"
+else
+  echo "[arcadebox] PipeWire désactivé (ARCADEBOX_PIPEWIRE != true) — capture X11 Xwayland"
+fi
+
 ## Emu setups ##
 # Retroarch
 if [ ! -d "${HOME}/.config/retroarch" ]; then
@@ -64,9 +136,12 @@ fi
 mako &
 
 # Decky Loader
-if [[ -x /config/homebrew/services/PluginLoader ]]; then
+# NB : labwc exécute cet autostart avec /bin/sh (dash) — pas de [[ ]] ici.
+if [ -x /config/homebrew/services/PluginLoader ]; then
     HOME=/config /config/homebrew/services/PluginLoader &
 fi
 
 # XDG autostart utilisateur (Steam, Heroic, etc.)
-dex --autostart --directory "${HOME}/.config/autostart" &
+# dex ne connaît pas --directory : l'option est -s/--search-paths. Avec --directory
+# il sortait en erreur, et l'autostart XDG n'était jamais exécuté.
+dex --autostart --search-paths "${HOME}/.config/autostart" &

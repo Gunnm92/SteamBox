@@ -1,8 +1,0 @@
-ArcadeBox/config/
-ArcadeBox/userdata/
-ArcadeBox/.git/
-ArcadeBox/*.md
-wsquashfs-launcher/.git/
-wsquashfs-launcher/docker-compose.yml
-wsquashfs-launcher/Dockerfile
-wsquashfs-launcher/*.md

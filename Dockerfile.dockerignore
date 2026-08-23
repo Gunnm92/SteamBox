@@ -1,0 +1,7 @@
+# Le contexte de build est le dossier parent (workspace/), qui contient d'autres
+# projets : on exclut tout par défaut et on ne réintègre que ce que le Dockerfile
+# copie réellement.
+*
+!ArcadeBox/root
+!ArcadeBox/wsquashfs-batocera
+!ArcadeBox/evdev-bridge

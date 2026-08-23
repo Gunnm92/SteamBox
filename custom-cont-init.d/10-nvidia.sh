@@ -11,16 +11,27 @@ mkdir -p "${CACHE_DIR}"
 
 # ── 1. Détecter la version driver du host ─────────────────────────────────────
 
-# nvidia-smi --query-gpu échoue si version mismatch → utiliser --version ou /proc
+# nvidia-smi --query-gpu échoue si version mismatch → utiliser --version ou /proc.
+# On extrait un numéro de version, jamais le dernier champ : en cas d'erreur
+# nvidia-smi affiche des phrases comme "... use nvidia-smi -q instead", et un
+# awk '{print $NF}' renvoyait alors "instead" comme numéro de version.
+extract_driver_version() {
+    grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
+}
+
 nvidia_host_driver_version=$(
-    nvidia-smi --version 2>/dev/null \
-        | grep -i "Driver Version" \
-        | awk '{print $NF}'
+    nvidia-smi --version 2>/dev/null | grep -i "driver version" | extract_driver_version
 )
 if [ -z "${nvidia_host_driver_version}" ]; then
     nvidia_host_driver_version=$(
-        cat /proc/driver/nvidia/version 2>/dev/null \
-            | grep -oP 'Kernel Module\s+\K[\d.]+'
+        nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version
+    )
+fi
+if [ -z "${nvidia_host_driver_version}" ]; then
+    # Format : "NVRM version: NVIDIA UNIX ... Kernel Module  610.43.03  ..."
+    nvidia_host_driver_version=$(
+        grep -oE 'Kernel Module[[:space:]]+[0-9.]+' /proc/driver/nvidia/version 2>/dev/null \
+            | extract_driver_version
     )
 fi
 
@@ -34,8 +45,8 @@ echo "[nvidia] Version driver host : ${nvidia_host_driver_version}"
 # ── 2. Vérifier si déjà installé à la bonne version ──────────────────────────
 
 installed_version=$(nvidia-settings --version 2>/dev/null \
-    | grep -i version \
-    | awk '{print $NF}')
+    | grep -i "version" \
+    | extract_driver_version)
 
 if [ "${installed_version}" = "${nvidia_host_driver_version}" ]; then
     echo "[nvidia] Driver ${installed_version} déjà installé — rien à faire"
@@ -107,17 +118,15 @@ else
     INSTALL_ARGS+=(--no-kernel-module)
 fi
 
-# Drivers >= 550 : supprimer le flag --no-multigpu obsolète de xorg (webstation)
-if [ "${major_version}" -ge 550 ] 2>/dev/null; then
-    sed -i 's/--no-multigpu//g' /etc/cont-init.d/70-configure_xorg.sh 2>/dev/null || true
-fi
+# NB : l'ancien patch du flag --no-multigpu visait /etc/cont-init.d/70-configure_xorg.sh,
+# répertoire qui n'existe plus (s6-overlay v3) — le sed était sans effet et a été retiré.
 
 "${RUN_FILE}" "${INSTALL_ARGS[@]}" >"${LOG_FILE}" 2>&1
 exit_code=$?
 
 # Les fichiers "Device or resource busy" sont déjà montés par nvidia-container-toolkit
 # à la bonne version → erreurs non fatales, vérifier nvidia-settings pour confirmer
-installed_after=$(nvidia-settings --version 2>/dev/null | grep -i version | awk '{print $NF}')
+installed_after=$(nvidia-settings --version 2>/dev/null | grep -i "version" | extract_driver_version)
 if [ "${installed_after}" = "${nvidia_host_driver_version}" ]; then
     echo "[nvidia] Installation réussie — nvidia-settings ${installed_after}"
 elif [ ${exit_code} -eq 0 ]; then
