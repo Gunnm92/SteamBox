@@ -52,6 +52,7 @@ RUN pacman -Syu --noconfirm && \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
+      dolphin-emu scummvm \
     && pacman -Scc --noconfirm
 
 # wayvnc --websocket (0.10.1) crashe (double free) au premier client
@@ -152,7 +153,9 @@ RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-m
       | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
     [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
-    chmod +x /tmp/srm.AppImage && cd /tmp && ./srm.AppImage --appimage-extract >/dev/null && \
+    chmod +x /tmp/srm.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./srm.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction srm.AppImage échouée"; exit 1; } && \
     mv /tmp/squashfs-root /opt/steam-rom-manager && \
     chmod -R a+rX /opt/steam-rom-manager && \
     ln -sf /opt/steam-rom-manager/AppRun /usr/local/bin/steam-rom-manager && \
@@ -163,7 +166,9 @@ RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-m
 # ── 1a10. Lindbergh Loader (arcade Sega Lindbergh) — AppImage officielle.
 RUN curl -fSL -o /tmp/lindbergh.app \
       "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage" && \
-    chmod +x /tmp/lindbergh.app && cd /tmp && ./lindbergh.app --appimage-extract >/dev/null && \
+    chmod +x /tmp/lindbergh.app && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./lindbergh.app --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction lindbergh.app échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/lindbergh && rm -f squashfs-root || mv squashfs-root /opt/lindbergh; } && \
     ln -sf /opt/lindbergh/AppRun /usr/local/bin/lindbergh && \
     printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nCategories=Game;Emulator;\nTerminal=false\n' \
@@ -223,6 +228,173 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
+# ── 1a14. Émulateurs supplémentaires — parité avec la suite bundlée dans
+# l'ancienne image de base lscr.io/linuxserver/webstation (dolphin-emu et
+# scummvm ci-dessus sont déjà des paquets Arch officiels ; le reste n'a pas
+# de paquet Arch/AUR-free, mais chaque projet publie une AppImage/archive
+# Linux officielle — même approche curl+extraction que Pegasus/SRM/Lindbergh/
+# Chrome ci-dessus, pas de build depuis les sources.
+RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
+    chmod +x /tmp/cemu.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./cemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/cemu && \
+    ln -sf /opt/cemu/AppRun /usr/local/bin/cemu && \
+    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/cemu.desktop && \
+    rm -f /tmp/cemu.AppImage
+
+RUN PCSX2_URL=$(curl -sX GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*linux-appimage-x64-Qt\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${PCSX2_URL}" ] || { echo "FATAL: PCSX2_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/pcsx2.AppImage "${PCSX2_URL}" && \
+    chmod +x /tmp/pcsx2.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./pcsx2.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction pcsx2.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/pcsx2 && \
+    ln -sf /opt/pcsx2/AppRun /usr/local/bin/pcsx2 && \
+    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/pcsx2.desktop && \
+    rm -f /tmp/pcsx2.AppImage
+
+RUN RPCS3_URL=$(curl -sX GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*_linux64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${RPCS3_URL}" ] || { echo "FATAL: RPCS3_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/rpcs3.AppImage "${RPCS3_URL}" && \
+    chmod +x /tmp/rpcs3.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./rpcs3.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction rpcs3.AppImage échouée"; exit 1; } && \
+    { [ -L squashfs-root ] && mv AppDir /opt/rpcs3 || mv squashfs-root /opt/rpcs3; } && \
+    ln -sf /opt/rpcs3/AppRun /usr/local/bin/rpcs3 && \
+    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/rpcs3.desktop && \
+    rm -f /tmp/rpcs3.AppImage
+
+RUN DUCKSTATION_URL=$(curl -sX GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*DuckStation-x64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${DUCKSTATION_URL}" ] || { echo "FATAL: DUCKSTATION_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/duckstation.AppImage "${DUCKSTATION_URL}" && \
+    chmod +x /tmp/duckstation.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./duckstation.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction duckstation.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/duckstation && \
+    ln -sf /opt/duckstation/AppRun /usr/local/bin/duckstation-qt && \
+    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/duckstation.desktop && \
+    rm -f /tmp/duckstation.AppImage
+
+RUN XEMU_URL=$(curl -sX GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v dbg | cut -d'"' -f4 | head -1) && \
+    [ -n "${XEMU_URL}" ] || { echo "FATAL: XEMU_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/xemu.AppImage "${XEMU_URL}" && \
+    chmod +x /tmp/xemu.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./xemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction xemu.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/xemu && \
+    ln -sf /opt/xemu/AppRun /usr/local/bin/xemu && \
+    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/xemu.desktop && \
+    rm -f /tmp/xemu.AppImage
+
+RUN AZAHAR_URL=$(curl -sX GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*wayland\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
+    chmod +x /tmp/azahar.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./azahar.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction azahar.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/azahar && \
+    ln -sf /opt/azahar/AppRun /usr/local/bin/azahar && \
+    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/azahar.desktop && \
+    rm -f /tmp/azahar.AppImage
+
+RUN XENIA_URL=$(curl -sX GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*linux\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${XENIA_URL}" ] || { echo "FATAL: XENIA_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/xenia.AppImage "${XENIA_URL}" && \
+    chmod +x /tmp/xenia.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./xenia.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/xenia && \
+    ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
+    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/xenia.desktop && \
+    rm -f /tmp/xenia.AppImage
+
+# melonDS (Nintendo DS) — zip, pas d'AppImage.
+RUN MELONDS_VERSION=$(curl -sX GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
+      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
+    [ -n "${MELONDS_VERSION}" ] || { echo "FATAL: MELONDS_VERSION vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/melon.zip \
+      "https://github.com/melonDS-emu/melonDS/releases/download/${MELONDS_VERSION}/melonDS-${MELONDS_VERSION}-ubuntu-x86_64.zip" && \
+    mkdir -p /opt/melonds && unzip -q /tmp/melon.zip -d /opt/melonds && \
+    ln -sf /opt/melonds/melonDS /usr/local/bin/melonDS && \
+    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/melonds.desktop && \
+    rm -f /tmp/melon.zip
+
+# DOSBox Staging — tarball officiel, pas d'AppImage.
+RUN DSTAGING_VERSION=$(curl -sX GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
+      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
+    [ -n "${DSTAGING_VERSION}" ] || { echo "FATAL: DSTAGING_VERSION vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/dosbox.tar.xz \
+      "https://github.com/dosbox-staging/dosbox-staging/releases/download/${DSTAGING_VERSION}/dosbox-staging-linux-x86_64-${DSTAGING_VERSION}.tar.xz" && \
+    mkdir -p /opt/dosbox && tar -xf /tmp/dosbox.tar.xz -C /opt/dosbox --strip-components=1 && \
+    ln -sf /opt/dosbox/dosbox /usr/local/bin/dosbox && \
+    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/dosbox.desktop && \
+    rm -f /tmp/dosbox.tar.xz
+
+# GZDoom + Freedoom (WAD libre, pas besoin du WAD original Doom) — .deb officiel,
+# même technique d'extraction manuelle que Chrome ci-dessus.
+RUN GZDOOM_URL=$(curl -sX GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*_amd64\.deb"' | cut -d'"' -f4) && \
+    [ -n "${GZDOOM_URL}" ] || { echo "FATAL: GZDOOM_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/gzdoom.deb "${GZDOOM_URL}" && \
+    cd /tmp && ar x gzdoom.deb && mkdir -p /tmp/gzdoom-extract && \
+    tar -xf data.tar.* -C /tmp/gzdoom-extract && \
+    cp -a /tmp/gzdoom-extract/opt/. /opt/ && \
+    cp -a /tmp/gzdoom-extract/usr/. /usr/ && \
+    chmod +x /usr/games/gzdoom /opt/gzdoom/gzdoom && \
+    ln -sf /usr/games/gzdoom /usr/local/bin/gzdoom && \
+    FREEDOOM_URL=$(curl -sX GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*freedoom-[^"]*\.zip"' | cut -d'"' -f4) && \
+    curl -fSL --retry 3 -o /tmp/freedoom.zip "${FREEDOOM_URL}" && \
+    mkdir -p /usr/local/share/doom && \
+    unzip -qj /tmp/freedoom.zip '*/freedoom1.wad' -d /usr/local/share/doom && \
+    rm -rf /tmp/gzdoom.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/gzdoom-extract /tmp/freedoom.zip
+
+# ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
+RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+      | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
+    SHADPS4_URL=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+      | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
+    [ -n "${SHADPS4_URL}" ] || { echo "FATAL: SHADPS4_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/shadps4.zip "${SHADPS4_URL}" && \
+    mkdir -p /tmp/shadps4 && cd /tmp/shadps4 && unzip -q /tmp/shadps4.zip && \
+    APPIMAGE=$(find . -name "*.AppImage" | head -1) && \
+    chmod +x "${APPIMAGE}" && \
+    for i in 1 2 3; do rm -rf squashfs-root; "./${APPIMAGE##./}" --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction shadps4 échouée"; exit 1; } && \
+    mv squashfs-root /opt/shadps4 && \
+    ln -sf /opt/shadps4/AppRun /usr/local/bin/shadps4 && \
+    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/shadps4.desktop && \
+    rm -rf /tmp/shadps4.zip /tmp/shadps4
+
+# Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
+RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
+    [ -n "${FLIPS_URL}" ] || { echo "FATAL: FLIPS_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/flips.zip "${FLIPS_URL}" && \
+    mkdir -p /tmp/flips && cd /tmp/flips && unzip -q /tmp/flips.zip && \
+    install -Dm755 flips /usr/local/bin/flips && \
+    rm -rf /tmp/flips.zip /tmp/flips
+
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
@@ -278,7 +450,8 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
-    LC_ALL=fr_FR.UTF-8
+    LC_ALL=fr_FR.UTF-8 \
+    DOOMWADDIR=/usr/local/share/doom
 
 VOLUME /config
 EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
