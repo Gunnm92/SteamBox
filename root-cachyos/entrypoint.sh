@@ -43,6 +43,19 @@ for script in init_system init_audio init_sunshine; do
     fi
 done
 
+# ── 2a. udevd — nécessaire pour le hotplug (souris/clavier virtuels Sunshine) ──
+# Sans démon udev tournant en continu, les périphériques uinput que Sunshine
+# crée à la connexion d'un client (ex: "Mouse passthrough") existent bien au
+# niveau noyau (/proc/bus/input/devices) mais libinput/Hyprland ne les
+# détecte jamais : udevadm trigger ponctuel au boot ne rejoue que les
+# uevents déjà existants, pas les hotplugs qui arrivent après.
+if ! pgrep -f systemd-udevd >/dev/null; then
+    /usr/lib/systemd/systemd-udevd --daemon
+    sleep 1
+    udevadm trigger --action=add --type=devices 2>/dev/null || true
+    udevadm settle --timeout=5 2>/dev/null || true
+fi
+
 # ── 2b. D-Bus système + NetworkManager (non-géré) ──────────────────────────────
 # Nécessaire uniquement pour que Steam trouve un client NetworkManager D-Bus
 # et sorte de "waiting for network" — NetworkManager.conf (unmanaged-devices=*)
@@ -94,11 +107,25 @@ while true; do
     if [ -n "${WAYLAND_SOCK_NAME}" ] && [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_SOCK_NAME}" ]; then
         sleep 2
         echo "    [Superviseur] Démarrage de Sunshine et wayvnc (${WAYLAND_SOCK_NAME})..."
-        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-            sunshine "/config/.config/sunshine/sunshine.conf" &
+        # Sunshine/wayvnc peuvent crasher (observé : wayvnc meurt sur une
+        # requête websocket malformée) sans que ça ne tue la session Hyprland
+        # — on les respawn en boucle tant que la session tourne, plutôt que
+        # de les laisser morts jusqu'au prochain cycle complet.
+        (
+            while kill -0 "${SESSION_PID}" 2>/dev/null; do
+                runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+                    sunshine "/config/.config/sunshine/sunshine.conf"
+                kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
+            done
+        ) &
         SUNSHINE_PID=$!
-        runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-            wayvnc --websocket --render-cursor --max-fps=60 0.0.0.0 5900 &
+        (
+            while kill -0 "${SESSION_PID}" 2>/dev/null; do
+                runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+                    wayvnc --websocket --render-cursor --max-fps=60 0.0.0.0 5900
+                kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
+            done
+        ) &
         WAYVNC_PID=$!
     else
         echo "    [Superviseur] ERREUR : aucun socket Wayland détecté, Hyprland n'a pas démarré."

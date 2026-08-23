@@ -23,7 +23,8 @@ mkdir -p "${HOME}/.config/hypr"
 cat > "${HOME}/.config/hypr/hyprland.conf" <<'EOF'
 monitor=,preferred,auto,1
 
-exec-once = steam -gamepadui -pipewire
+# Pas d'auto-lancement de Steam ici — lancé à la demande via l'app
+# "Steam Big Picture" de Sunshine/Moonlight (apps.json).
 
 input {
     kb_layout = fr
