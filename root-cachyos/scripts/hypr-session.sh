@@ -170,7 +170,7 @@ wireplumber &
 pipewire-pulse &
 sleep 1
 
-dbus-run-session -- Hyprland &
+dbus-run-session -- start-hyprland &
 HYPR_PID=$!
 
 # Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
