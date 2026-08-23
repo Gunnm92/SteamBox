@@ -24,7 +24,7 @@ mkdir -p /config/.config/sunshine /config/.local/share/Steam
 # comme avant, seulement si l'ownership n'est pas déjà correcte.
 TARGET_OWNER="${PUID:-1000}:${PGID:-1000}"
 for d in /config/.config /config/.local /config/.cache /config/.steam \
-         /config/steam /config/.nv /config/nvidia-drivers /config/.pki \
+         /config/.nv /config/nvidia-drivers /config/.pki \
          /config/.bash_history /config/.bash_logout /config/.bash_profile /config/.bashrc; do
     [ -e "${d}" ] || continue
     CURRENT_OWNER=$(stat -c '%u:%g' "${d}" 2>/dev/null || echo "")

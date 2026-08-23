@@ -50,7 +50,8 @@ RUN pacman -Syu --noconfirm && \
       libretro-flycast libretro-yabause libretro-dolphin \
       libretro-mame libretro-beetle-pce-fast \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
-      squashfuse fuse-overlayfs \
+      squashfuse squashfs-tools fuse-overlayfs \
+      mako libnotify cabextract p7zip binutils nss \
     && pacman -Scc --noconfirm
 
 # wayvnc --websocket (0.10.1) crashe (double free) au premier client
@@ -181,6 +182,46 @@ RUN SUPERMODEL_URL=$(curl -sX GET "https://api.github.com/repos/trzy/Supermodel/
       echo "Supermodel: pas de release Linux, skip"; \
     fi && \
     rm -f /tmp/supermodel.tar.gz
+
+# ── 1a12. Wine Gecko + Mono — sans ça, tout préfixe Wine invite au
+# téléchargement (popup bloquant) au premier lancement d'un installeur/jeu qui
+# a besoin du moteur HTML (Gecko) ou de .NET (Mono). Récupéré depuis le miroir
+# officiel WineHQ, indépendant de la distro (déjà utilisé sur l'image
+# webstation) — wine cherche nativement dans /usr/share/wine/{gecko,mono},
+# chemin issu du code amont, pas d'un patch Debian.
+RUN GECKO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wine/refs/heads/master/dlls/appwiz.cpl/addons.c" \
+      | grep -oP '(?<=GECKO_VERSION ")[^"]+' | head -1) && \
+    MONO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wine/refs/heads/master/dlls/appwiz.cpl/addons.c" \
+      | grep -oP '(?<=MONO_VERSION ")[^"]+' | head -1) && \
+    mkdir -p /usr/share/wine/gecko /usr/share/wine/mono && \
+    for arch in x86 x86_64; do \
+      curl -fsSL --retry 3 -o "/usr/share/wine/gecko/wine-gecko-${GECKO_VERSION}-${arch}.msi" \
+        "https://dl.winehq.org/wine/wine-gecko/${GECKO_VERSION}/wine-gecko-${GECKO_VERSION}-${arch}.msi" || true; \
+    done && \
+    curl -fsSL --retry 3 -o "/tmp/wine-mono.tar.xz" \
+      "https://dl.winehq.org/wine/wine-mono/${MONO_VERSION}/wine-mono-${MONO_VERSION}-x86.tar.xz" && \
+    tar -xf /tmp/wine-mono.tar.xz -C /usr/share/wine/mono && \
+    rm -f /tmp/wine-mono.tar.xz
+
+# ── 1a13. Google Chrome — pas de paquet Arch officiel (AUR-only, nécessite un
+# helper AUR + base-devel), extrait manuellement du .deb officiel Google
+# (même approche que Pegasus/SRM/Lindbergh ci-dessus : curl + extraction, pas
+# d'installeur). Vérifié en direct : nécessite --ozone-platform=wayland pour
+# tourner en Wayland natif (sinon "Missing X server or $DISPLAY" — Chrome ne
+# détecte pas Wayland tout seul comme les apps Qt/GTK) ; chmod 4755 sur
+# chrome-sandbox reproduit ce que fait le postinst du .deb (on ne l'exécute
+# pas, on ne prend que data.tar).
+RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
+    cd /tmp && ar x chrome.deb && \
+    mkdir -p /tmp/chrome-extract && \
+    tar -xf data.tar.xz -C /tmp/chrome-extract && \
+    mkdir -p /opt/google/chrome && \
+    cp -a /tmp/chrome-extract/opt/google/chrome/. /opt/google/chrome/ && \
+    ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome && \
+    chmod 4755 /opt/google/chrome/chrome-sandbox && \
+    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=env QT_QPA_PLATFORM=wayland /opt/google/chrome/google-chrome --ozone-platform=wayland %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
+      > /usr/share/applications/google-chrome.desktop && \
+    rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \

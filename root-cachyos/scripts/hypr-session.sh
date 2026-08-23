@@ -126,6 +126,7 @@ monitor=,preferred,auto,2
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
 exec-once = hyprpaper
 exec-once = waybar
+exec-once = mako
 # -l top (au lieu du défaut "overlay") : Hyprland masque la couche "top"
 # quand une fenêtre passe en plein écran (Steam Big Picture) — "overlay"
 # reste affichée par-dessus, quel que soit le premier plan. Pas de -d

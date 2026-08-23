@@ -131,10 +131,16 @@ while true; do
         # sert le RFB brut en interne (5901) et on websocket-ifie via
         # websockify, l'architecture noVNC classique/éprouvée, plutôt que
         # de dépendre de l'implémentation websocket native de wayvnc.
+        # --keyboard=fr : le clavier virtuel créé par wayvnc (protocole
+        # virtual-keyboard) fournit son propre keymap au client Wayland —
+        # il n'hérite PAS de input:kb_layout de hyprland.conf (qui ne
+        # s'applique qu'aux vrais périphériques). Sans ce flag, confirmé
+        # en direct : "hl-virtual-keyboard-wayvnc" reste en English (US)
+        # même avec kb_layout=fr, d'où un clavier QWERTY côté client VNC.
         (
             while kill -0 "${SESSION_PID}" 2>/dev/null; do
                 runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-                    wayvnc --render-cursor --max-fps=60 127.0.0.1 5901
+                    wayvnc --render-cursor --max-fps=60 --keyboard=fr 127.0.0.1 5901
                 kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
             done
         ) &
