@@ -3,6 +3,13 @@
 # de la session Hyprland (pas un enfant exec-once), donc n'hérite de rien
 # d'autre que ce qu'on lui passe explicitement — sans DISPLAY, ses apps
 # "detached" (Steam Big Picture) plantent avec une erreur X.
+#
+# s6-setuidgid change l'UID/GID mais PAS HOME — contrairement à runuser/su,
+# il ne fait rien de plus (pas de vraie session utilisateur). Sans le
+# préciser, Sunshine hérite du HOME=/root ambiant et tente d'écrire sa
+# config dans /root/.config/sunshine, inaccessible à arcade — confirmé en
+# direct : "Failed to apply config: filesystem error: status: Permission
+# denied [/root/.config/sunshine]" en boucle jusqu'à ce crash-loop soit fixé.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
 # Hyprland ne respecte pas forcément WAYLAND_DISPLAY=wayland-0 pour le nom du
@@ -15,5 +22,5 @@ while [ -z "${SOCK}" ]; do
 done
 
 exec s6-setuidgid arcade \
-    env WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
+    env HOME=/home/arcade WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
     sunshine /config/.config/sunshine/sunshine.conf

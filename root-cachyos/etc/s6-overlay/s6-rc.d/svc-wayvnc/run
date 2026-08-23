@@ -9,6 +9,11 @@
 # n'hérite PAS de input:kb_layout de hyprland.conf (qui ne s'applique
 # qu'aux vrais périphériques). Sans ce flag, confirmé en direct :
 # "hl-virtual-keyboard-wayvnc" reste en English (US) même avec kb_layout=fr.
+#
+# HOME=/home/arcade explicite : s6-setuidgid change l'UID/GID mais pas HOME
+# (contrairement à runuser/su) — sans ça wayvnc hérite du HOME=/root ambiant
+# et plante ("Failed to load config. Permission denied") en tentant de lire
+# sa config sous /root, inaccessible à arcade.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
 SOCK=""
@@ -18,5 +23,5 @@ while [ -z "${SOCK}" ]; do
 done
 
 exec s6-setuidgid arcade \
-    env WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    env HOME=/home/arcade WAYLAND_DISPLAY="$(basename "${SOCK}")" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
     wayvnc --render-cursor --max-fps=60 --keyboard=fr 127.0.0.1 5901
