@@ -65,7 +65,7 @@ monitor=,preferred,auto,1
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
 exec-once = hyprpaper
 exec-once = waybar
-exec-once = nwg-dock-hyprland -p bottom -a center
+exec-once = nwg-dock-hyprland -p bottom -a center -i 96
 
 input {
     kb_layout = fr

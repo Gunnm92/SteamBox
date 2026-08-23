@@ -27,7 +27,7 @@ RUN pacman -Syu --noconfirm && \
       sudo vim openssh curl wget tar git jq unzip \
       seatd libinput \
       hyprland xdg-desktop-portal-hyprland foot \
-      hyprpaper waybar wofi nwg-dock-hyprland nwg-drawer imagemagick \
+      hyprpaper waybar wofi nwg-dock-hyprland nwg-drawer imagemagick grim \
       xorg-xwayland \
       mesa vulkan-icd-loader vulkan-tools \
       vulkan-radeon lib32-vulkan-radeon \
@@ -74,6 +74,15 @@ RUN curl -fsSL https://raw.githubusercontent.com/bminor/glibc/master/localedata/
 # pacman -Scc). xdg-desktop-portal (utilisé par waybar/Steam) crashe
 # immédiatement sans /usr/share/glib-2.0/schemas/gschemas.compiled.
 RUN glib-compile-schemas /usr/share/glib-2.0/schemas/
+
+# ── 1a3b. Cache MIME — même classe de hook pacman bloqué au build. Sans
+# /usr/share/mime/mime.cache, gdk-pixbuf ne peut pas identifier le format
+# d'un fichier avant de le déléguer à glycin (nouveau backend de décodage
+# d'image sandboxé) — TOUTE image (PNG compris, pas seulement SVG) échoue à
+# charger ("Couldn't recognize the image file format"), et n'importe quelle
+# appli GTK3 qui tente d'afficher une icône (même une icône interne, ex. le
+# menu applications nwg-drawer) plante instantanément dessus.
+RUN update-mime-database /usr/share/mime
 
 # ── 1a4. Fond d'écran par défaut — dégradé sombre, pas juste un écran noir.
 RUN mkdir -p /usr/share/backgrounds && \

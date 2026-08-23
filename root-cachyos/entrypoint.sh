@@ -120,7 +120,7 @@ while true; do
         # plutôt que de les laisser morts jusqu'au prochain cycle complet.
         (
             while kill -0 "${SESSION_PID}" 2>/dev/null; do
-                runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+                runuser -u "${USER_NAME}" -- env WAYLAND_DISPLAY="${WAYLAND_SOCK_NAME}" XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
                     sunshine "/config/.config/sunshine/sunshine.conf"
                 kill -0 "${SESSION_PID}" 2>/dev/null && sleep 2
             done
