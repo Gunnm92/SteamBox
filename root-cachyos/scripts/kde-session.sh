@@ -20,6 +20,16 @@ export SDL_JOYSTICK_DISABLE_UDEV=1
 # inapplicable en headless.
 export KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
 
+# Désactive l'écran de démarrage (ksplashqml, app Qt Quick/OpenGL) — bloque
+# indéfiniment sur ce rendu headless sans jamais planter proprement, ce qui
+# gèle toute la suite du bootstrap Plasma (plasmashell, autostart, etc.).
+mkdir -p "${HOME}/.config"
+cat > "${HOME}/.config/ksplashrc" <<'EOF'
+[KSplash]
+Theme=None
+Engine=none
+EOF
+
 mkdir -p "${HOME}/.config/autostart"
 if [ ! -f "${HOME}/.config/autostart/steam.desktop" ]; then
     cat > "${HOME}/.config/autostart/steam.desktop" <<'EOF'
