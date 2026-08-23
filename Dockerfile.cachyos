@@ -94,6 +94,15 @@ RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/
     mkdir -p /usr/share/webapps/novnc && \
     curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
 
+# La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
+# (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
+# (l'utilisateur doit les saisir à la main dans le formulaire) — on redirige
+# en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
+# d'IP en dur) et le port websockify pour que l'URL de base se connecte
+# directement.
+RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=remote&reconnect=true");</script>\n' \
+      > /usr/share/webapps/novnc/index.html
+
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
 # Le paquet Arch nvidia-utils suit la dernière release, pas forcément celle du
 # host. On réutilise l'approche .run (agnostique à la distro, déjà éprouvée

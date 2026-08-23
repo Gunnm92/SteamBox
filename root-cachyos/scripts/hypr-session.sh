@@ -109,7 +109,10 @@ monitor=,preferred,auto,1
 # "Steam Big Picture" de Sunshine/Moonlight (apps.json).
 exec-once = hyprpaper
 exec-once = waybar
-exec-once = nwg-dock-hyprland -p bottom -a center -i 96
+# -l top (au lieu du défaut "overlay") : Hyprland masque la couche "top"
+# quand une fenêtre passe en plein écran (Steam Big Picture) — "overlay"
+# reste affichée par-dessus, quel que soit le premier plan.
+exec-once = nwg-dock-hyprland -p bottom -a center -i 96 -l top -d
 
 input {
     kb_layout = fr
