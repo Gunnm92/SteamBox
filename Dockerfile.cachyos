@@ -42,6 +42,15 @@ RUN pacman -Syu --noconfirm && \
       gamemode mangohud \
       dbus polkit networkmanager \
       xdg-desktop-portal \
+      gamescope \
+      retroarch \
+      libretro-nestopia libretro-bsnes libretro-genesis-plus-gx \
+      libretro-mgba libretro-gambatte libretro-desmume \
+      libretro-mupen64plus-next libretro-beetle-psx-hw libretro-ppsspp \
+      libretro-flycast libretro-yabause libretro-dolphin \
+      libretro-mame libretro-beetle-pce-fast \
+      wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
+      squashfuse fuse-overlayfs \
     && pacman -Scc --noconfirm
 
 # wayvnc --websocket (0.10.1) crashe (double free) au premier client
@@ -105,6 +114,73 @@ RUN mkdir -p /usr/share/backgrounds && \
 RUN mkdir -p /usr/share/catppuccin && \
     curl -fsSL https://raw.githubusercontent.com/catppuccin/waybar/main/themes/mocha.css \
       -o /usr/share/catppuccin/mocha.css
+
+# ── 1a6. DXVK — injecte les DLL dans les préfixes Wine (dxvk-mingw-git ne le
+# fait pas tout seul, contrairement à un vrai paquet dxvk-bin ; setup.sh doit
+# tourner explicitement, généralement au 1er lancement d'un préfixe — voir
+# scripts/init_system.sh qui lance dxvk_setup pour le préfixe par défaut).
+RUN ln -sf /opt/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null || true
+
+# ── 1a7. Pegasus Frontend — pas de paquet Arch/CachyOS, build x11-static
+# officiel (Qt5 sans plugin Wayland compilé — testé en direct : "Could not
+# find the Qt platform plugin wayland", il faut forcer QT_QPA_PLATFORM=xcb
+# pour tourner via Xwayland). Une fois lancé : détecte Steam/GOG/manettes
+# automatiquement (confirmé en direct : 20 jeux Steam trouvés).
+RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
+    [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
+    mkdir -p /opt/pegasus && \
+    unzip -q /tmp/pegasus.zip -d /opt/pegasus && \
+    ln -sf /opt/pegasus/pegasus-fe /usr/local/bin/pegasus-fe && \
+    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb DISPLAY=:0 /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/pegasus.desktop && \
+    rm -f /tmp/pegasus.zip
+
+# ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
+# Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
+# le script wsquashfs-batocera embarqué dans l'image webstation — plus
+# portable (détection auto Docker/FUSE, fallback unsquashfs), maintenu à part.
+RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main/wsquashfs-launcher \
+      -o /usr/local/bin/wsquashfs-launcher && \
+    chmod +x /usr/local/bin/wsquashfs-launcher
+
+# ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
+# non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
+RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
+    [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
+    chmod +x /tmp/srm.AppImage && cd /tmp && ./srm.AppImage --appimage-extract >/dev/null && \
+    mv /tmp/squashfs-root /opt/steam-rom-manager && \
+    chmod -R a+rX /opt/steam-rom-manager && \
+    ln -sf /opt/steam-rom-manager/AppRun /usr/local/bin/steam-rom-manager && \
+    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/steam-rom-manager.desktop && \
+    rm -rf /tmp/srm.AppImage /tmp/squashfs-root
+
+# ── 1a10. Lindbergh Loader (arcade Sega Lindbergh) — AppImage officielle.
+RUN curl -fSL -o /tmp/lindbergh.app \
+      "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage" && \
+    chmod +x /tmp/lindbergh.app && cd /tmp && ./lindbergh.app --appimage-extract >/dev/null && \
+    { [ -L squashfs-root ] && mv AppDir /opt/lindbergh && rm -f squashfs-root || mv squashfs-root /opt/lindbergh; } && \
+    ln -sf /opt/lindbergh/AppRun /usr/local/bin/lindbergh && \
+    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nCategories=Game;Emulator;\nTerminal=false\n' \
+      > /usr/share/applications/lindbergh.desktop && \
+    rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
+
+# ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
+RUN SUPERMODEL_URL=$(curl -sX GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
+      | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*\.tar[^"]*"' | cut -d'"' -f4 | head -1) && \
+    if [ -n "${SUPERMODEL_URL}" ]; then \
+      curl -o /tmp/supermodel.tar.gz -L "${SUPERMODEL_URL}" && \
+      mkdir -p /opt/supermodel && \
+      tar -xzf /tmp/supermodel.tar.gz -C /opt/supermodel --strip-components=1 && \
+      ln -sf /opt/supermodel/supermodel /usr/local/bin/supermodel; \
+    else \
+      echo "Supermodel: pas de release Linux, skip"; \
+    fi && \
+    rm -f /tmp/supermodel.tar.gz
 
 # ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
