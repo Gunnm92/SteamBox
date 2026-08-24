@@ -77,6 +77,12 @@ if [ "${TIMEOUT}" -le 0 ]; then
 fi
 echo "[x11-session] Xorg prêt."
 
+# Doit être fait en root : /etc/xdg/menus/ appartient à root, arcade ne
+# peut pas y écrire — confirmé en direct (cp silencieusement en échec sous
+# "|| true", applications.menu jamais créé, menu KDE vide en conséquence).
+[ -f /etc/xdg/menus/applications.menu ] || \
+    cp /etc/xdg/menus/plasma-applications.menu /etc/xdg/menus/applications.menu 2>/dev/null || true
+
 # À partir d'ici, tout tourne comme arcade (pas de raison d'avoir kwin/
 # plasmashell en root) — mais ce script reste root en premier plan pour
 # que le trap ci-dessus nettoie Xorg quand la session se termine.
@@ -118,8 +124,8 @@ kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorSize
 
 # Reconstruit la base d'\''applications (kickoff/menu) — nécessaire pour que nos
 # .desktop personnalisés (Steam, Sunshine, Chrome, émulateurs...) apparaissent.
-[ -f /etc/xdg/menus/applications.menu ] || \
-    cp /etc/xdg/menus/plasma-applications.menu /etc/xdg/menus/applications.menu 2>/dev/null || true
+# (applications.menu lui-même est copié plus haut, en root : /etc/xdg/menus/
+# appartient à root, arcade ne peut pas y écrire.)
 kbuildsycoca6 2>/dev/null || true
 
 # PipeWire — gardé uniquement pour l'\''audio de Sunshine (PulseAudio via
