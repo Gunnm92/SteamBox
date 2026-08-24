@@ -122,6 +122,13 @@ kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group KDE --key LookAndFeelP
 kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group General --key ColorScheme BreezeDark 2>/dev/null || true
 kwriteconfig6 --file "${HOME}/.config/kwinrc" --group org.kde.kdecoration2 --key theme Breeze 2>/dev/null || true
 
+# Desactive l optimisation KWin qui bypass le compositeur pour les fenetres
+# plein ecran (unredirect) - confirme en direct : cause exacte d ecran noir
+# pour Steam Big Picture (fenetre CEF/Chromium plein ecran) sur ce driver
+# NVIDIA, sans doute lie a la meme famille de bugs GLX/compositeur que la
+# capture bureau de Steam Remote Play.
+kwriteconfig6 --file "${HOME}/.config/kwinrc" --group Compositing --key UnredirectFullscreen false 2>/dev/null || true
+
 # Thème de curseur — sans ça, confirmé en direct sous KWin/Wayland : curseur
 # invisible. Gardé par précaution ici aussi.
 kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorTheme breeze_cursors 2>/dev/null || true
