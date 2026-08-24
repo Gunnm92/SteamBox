@@ -7,19 +7,22 @@
 #   - le périphérique souris virtuel créé par Sunshine n'était jamais tagué
 #     ID_INPUT_MOUSE par udev en temps réel sous KWin (cause exacte non
 #     élucidée), rendant la souris inopérante.
-# X11 règle les deux structurellement : x11vnc fonctionne avec n'importe
-# quel gestionnaire de fenêtres X11 (capture native au protocole, pas de
-# fragmentation par compositeur), et l'injection d'input via l'extension
-# XTest ne dépend pas du tout d'udev — confirmé en direct (xdotool
-# mousemove fonctionne instantanément, contrairement à Wayland/libinput).
+# X11 règle wayvnc structurellement (x11vnc fonctionne avec n'importe quel
+# gestionnaire de fenêtres X11, capture native au protocole, pas de
+# fragmentation par compositeur). La souris, elle, restait cassée sous X11
+# aussi au départ (Sunshine utilise de vrais périphériques uinput, pas
+# XTest — udev ne persistait jamais ses tags en temps réel dans ce
+# conteneur, cause exacte jamais élucidée) : réglée en forçant le pilote
+# X11 historique 'evdev' (indépendant d'udev) sur les périphériques
+# Sunshine, voir xorg.conf.d/99-sunshine-input.conf.
 #
 # Ce script tourne EN ROOT (contrairement à hypr-session.sh/kde-session.sh
 # avant lui) : Xorg.wrap refuse de lancer le serveur X pour un utilisateur
 # non-root sans session console/logind enregistrée ("Only console users are
 # allowed to run the X server") — confirmé en direct, notre utilisateur
 # arcade n'a jamais de session logind (pas de systemd). Seul Xorg lui-même
-# doit rester root ; kwin_x11/plasmashell tournent comme arcade via runuser
-# plus bas, connectés au serveur X déjà démarré.
+# doit rester root ; la session Plasma (startplasma-x11) tourne comme arcade
+# via runuser plus bas, connectée au serveur X déjà démarré.
 
 set -e
 
@@ -144,28 +147,14 @@ pgrep -x wireplumber >/dev/null || wireplumber &
 pgrep -x pipewire-pulse >/dev/null || pipewire-pulse &
 sleep 1
 
-dbus-run-session bash -c "
-    kwin_x11 --replace &
-    KWIN_PID=\$!
-    sleep 3
-    if [ -x /usr/lib/polkit-kde-authentication-agent-1 ]; then
-        /usr/lib/polkit-kde-authentication-agent-1 &
-    fi
-    plasmashell &
-    PLASMASHELL_PID=\$!
-    sleep 4
-    # Notre lancement a la main (sans startplasma-x11) ne declenche jamais le
-    # chargement du layout par defaut de Plasma - confirme en direct : sans
-    # ca, seul le containment desktop (fond ecran) apparait, jamais le
-    # panneau (formfactor=2). startplasma-x11 gere normalement ca en
-    # coulisses ; on le force donc explicitement ici via le scripting API de
-    # plasmashell, uniquement si aucun panneau existe deja (idempotent :
-    # sans effet sur une config utilisateur deja personnalisee).
-    if ! grep -q formfactor=2 \"${HOME}/.config/plasma-org.kde.plasma.desktop-appletsrc\" 2>/dev/null; then
-        qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \\
-            \"loadTemplate('\''org.kde.plasma.desktop.defaultPanel'\'')\" 2>/dev/null || true
-    fi
-    wait \"\${PLASMASHELL_PID}\"
-    kill \"\${KWIN_PID}\" 2>/dev/null || true
-"
+# startplasma-x11 (vraie session standard, avec ksmserver/kded6/plasma_session)
+# plutot que kwin_x11+plasmashell lances a la main : le blocage supposement
+# du a systemd --user ne concernait que startplasma-WAYLAND, jamais reteste
+# specifiquement pour X11 depuis. Confirme en direct sur conteneur jetable :
+# demarre sans blocage malgre les echecs (ignores) de org.freedesktop.systemd1,
+# panneau par defaut charge automatiquement (plus besoin du hack qdbus/
+# loadTemplate precedent). Piste principale aussi pour l ecran noir de Steam
+# Remote Play (capture GLX cassee sous notre lancement a la main non standard) -
+# a confirmer en usage reel, Valve ne testant/supportant que de vraies sessions.
+dbus-run-session startplasma-x11
 '
