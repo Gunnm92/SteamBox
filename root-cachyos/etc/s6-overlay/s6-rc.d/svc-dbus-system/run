@@ -1,4 +1,11 @@
 #!/command/with-contenv bash
 # Bus système D-Bus — nécessaire pour que Steam trouve un client
 # NetworkManager D-Bus et sorte de "waiting for network".
+#
+# rm préventif : si dbus-daemon meurt sans nettoyer (crash, kill -9), le pid
+# file/socket restent — confirmé en direct : dbus-daemon refuse alors de
+# redémarrer ("The pid file /run/dbus/pid exists"), et comme s6 relance le
+# service indéfiniment sans jamais nettoyer entre deux essais, ça boucle en
+# échec permanent au lieu de simplement redémarrer proprement.
+rm -f /run/dbus/pid /run/dbus/system_bus_socket
 exec dbus-daemon --system --nofork
