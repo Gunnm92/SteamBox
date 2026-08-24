@@ -166,7 +166,7 @@ RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-m
     mv /tmp/squashfs-root /opt/steam-rom-manager && \
     chmod -R a+rX /opt/steam-rom-manager && \
     ln -sf /opt/steam-rom-manager/AppRun /usr/local/bin/steam-rom-manager && \
-    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-rom-manager.desktop && \
     rm -rf /tmp/srm.AppImage /tmp/squashfs-root
 
@@ -178,7 +178,7 @@ RUN curl -fSL -o /tmp/lindbergh.app \
     { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction lindbergh.app échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/lindbergh && rm -f squashfs-root || mv squashfs-root /opt/lindbergh; } && \
     ln -sf /opt/lindbergh/AppRun /usr/local/bin/lindbergh && \
-    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nCategories=Game;Emulator;\nTerminal=false\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nIcon=/opt/lindbergh/.DirIcon\nCategories=Game;Emulator;\nTerminal=false\n' \
       > /usr/share/applications/lindbergh.desktop && \
     rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
 
@@ -248,7 +248,7 @@ RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/rele
     [ -d squashfs-root ] || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/cemu && \
     ln -sf /opt/cemu/AppRun /usr/local/bin/cemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
@@ -261,7 +261,7 @@ RUN PCSX2_URL=$(curl -sX GET "https://api.github.com/repos/PCSX2/pcsx2/releases/
     [ -d squashfs-root ] || { echo "FATAL: extraction pcsx2.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/pcsx2 && \
     ln -sf /opt/pcsx2/AppRun /usr/local/bin/pcsx2 && \
-    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nIcon=/opt/pcsx2/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/pcsx2.desktop && \
     rm -f /tmp/pcsx2.AppImage
 
@@ -274,7 +274,7 @@ RUN RPCS3_URL=$(curl -sX GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-
     { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction rpcs3.AppImage échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/rpcs3 || mv squashfs-root /opt/rpcs3; } && \
     ln -sf /opt/rpcs3/AppRun /usr/local/bin/rpcs3 && \
-    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nIcon=/opt/rpcs3/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
 
@@ -287,7 +287,7 @@ RUN DUCKSTATION_URL=$(curl -sX GET "https://api.github.com/repos/stenzek/ducksta
     [ -d squashfs-root ] || { echo "FATAL: extraction duckstation.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/duckstation && \
     ln -sf /opt/duckstation/AppRun /usr/local/bin/duckstation-qt && \
-    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nIcon=/opt/duckstation/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/duckstation.desktop && \
     rm -f /tmp/duckstation.AppImage
 
@@ -300,7 +300,7 @@ RUN XEMU_URL=$(curl -sX GET "https://api.github.com/repos/xemu-project/xemu/rele
     [ -d squashfs-root ] || { echo "FATAL: extraction xemu.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xemu && \
     ln -sf /opt/xemu/AppRun /usr/local/bin/xemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nIcon=/opt/xemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
@@ -313,7 +313,7 @@ RUN AZAHAR_URL=$(curl -sX GET "https://api.github.com/repos/azahar-emu/azahar/re
     [ -d squashfs-root ] || { echo "FATAL: extraction azahar.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/azahar && \
     ln -sf /opt/azahar/AppRun /usr/local/bin/azahar && \
-    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nIcon=/opt/azahar/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
 
@@ -326,7 +326,7 @@ RUN XENIA_URL=$(curl -sX GET "https://api.github.com/repos/has207/xenia-edge/rel
     [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xenia && \
     ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
-    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/xenia.desktop && \
     rm -f /tmp/xenia.AppImage
 
@@ -338,7 +338,7 @@ RUN MELONDS_VERSION=$(curl -sX GET "https://api.github.com/repos/melonDS-emu/mel
       "https://github.com/melonDS-emu/melonDS/releases/download/${MELONDS_VERSION}/melonDS-${MELONDS_VERSION}-ubuntu-x86_64.zip" && \
     mkdir -p /opt/melonds && unzip -q /tmp/melon.zip -d /opt/melonds && \
     ln -sf /opt/melonds/melonDS /usr/local/bin/melonDS && \
-    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=applications-games\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/melonds.desktop && \
     rm -f /tmp/melon.zip
 
@@ -350,7 +350,7 @@ RUN DSTAGING_VERSION=$(curl -sX GET "https://api.github.com/repos/dosbox-staging
       "https://github.com/dosbox-staging/dosbox-staging/releases/download/${DSTAGING_VERSION}/dosbox-staging-linux-x86_64-${DSTAGING_VERSION}.tar.xz" && \
     mkdir -p /opt/dosbox && tar -xf /tmp/dosbox.tar.xz -C /opt/dosbox --strip-components=1 && \
     ln -sf /opt/dosbox/dosbox /usr/local/bin/dosbox && \
-    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=/opt/dosbox/icons/hicolor/256x256/apps/org.dosbox-staging.dosbox-staging.png\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/dosbox.desktop && \
     rm -f /tmp/dosbox.tar.xz
 
@@ -387,7 +387,7 @@ RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4
     [ -d squashfs-root ] || { echo "FATAL: extraction shadps4 échouée"; exit 1; } && \
     mv squashfs-root /opt/shadps4 && \
     ln -sf /opt/shadps4/AppRun /usr/local/bin/shadps4 && \
-    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nIcon=/opt/shadps4/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/shadps4.desktop && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 

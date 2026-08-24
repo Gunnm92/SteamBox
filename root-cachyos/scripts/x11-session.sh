@@ -143,7 +143,21 @@ dbus-run-session bash -c "
     if [ -x /usr/lib/polkit-kde-authentication-agent-1 ]; then
         /usr/lib/polkit-kde-authentication-agent-1 &
     fi
-    plasmashell
+    plasmashell &
+    PLASMASHELL_PID=\$!
+    sleep 4
+    # Notre lancement a la main (sans startplasma-x11) ne declenche jamais le
+    # chargement du layout par defaut de Plasma - confirme en direct : sans
+    # ca, seul le containment desktop (fond ecran) apparait, jamais le
+    # panneau (formfactor=2). startplasma-x11 gere normalement ca en
+    # coulisses ; on le force donc explicitement ici via le scripting API de
+    # plasmashell, uniquement si aucun panneau existe deja (idempotent :
+    # sans effet sur une config utilisateur deja personnalisee).
+    if ! grep -q formfactor=2 \"${HOME}/.config/plasma-org.kde.plasma.desktop-appletsrc\" 2>/dev/null; then
+        qdbus6 org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript \\
+            \"loadTemplate('\''org.kde.plasma.desktop.defaultPanel'\'')\" 2>/dev/null || true
+    fi
+    wait \"\${PLASMASHELL_PID}\"
     kill \"\${KWIN_PID}\" 2>/dev/null || true
 "
 '
