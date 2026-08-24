@@ -338,7 +338,9 @@ RUN MELONDS_VERSION=$(curl -sX GET "https://api.github.com/repos/melonDS-emu/mel
       "https://github.com/melonDS-emu/melonDS/releases/download/${MELONDS_VERSION}/melonDS-${MELONDS_VERSION}-ubuntu-x86_64.zip" && \
     mkdir -p /opt/melonds && unzip -q /tmp/melon.zip -d /opt/melonds && \
     ln -sf /opt/melonds/melonDS /usr/local/bin/melonDS && \
-    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=applications-games\nTerminal=false\nCategories=Game;Emulator;\n' \
+    curl -fSL --retry 3 -o /opt/melonds/melon.png \
+      "https://raw.githubusercontent.com/melonDS-emu/melonDS/master/res/melon512.png" && \
+    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=/opt/melonds/melon.png\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/melonds.desktop && \
     rm -f /tmp/melon.zip
 
