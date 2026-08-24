@@ -54,13 +54,13 @@ Section "Device"
     Identifier "Device0"
     Driver "nvidia"
     BusID "${XORG_BUS_ID}"
-    Option "AllowGLXWithComposite" "true"
     Option "TripleBuffer" "true"
 EndSection
 
 Section "Screen"
     Identifier "Screen0"
     Device "Device0"
+    Option "ForceCompositionPipeline" "true"
 EndSection
 EOF
 
