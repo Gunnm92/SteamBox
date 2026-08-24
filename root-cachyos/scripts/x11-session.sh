@@ -132,10 +132,16 @@ kbuildsycoca6 2>/dev/null || true
 
 # PipeWire — gardé uniquement pour l'\''audio de Sunshine (PulseAudio via
 # pipewire-pulse) ; la capture vidéo sous X11 passe par NvFBC, pas PipeWire.
-pipewire &
+# Protégé par pgrep : un redémarrage de svc-kde relance ce script, mais
+# pipewire/pipewire-pulse survivent (le socket déjà lié fait échouer une
+# deuxième instance) alors que wireplumber (simple client, pas de socket à
+# lui) démarrait une deuxième fois sans erreur — confirmé en direct : deux
+# wireplumber en concurrence sur le même graphe PipeWire faisaient planter
+# Steam (segfault) au moment ou il crée son null sink de streaming.
+pgrep -x pipewire >/dev/null || pipewire &
 sleep 1
-wireplumber &
-pipewire-pulse &
+pgrep -x wireplumber >/dev/null || wireplumber &
+pgrep -x pipewire-pulse >/dev/null || pipewire-pulse &
 sleep 1
 
 dbus-run-session bash -c "
