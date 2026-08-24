@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# Sert les fichiers statiques noVNC.
+exec s6-setuidgid arcade \
+    env HOME=/home/arcade \
+    python3 -m http.server 6080 --directory /usr/share/webapps/novnc --bind 0.0.0.0

@@ -1,36 +1,52 @@
-# ArcadeBox — variante CachyOS + Hyprland, architecture proche SteamOS.
+# ArcadeBox — variante CachyOS + KDE Plasma (session X11 réelle).
 #
-# Différence structurelle avec l'image webstation : Hyprland est le compositeur
-# RACINE (accès DRM/GPU direct via seatd+libinput), pas imbriqué dans un
-# backend de rendu tiers. Sunshine et wayvnc capturent donc directement le
-# vrai wl_output de Hyprland — pas de compositeur parent à contourner, pas
-# besoin du bridge evdev custom : seatd + libinput gèrent l'input normalement,
-# comme sur un vrai bureau. Hyprland étant wlroots, il implémente nativement
-# zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1 (wayvnc input
-# fonctionne directement, contrairement à KWin qui ne les implémente pas).
+# Historique des architectures essayées sur cette branche, chacune abandonnée
+# pour une raison concrète, testée en direct :
 #
-# KDE Plasma/KWin a été essayé en premier (plus proche visuellement de
-# SteamOS) mais abandonné : Plasma 6 dépend de systemd --user pour lancer ses
-# composants, absent d'un conteneur sans systemd (PID 1 = bash). Chaîne de
-# blocages en cascade (kcminit_startup, plasma_waitforname/KSplash, kded6)
-# nécessitant des wrappers timeout au cas par cas — non soutenable. Hyprland
-# n'a pas cette dépendance et évite toute cette classe de problèmes.
+# 1. KDE Plasma/KWin (Wayland, `startplasma-wayland`) — abandonné : Plasma 6
+#    dépend de systemd --user pour lancer ses composants, absent d'un
+#    conteneur sans systemd (PID 1 = bash). Chaîne de blocages en cascade
+#    (kcminit_startup, plasma_waitforname/KSplash, kded6).
 #
-# Steam Big Picture se lance en plein écran DANS cette session Hyprland (pas
-# de bascule vers un second compositeur type Gamescope).
+# 2. Hyprland (Wayland, compositeur racine, accès DRM/GPU direct via
+#    seatd+libinput) — a bien fonctionné techniquement (wlroots implémente
+#    nativement zwlr_virtual_pointer/zwp_virtual_keyboard, contrairement à
+#    KWin), mais bureau minimal (waybar + dock reconstruits à la main,
+#    aucun vrai panneau de configuration pour résolution/scaling).
+#
+# 3. KDE Plasma/KWin (Wayland, `kwin_wayland --drm` lancé à la main comme
+#    linuxserver/docker-webtop branche arch-kde, contournant ksmserver/
+#    kcminit) — vrai bureau obtenu, capture Sunshine fonctionnelle
+#    (KWIN_WAYLAND_NO_PERMISSION_CHECKS=1), MAIS deux problèmes bloquants :
+#    - wayvnc (VNC) ne fonctionne QUE sur les compositeurs wlroots, confirmé
+#      dans son propre README ("Gnome, KDE and Weston are not supported").
+#    - le périphérique souris virtuel de Sunshine n'était jamais tagué
+#      ID_INPUT_MOUSE par udev en temps réel sous KWin (cause exacte non
+#      élucidée) — souris inopérante.
+#
+# 4. KDE Plasma/KWin (X11 réel — Xorg + driver NVIDIA direct sur le GPU,
+#    PAS Xvfb) — architecture actuelle. X11 règle les deux problèmes du
+#    point 3 structurellement : x11vnc fonctionne avec n'importe quel
+#    gestionnaire de fenêtres (capture native au protocole, pas de
+#    fragmentation par compositeur), et l'injection d'input via l'extension
+#    XTest ne dépend pas du tout d'udev. Confirmé en direct sur conteneur
+#    jetable : Xorg détecte et pilote le vrai moniteur physique (pas de
+#    virtualisation), xdotool/x11vnc fonctionnent immédiatement.
+#
+# Steam Big Picture se lance en plein écran DANS cette session X11 (pas de
+# bascule vers un second serveur type Gamescope).
 
 FROM cachyos/cachyos-v3:latest
 
-# ── 1. Base système + Hyprland minimal + seatd/libinput + GPU (Mesa/Vulkan) ──
+# ── 1. Base système + KDE Plasma (X11) + seatd/libinput + GPU (Mesa/Vulkan) ──
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
-      plasma-desktop kwin konsole dolphin kate \
+      plasma-desktop kwin-x11 konsole dolphin kate \
       xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent \
       kscreen breeze breeze-gtk kdeplasma-addons spectacle \
-      imagemagick \
-      xorg-xwayland \
+      xorg-server xorg-xdpyinfo x11vnc python-pip \
       mesa vulkan-icd-loader vulkan-tools \
       vulkan-radeon lib32-vulkan-radeon \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
@@ -101,17 +117,6 @@ RUN update-mime-database /usr/share/mime
 # /usr/bin dans le PATH.
 RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
-
-# ── 1a4. Fond d'écran par défaut — dégradé sombre, pas juste un écran noir.
-RUN mkdir -p /usr/share/backgrounds && \
-    magick -size 3840x2160 gradient:'#4a3a8a'-'#161028' /usr/share/backgrounds/arcadebox.png
-
-# ── 1a5. Palette officielle Catppuccin Mocha — plutôt que deviner des
-# couleurs à la main, on récupère la palette de référence (catppuccin/
-# waybar) : @import-able depuis waybar ET le dock (même fichier CSS).
-RUN mkdir -p /usr/share/catppuccin && \
-    curl -fsSL https://raw.githubusercontent.com/catppuccin/waybar/main/themes/mocha.css \
-      -o /usr/share/catppuccin/mocha.css
 
 # ── 1a6. DXVK — injecte les DLL dans les préfixes Wine (dxvk-mingw-git ne le
 # fait pas tout seul, contrairement à un vrai paquet dxvk-bin ; setup.sh doit
@@ -207,11 +212,9 @@ RUN GECKO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wi
 # ── 1a13. Google Chrome — pas de paquet Arch officiel (AUR-only, nécessite un
 # helper AUR + base-devel), extrait manuellement du .deb officiel Google
 # (même approche que Pegasus/SRM/Lindbergh ci-dessus : curl + extraction, pas
-# d'installeur). Vérifié en direct : nécessite --ozone-platform=wayland pour
-# tourner en Wayland natif (sinon "Missing X server or $DISPLAY" — Chrome ne
-# détecte pas Wayland tout seul comme les apps Qt/GTK) ; chmod 4755 sur
-# chrome-sandbox reproduit ce que fait le postinst du .deb (on ne l'exécute
-# pas, on ne prend que data.tar).
+# d'installeur). --ozone-platform=x11 explicite (session X11 réelle, cf.
+# section 2b) ; chmod 4755 sur chrome-sandbox reproduit ce que fait le
+# postinst du .deb (on ne l'exécute pas, on ne prend que data.tar).
 RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
     cd /tmp && ar x chrome.deb && \
     mkdir -p /tmp/chrome-extract && \
@@ -220,7 +223,7 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
     cp -a /tmp/chrome-extract/opt/google/chrome/. /opt/google/chrome/ && \
     ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome && \
     chmod 4755 /opt/google/chrome/chrome-sandbox && \
-    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=env QT_QPA_PLATFORM=wayland /opt/google/chrome/google-chrome --ozone-platform=wayland %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=/opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
@@ -391,6 +394,26 @@ RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases
     install -Dm755 flips /usr/local/bin/flips && \
     rm -rf /tmp/flips.zip /tmp/flips
 
+# ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
+# x11vnc lui-même sert du RFB brut (5901, interne) ; websockify (pip, absent
+# des dépôts Arch/CachyOS) le websocket-ifie pour noVNC — architecture
+# classique, x11vnc n'a pas le bug websocket natif de wayvnc.
+RUN pip install --break-system-packages --no-cache-dir websockify
+
+RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
+      | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
+    mkdir -p /usr/share/webapps/novnc && \
+    curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
+
+# La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
+# (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
+# (l'utilisateur doit les saisir à la main dans le formulaire) — on redirige
+# en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
+# d'IP en dur) et le port websockify pour que l'URL de base se connecte
+# directement.
+RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
+      > /usr/share/webapps/novnc/index.html
+
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
 # Le paquet Arch nvidia-utils suit la dernière release, pas forcément celle du
 # host. On réutilise l'approche .run (agnostique à la distro, déjà éprouvée
@@ -446,14 +469,14 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
     find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \;
 
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
-    WAYLAND_DISPLAY=wayland-0 \
+    DISPLAY=:0 \
     SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
-    QT_QPA_PLATFORM=wayland \
-    SDL_VIDEODRIVER=wayland \
+    QT_QPA_PLATFORM=xcb \
+    SDL_VIDEODRIVER=x11 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
     XDG_CURRENT_DESKTOP=KDE \
-    XDG_SESSION_TYPE=wayland \
+    XDG_SESSION_TYPE=x11 \
     KDE_SESSION_VERSION=6 \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
@@ -464,6 +487,6 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     S6_VERBOSITY=2
 
 VOLUME /config
-EXPOSE 47990 47984 47989 47998-48000/udp 48010
+EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]

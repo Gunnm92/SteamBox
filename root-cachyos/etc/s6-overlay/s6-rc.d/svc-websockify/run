@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# Proxy websocket devant le RFB brut de x11vnc (127.0.0.1:5901) — architecture
+# noVNC classique. x11vnc se relance seul si la connexion échoue par
+# client, pas besoin de l'attendre explicitement ici.
+exec websockify 0.0.0.0:5900 127.0.0.1:5901
