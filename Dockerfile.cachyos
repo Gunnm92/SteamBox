@@ -25,13 +25,19 @@
 #      élucidée) — souris inopérante.
 #
 # 4. KDE Plasma/KWin (X11 réel — Xorg + driver NVIDIA direct sur le GPU,
-#    PAS Xvfb) — architecture actuelle. X11 règle les deux problèmes du
-#    point 3 structurellement : x11vnc fonctionne avec n'importe quel
-#    gestionnaire de fenêtres (capture native au protocole, pas de
-#    fragmentation par compositeur), et l'injection d'input via l'extension
-#    XTest ne dépend pas du tout d'udev. Confirmé en direct sur conteneur
-#    jetable : Xorg détecte et pilote le vrai moniteur physique (pas de
-#    virtualisation), xdotool/x11vnc fonctionnent immédiatement.
+#    PAS Xvfb) — architecture actuelle. X11 règle le problème VNC du point 3
+#    structurellement : x11vnc fonctionne avec n'importe quel gestionnaire de
+#    fenêtres (capture native au protocole, pas de fragmentation par
+#    compositeur). Le problème souris, lui, PERSISTE sous X11 (pas
+#    spécifique à Wayland/KWin comme supposé initialement) : Sunshine injecte
+#    l'input via de vrais périphériques uinput (pas XTest), et le pilote
+#    X11 'libinput' interroge la même base udev on-disk qui ne persiste
+#    jamais ses tags dans ce conteneur (cause exacte toujours non élucidée —
+#    udevd calcule et diffuse bien les bons tags en temps réel, confirmé via
+#    `udevadm monitor`, mais `/run/udev/data/` reste vide). Contourné en
+#    forçant le pilote 'evdev' (n'a pas besoin d'udev, ouvre le device node
+#    directement) sur les périphériques Sunshine via une règle InputClass —
+#    voir `root-cachyos/etc/X11/xorg.conf.d/99-sunshine-input.conf`.
 #
 # Steam Big Picture se lance en plein écran DANS cette session X11 (pas de
 # bascule vers un second serveur type Gamescope).
@@ -46,7 +52,7 @@ RUN pacman -Syu --noconfirm && \
       plasma-desktop kwin-x11 konsole dolphin kate \
       xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent \
       kscreen breeze breeze-gtk kdeplasma-addons spectacle \
-      xorg-server xorg-xdpyinfo x11vnc python-pip \
+      xorg-server xorg-xdpyinfo x11vnc xf86-input-evdev python-pip \
       mesa vulkan-icd-loader vulkan-tools \
       vulkan-radeon lib32-vulkan-radeon \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
