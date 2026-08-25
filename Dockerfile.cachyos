@@ -394,6 +394,33 @@ RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4
       > /usr/share/applications/shadps4.desktop && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 
+# Eden (Nintendo Switch) — le dépôt GitHub officiel (eden-emulator/Releases)
+# est bloqué sur ordre DMCA de Nintendo (confirmé en direct : l'API GitHub
+# renvoie "Repository access blocked"/"reason":"dmca"), le projet publie
+# donc sur sa propre infrastructure (eden-emu.dev). Build clang-pgo
+# recommandé par le projet (~10-30% plus rapide que le build gcc standard).
+#
+# Le AppRun de ce build (basé sur "sharun") calcule son dossier via $0 sans
+# résoudre les liens symboliques (APPDIR=$(cd "${0%/*}" && pwd)) — un simple
+# `ln -sf .../AppRun /usr/local/bin/eden` casse tout (cherche les binaires
+# dans /usr/local/bin/bin au lieu de /opt/eden/bin, confirmé en direct).
+# Wrapper shell qui se place dans le bon dossier avant de lancer, au lieu
+# du symlink direct utilisé pour les autres émulateurs AppImage.
+RUN EDEN_TAG=$(curl -sX GET "https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases/latest" \
+      | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
+    [ -n "${EDEN_TAG}" ] || { echo "FATAL: EDEN_TAG vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/eden.AppImage \
+      "https://stable.eden-emu.dev/${EDEN_TAG}/Eden-Linux-${EDEN_TAG}-amd64-clang-pgo.AppImage" && \
+    chmod +x /tmp/eden.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./eden.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction eden.AppImage échouée"; exit 1; } && \
+    { [ -L squashfs-root ] && mv AppDir /opt/eden || mv squashfs-root /opt/eden; } && \
+    printf '#!/bin/sh\ncd /opt/eden && exec ./AppRun "$@"\n' > /usr/local/bin/eden && \
+    chmod +x /usr/local/bin/eden && \
+    printf '[Desktop Entry]\nType=Application\nName=Eden\nExec=/usr/local/bin/eden\nIcon=/opt/eden/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+      > /usr/share/applications/eden.desktop && \
+    rm -f /tmp/eden.AppImage
+
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
 RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
