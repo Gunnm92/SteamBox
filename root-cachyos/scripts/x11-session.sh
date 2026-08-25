@@ -91,12 +91,27 @@ echo "[x11-session] Xorg prêt."
 # À partir d'ici, tout tourne comme arcade (pas de raison d'avoir kwin/
 # plasmashell en root) — mais ce script reste root en premier plan pour
 # que le trap ci-dessus nettoie Xorg quand la session se termine.
+# Version Plasma variable selon la distro : 6 sur CachyOS/Arch (rolling),
+# 5.27 sur Ubuntu 24.04 (noble n'a pas encore Plasma 6) — confirmé en
+# direct sur Ubuntu : kwriteconfig6/kbuildsycoca6 absents, seuls les
+# binaires suffixés "5" existent. KDE_SESSION_VERSION et les commandes
+# kwriteconfig/kbuildsycoca détectés dynamiquement ci-dessous pour que ce
+# script reste commun aux deux variantes sans divergence.
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+    KDE_SESSION_VER=6
+else
+    KDE_SESSION_VER=5
+fi
+
 runuser -u arcade -- env \
     HOME=/home/arcade DISPLAY=:0 XDG_RUNTIME_DIR="${ARCADE_RUNTIME_DIR}" \
     QT_QPA_PLATFORM=xcb XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=x11 \
-    KDE_SESSION_VERSION=6 SDL_VIDEODRIVER=x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
+    KDE_SESSION_VERSION="${KDE_SESSION_VER}" SDL_VIDEODRIVER=x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
+
+KWRITECONFIG=$(command -v kwriteconfig6 || command -v kwriteconfig5)
+KBUILDSYCOCA=$(command -v kbuildsycoca6 || command -v kbuildsycoca5)
 
 # GTK ne suit pas automatiquement le thème Plasma comme le font les
 # applications Qt (intégration native via plasma-integration) — breeze-gtk
@@ -112,33 +127,33 @@ cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
 
 # Pas d'\''écran de verrouillage : aucun mécanisme de login ici, un
 # verrouillage serait une impasse définitive plutôt qu'\''une protection utile.
-kwriteconfig6 --file "${HOME}/.config/kscreenlockerrc" --group Daemon --key Autolock false 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kscreenlockerrc" --group Daemon --key Autolock false 2>/dev/null || true
 
 touch "${HOME}/.local/share/user-places.xbel"
 
 # Thème sombre par défaut pour les applications Qt/Plasma (GTK est réglé
 # séparément ci-dessus) — sans ça Arch installe Breeze en clair par défaut.
-kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group KDE --key LookAndFeelPackage org.kde.breezedark.desktop 2>/dev/null || true
-kwriteconfig6 --file "${HOME}/.config/kdeglobals" --group General --key ColorScheme BreezeDark 2>/dev/null || true
-kwriteconfig6 --file "${HOME}/.config/kwinrc" --group org.kde.kdecoration2 --key theme Breeze 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kdeglobals" --group KDE --key LookAndFeelPackage org.kde.breezedark.desktop 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kdeglobals" --group General --key ColorScheme BreezeDark 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group org.kde.kdecoration2 --key theme Breeze 2>/dev/null || true
 
 # Desactive l optimisation KWin qui bypass le compositeur pour les fenetres
 # plein ecran (unredirect) - confirme en direct : cause exacte d ecran noir
 # pour Steam Big Picture (fenetre CEF/Chromium plein ecran) sur ce driver
 # NVIDIA, sans doute lie a la meme famille de bugs GLX/compositeur que la
 # capture bureau de Steam Remote Play.
-kwriteconfig6 --file "${HOME}/.config/kwinrc" --group Compositing --key UnredirectFullscreen false 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group Compositing --key UnredirectFullscreen false 2>/dev/null || true
 
 # Thème de curseur — sans ça, confirmé en direct sous KWin/Wayland : curseur
 # invisible. Gardé par précaution ici aussi.
-kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorTheme breeze_cursors 2>/dev/null || true
-kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorSize 24 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorTheme breeze_cursors 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorSize 24 2>/dev/null || true
 
 # Reconstruit la base d'\''applications (kickoff/menu) — nécessaire pour que nos
 # .desktop personnalisés (Steam, Sunshine, Chrome, émulateurs...) apparaissent.
 # (applications.menu lui-même est copié plus haut, en root : /etc/xdg/menus/
 # appartient à root, arcade ne peut pas y écrire.)
-kbuildsycoca6 2>/dev/null || true
+"${KBUILDSYCOCA}" 2>/dev/null || true
 
 # Association .exe/.msi/.bat -> Wine pour lancement automatique depuis Dolphin.
 # wine.desktop declare bien ces MimeType (paquet wine-staging), mais rien ne

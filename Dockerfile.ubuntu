@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
       seatd libinput10 \
       plasma-desktop kwin-x11 konsole dolphin kate \
       xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent-1 \
-      kscreen breeze breeze-gtk-theme kde-spectacle \
+      kscreen breeze breeze-gtk-theme kde-spectacle systemsettings \
       xserver-xorg x11-utils x11vnc xserver-xorg-input-evdev python3-pip \
       mesa-utils libgl1-mesa-dri vulkan-tools mesa-vulkan-drivers \
       libvulkan1 libvulkan1:i386 \
@@ -537,7 +537,7 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
     XDG_CURRENT_DESKTOP=KDE \
     XDG_SESSION_TYPE=x11 \
-    KDE_SESSION_VERSION=6 \
+    KDE_SESSION_VERSION=5 \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
