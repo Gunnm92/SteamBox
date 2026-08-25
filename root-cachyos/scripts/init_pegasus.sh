@@ -16,7 +16,7 @@ set -e
 
 ROMS_DIR="/userdata/roms"
 PEGASUS_CFG="/config/.config/pegasus-frontend"
-CORES="/config/.config/retroarch/cores"
+CORES="/usr/lib/libretro"
 RA="retroarch -L"
 WSQUASHFS="/usr/local/bin/wsquashfs-launcher"
 FLAG_FILE="${PEGASUS_CFG}/.metadata-generated"
@@ -60,17 +60,28 @@ SYSTEMS["model3"]="Sega Model 3|zip|/usr/local/bin/supermodel -res=1920,1080 -fu
 SYSTEMS["model2"]="Sega Model 2|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 SYSTEMS["model1"]="Sega Model 1|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 
-# ── Arcade (MAME / FBA) ───────────────────────────────────────────────────────
+# ── Arcade (MAME / FBNeo) ─────────────────────────────────────────────────────
+# Verifie en direct contre /usr/lib/libretro (ls) - la version precedente de
+# ce mapping (portee telle quelle de l'ancienne image webstation) referencait
+# des noms de core qui n'ont jamais ete installes ici (fbalpha2012_*, neocd,
+# gearsystem, yabasanshiro, snes9x2010, citra2018, virtualjaguar, mednafen_ngp/
+# lynx/pcfx, pcsx2, opera) et pointait CORES vers un dossier vide
+# (~/.config/retroarch/cores au lieu de /usr/lib/libretro, ou pacman installe
+# reellement les cores) - aucun de ces systemes n'a donc jamais fonctionne.
+# Cores installes en plus pour combler les ecarts : fbneo, picodrive,
+# beetle-pce(-fast), beetle-supergrafx, snes9x, melonds, scummvm. Systemes
+# sans core disponible dans les depots retires (neogeocd, jaguar, pcfx, ngp,
+# lynx, ps2, 3do) plutot que de laisser une reference morte.
 SYSTEMS["arcade"]="Arcade|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 SYSTEMS["mame"]="MAME|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 SYSTEMS["fbneo"]="FBNeo|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
 SYSTEMS["fba"]="FBA|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["cps1"]="CPS-1|zip,7z|${RA} ${CORES}/fbalpha2012_cps1_libretro.so \"{file.path}\""
-SYSTEMS["cps2"]="CPS-2|zip,7z|${RA} ${CORES}/fbalpha2012_cps2_libretro.so \"{file.path}\""
-SYSTEMS["cps3"]="CPS-3|zip,7z|${RA} ${CORES}/fbalpha2012_cps3_libretro.so \"{file.path}\""
-SYSTEMS["neogeo"]="Neo Geo|zip,7z|${RA} ${CORES}/fbalpha2012_neogeo_libretro.so \"{file.path}\""
-SYSTEMS["neogeocd"]="Neo Geo CD|iso,chd,cue|${RA} ${CORES}/neocd_libretro.so \"{file.path}\""
-SYSTEMS["neogeocdjp"]="Neo Geo CD JP|iso,chd,cue|${RA} ${CORES}/neocd_libretro.so \"{file.path}\""
+# FBNeo est un core unifie moderne qui couvre CPS-1/2/3 et Neo Geo - remplace
+# les anciens cores fbalpha2012_* separes, plus maintenus/disponibles.
+SYSTEMS["cps1"]="CPS-1|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
+SYSTEMS["cps2"]="CPS-2|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
+SYSTEMS["cps3"]="CPS-3|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
+SYSTEMS["neogeo"]="Neo Geo|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
 SYSTEMS["atomiswave"]="Atomiswave|zip,7z|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
 SYSTEMS["naomi"]="Sega NAOMI|zip,7z,chd|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
 SYSTEMS["naomi2"]="Sega NAOMI 2|zip,7z,chd|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
@@ -84,47 +95,35 @@ SYSTEMS["genesis"]="Genesis|md,bin,smd,gen,zip,7z|${RA} ${CORES}/genesis_plus_gx
 SYSTEMS["sega32x"]="Sega 32X|32x,bin,md,zip,7z|${RA} ${CORES}/picodrive_libretro.so \"{file.path}\""
 SYSTEMS["segacd"]="Sega CD|iso,chd,cue,bin|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
 SYSTEMS["megacd"]="Mega CD|iso,chd,cue,bin|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["mastersystem"]="Master System|sms,bin,zip,7z|${RA} ${CORES}/gearsystem_libretro.so \"{file.path}\""
-SYSTEMS["mark3"]="Sega Mark III|sms,bin,zip,7z|${RA} ${CORES}/gearsystem_libretro.so \"{file.path}\""
-SYSTEMS["sg-1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/gearsystem_libretro.so \"{file.path}\""
-SYSTEMS["sg1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/gearsystem_libretro.so \"{file.path}\""
-SYSTEMS["gamegear"]="Game Gear|gg,bin,zip,7z|${RA} ${CORES}/gearsystem_libretro.so \"{file.path}\""
-SYSTEMS["saturn"]="Saturn|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabasanshiro_libretro.so \"{file.path}\""
-SYSTEMS["saturnjp"]="Saturn JP|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabasanshiro_libretro.so \"{file.path}\""
+# Genesis Plus GX est multi-systeme (couvre aussi Master System/Game Gear/
+# SG-1000) - gearsystem_libretro.so n'a jamais ete disponible dans les depots.
+SYSTEMS["mastersystem"]="Master System|sms,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
+SYSTEMS["mark3"]="Sega Mark III|sms,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
+SYSTEMS["sg-1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
+SYSTEMS["sg1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
+SYSTEMS["gamegear"]="Game Gear|gg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
+SYSTEMS["saturn"]="Saturn|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabause_libretro.so \"{file.path}\""
+SYSTEMS["saturnjp"]="Saturn JP|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabause_libretro.so \"{file.path}\""
 SYSTEMS["dreamcast"]="Dreamcast|chd,cdi,gdi,iso|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
 
 # ── Nintendo (RetroArch) ──────────────────────────────────────────────────────
-SYSTEMS["snes"]="Super Nintendo|sfc,smc,fig,bs,zip,7z|${RA} ${CORES}/snes9x2010_libretro.so \"{file.path}\""
-SYSTEMS["sfc"]="Super Famicom|sfc,smc,fig,zip,7z|${RA} ${CORES}/snes9x2010_libretro.so \"{file.path}\""
+SYSTEMS["snes"]="Super Nintendo|sfc,smc,fig,bs,zip,7z|${RA} ${CORES}/snes9x_libretro.so \"{file.path}\""
+SYSTEMS["sfc"]="Super Famicom|sfc,smc,fig,zip,7z|${RA} ${CORES}/snes9x_libretro.so \"{file.path}\""
 SYSTEMS["supergrafx"]="SuperGrafx|pce,sgx,bin,zip,7z|${RA} ${CORES}/mednafen_supergrafx_libretro.so \"{file.path}\""
 SYSTEMS["gamecube"]="GameCube|iso,rvz,chd,gcm|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
 SYSTEMS["gc"]="GameCube|iso,rvz,chd,gcm|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
 SYSTEMS["wii"]="Wii|iso,wbfs,rvz,chd|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
-SYSTEMS["3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|${RA} ${CORES}/citra2018_libretro.so \"{file.path}\""
-SYSTEMS["n3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|${RA} ${CORES}/citra2018_libretro.so \"{file.path}\""
-SYSTEMS["jaguar"]="Atari Jaguar|j64,jag,rom,zip,7z|${RA} ${CORES}/virtualjaguar_libretro.so \"{file.path}\""
-SYSTEMS["atarijaguar"]="Atari Jaguar|j64,jag,rom,zip,7z|${RA} ${CORES}/virtualjaguar_libretro.so \"{file.path}\""
+# Pas de core libretro 3DS disponible (citra2018 jamais installe ni maintenu,
+# citra lui-meme discontinue) - redirige vers Azahar, deja installe en
+# standalone dans cette image (voir plus haut dans le Dockerfile).
+SYSTEMS["3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|/usr/local/bin/azahar \"{file.path}\""
+SYSTEMS["n3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|/usr/local/bin/azahar \"{file.path}\""
 
 # ── NEC (RetroArch) ───────────────────────────────────────────────────────────
 SYSTEMS["pcengine"]="PC Engine|pce,bin,ccd,img,zip,7z|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
 SYSTEMS["tg16"]="TurboGrafx-16|pce,bin,ccd,img,zip,7z|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
 SYSTEMS["pcenginecd"]="PC Engine CD|iso,chd,cue,bin|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
 SYSTEMS["tg-cd"]="TurboGrafx CD|iso,chd,cue,bin|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
-SYSTEMS["pcfx"]="PC-FX|iso,chd,cue,bin,pce|${RA} ${CORES}/mednafen_pcfx_libretro.so \"{file.path}\""
-
-# ── SNK (RetroArch) ──────────────────────────────────────────────────────────
-SYSTEMS["ngp"]="Neo Geo Pocket|ngp,ngc,zip,7z|${RA} ${CORES}/mednafen_ngp_libretro.so \"{file.path}\""
-SYSTEMS["ngpc"]="Neo Geo Pocket Color|ngp,ngc,zip,7z|${RA} ${CORES}/mednafen_ngp_libretro.so \"{file.path}\""
-
-# ── Atari (RetroArch) ─────────────────────────────────────────────────────────
-SYSTEMS["atarilynx"]="Atari Lynx|lnx,zip,7z|${RA} ${CORES}/mednafen_lynx_libretro.so \"{file.path}\""
-SYSTEMS["lynx"]="Atari Lynx|lnx,zip,7z|${RA} ${CORES}/mednafen_lynx_libretro.so \"{file.path}\""
-
-# ── Sony (RetroArch) ─────────────────────────────────────────────────────────
-SYSTEMS["ps2"]="PlayStation 2|iso,chd,bin,mdf|${RA} ${CORES}/pcsx2_libretro.so \"{file.path}\""
-
-# ── 3DO (RetroArch) ──────────────────────────────────────────────────────────
-SYSTEMS["3do"]="3DO|iso,chd,cue,bin|${RA} ${CORES}/opera_libretro.so \"{file.path}\""
 
 # ── ScummVM (RetroArch) ───────────────────────────────────────────────────────
 SYSTEMS["scummvm"]="ScummVM|scummvm,zip|${RA} ${CORES}/scummvm_libretro.so \"{file.path}\""

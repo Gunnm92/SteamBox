@@ -71,7 +71,9 @@ RUN pacman -Syu --noconfirm && \
       libretro-mgba libretro-gambatte libretro-desmume \
       libretro-mupen64plus-next libretro-beetle-psx-hw libretro-ppsspp \
       libretro-flycast libretro-yabause libretro-dolphin \
-      libretro-mame libretro-beetle-pce-fast \
+      libretro-mame libretro-beetle-pce-fast libretro-beetle-pce \
+      libretro-fbneo-git libretro-picodrive libretro-beetle-supergrafx \
+      libretro-snes9x libretro-melonds libretro-scummvm \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
