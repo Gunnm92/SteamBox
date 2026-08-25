@@ -18,7 +18,18 @@ ROMS_DIR="/userdata/roms"
 PEGASUS_CFG="/config/.config/pegasus-frontend"
 CORES="/usr/lib/libretro"
 RA="retroarch -L"
-WSQUASHFS="/usr/local/bin/wsquashfs-launcher"
+# Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
+# d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
+# root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre
+# session KDE/wine tourne en tant qu'"arcade" (non-root) — squashfuse monte le
+# paquet en préservant ces UID/permissions d'origine, donc "arcade" se voit
+# refuser la lecture (confirmé en direct : erreurs "Permission denied" sur
+# autorun.cmd, jeu qui ne démarre pas). Confirmé aussi que les fichiers ne
+# sont PAS corrompus : le même paquet non modifié se lance sans erreur une
+# fois élevé en root. sudo -E (accès NOPASSWD déjà configuré pour arcade)
+# élève le montage/lancement en root tout en gardant DISPLAY/XDG_RUNTIME_DIR
+# d'arcade, donc la session graphique et l'audio (PipeWire) restent accessibles.
+WSQUASHFS="sudo -E /usr/local/bin/wsquashfs-launcher"
 FLAG_FILE="${PEGASUS_CFG}/.metadata-generated"
 
 [ -d "${ROMS_DIR}" ] || exit 0
