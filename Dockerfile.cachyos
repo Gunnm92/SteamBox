@@ -76,6 +76,7 @@ RUN pacman -Syu --noconfirm && \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
       ark unrar zip \
+      sdl2_image sdl2_mixer sdl2_ttf sdl2_gfx \
       dolphin-emu scummvm \
       papirus-icon-theme ttf-jetbrains-mono-nerd \
     && pacman -Scc --noconfirm
