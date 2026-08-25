@@ -34,7 +34,7 @@ chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
 # gère déjà l'accès cgroup, ceci couvre la permission Unix classique.
 chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
 
-for script in init_system init_audio init_sunshine; do
+for script in init_system init_audio init_sunshine init_pegasus; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
         "/usr/local/bin/scripts/${script}.sh"
     fi
