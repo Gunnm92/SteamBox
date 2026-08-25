@@ -140,6 +140,12 @@ kwriteconfig6 --file "${HOME}/.config/kcminputrc" --group Mouse --key cursorSize
 # appartient à root, arcade ne peut pas y écrire.)
 kbuildsycoca6 2>/dev/null || true
 
+# Association .exe/.msi/.bat -> Wine pour lancement automatique depuis Dolphin.
+# wine.desktop declare bien ces MimeType (paquet wine-staging), mais rien ne
+# le definit comme gestionnaire par defaut sans cet appel explicite - sans
+# ca, double-clic sur un .exe dans Dolphin ne fait rien.
+xdg-mime default wine.desktop application/x-ms-dos-executable application/x-msi application/x-ms-shortcut application/x-bat 2>/dev/null || true
+
 # PipeWire — gardé uniquement pour l'\''audio de Sunshine (PulseAudio via
 # pipewire-pulse) ; la capture vidéo sous X11 passe par NvFBC, pas PipeWire.
 # Protégé par pgrep : un redémarrage de svc-kde relance ce script, mais

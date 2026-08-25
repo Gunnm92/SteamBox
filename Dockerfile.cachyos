@@ -75,6 +75,7 @@ RUN pacman -Syu --noconfirm && \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
       squashfuse squashfs-tools fuse-overlayfs \
       mako libnotify cabextract p7zip binutils nss \
+      ark unrar zip \
       dolphin-emu scummvm \
       papirus-icon-theme ttf-jetbrains-mono-nerd \
     && pacman -Scc --noconfirm
