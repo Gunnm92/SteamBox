@@ -233,6 +233,12 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
+# ── 1a13b. Mode Jeu (façon SteamOS) — Steam Big Picture sous gamescope plutôt
+# que sous KWin. Voir scripts/game-mode.sh pour le detail (Steam Deck n'utilise
+# KWin qu'en Mode Bureau, Big Picture/Remote Play tournent sous gamescope).
+RUN printf '[Desktop Entry]\nType=Application\nName=Mode Jeu\nExec=/usr/local/bin/scripts/game-mode.sh\nIcon=distributor-logo-steamos\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/game-mode.desktop
+
 # ── 1a14. Émulateurs supplémentaires — parité avec la suite bundlée dans
 # l'ancienne image de base lscr.io/linuxserver/webstation (dolphin-emu et
 # scummvm ci-dessus sont déjà des paquets Arch officiels ; le reste n'a pas
