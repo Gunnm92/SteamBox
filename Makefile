@@ -13,7 +13,7 @@ ifdef GITHUB_TOKEN
 BUILD_ARGS  += --build-arg GITHUB_TOKEN="$(GITHUB_TOKEN)"
 endif
 
-.PHONY: build push run stop logs clean help build-cachyos push-cachyos run-cachyos stop-cachyos logs-cachyos
+.PHONY: build push run stop logs clean help build-cachyos push-cachyos run-cachyos stop-cachyos logs-cachyos build-ubuntu push-ubuntu run-ubuntu stop-ubuntu logs-ubuntu
 
 build:
 	$(BUILDX) $(BUILD_ARGS) \
@@ -64,6 +64,30 @@ stop-cachyos:
 
 logs-cachyos:
 	$(DOCKER) compose --file ArcadeBox/docker-compose.cachyos.yml logs -f
+
+# ── Variante Ubuntu + KDE (structure root-cachyos/, paquets apt) ────────────
+build-ubuntu:
+	$(BUILDX) $(BUILD_ARGS) \
+		--file Dockerfile.ubuntu \
+		--tag $(REGISTRY)/$(IMAGE)-ubuntu:$(TAG) \
+		--load \
+		..
+
+push-ubuntu:
+	$(BUILDX) $(BUILD_ARGS) \
+		--file Dockerfile.ubuntu \
+		--tag $(REGISTRY)/$(IMAGE)-ubuntu:$(TAG) \
+		--push \
+		..
+
+run-ubuntu:
+	$(DOCKER) compose --file ArcadeBox/docker-compose.ubuntu.yml up -d
+
+stop-ubuntu:
+	$(DOCKER) compose --file ArcadeBox/docker-compose.ubuntu.yml down
+
+logs-ubuntu:
+	$(DOCKER) compose --file ArcadeBox/docker-compose.ubuntu.yml logs -f
 
 help:
 	@echo "Targets:"

@@ -93,6 +93,15 @@ INSTALL_ARGS=(
     --no-libglx-indirect
     --no-install-libglvnd
     --no-x-check
+    # --no-x-check + --no-distro-scripts désactivent la détection auto du
+    # layout Xorg de la distro — l'installeur retombe alors sur un chemin
+    # générique /usr/lib64/xorg/modules. Ça se trouve marcher sur CachyOS/
+    # Arch (Xorg y cherche aussi dans ce chemin) mais PAS sur Ubuntu/Debian
+    # (Xorg n'y cherche que /usr/lib/xorg/modules, sans "64") — confirmé en
+    # direct : nvidia_drv.so installé mais introuvable par Xorg, fallback
+    # silencieux sur le driver "modeset" générique, échec ensuite ("AddScreen
+    # /ScreenInit failed"). Chemin forcé explicitement, valable sur les deux.
+    --x-module-path=/usr/lib/xorg/modules
 )
 
 major_version=$(echo "${nvidia_host_driver_version}" | cut -d'.' -f1)
