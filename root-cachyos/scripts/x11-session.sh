@@ -58,6 +58,24 @@ Section "Device"
     Driver "nvidia"
     BusID "${XORG_BUS_ID}"
     Option "TripleBuffer" "true"
+    # ProbeAllGpus false : ajoute le 26/08 en reponse a un "Failed to
+    # initialize the NVIDIA GPU at PCI:x:0:0" (hote multi-GPU, deux RTX
+    # 3090 - le pilote sonde par defaut tous les GPU PCI presents via
+    # sysfs, non filtre par NVIDIA_VISIBLE_DEVICES/le conteneur). CORRECTIF
+    # SANS EFFET, verifie en direct : l'erreur persiste identique meme avec
+    # cette option confirmee active dans le log ("(**) Option
+    # ProbeAllGpus false"). Ce message vient en realite du "PRIME Render
+    # Offload" du pilote (log : "The X server supports PRIME Render
+    # Offload" juste avant), un mecanisme different de ce que
+    # ProbeAllGpus controle - et il n'est PAS fatal : le log continue
+    # normalement juste apres (UnloadModule, Deleting GPU-1, puis
+    # Device0/Screen0 s'initialise normalement jusqu'au bout, jusqu'a
+    # "Server terminated successfully (0)"). La vraie cause du crash-loop
+    # du 26/08 etait ailleurs (startplasma-x11 manquant sur 26.04, voir
+    # Dockerfile.ubuntu). Option laissee en place (inoffensive, sonde un
+    # GPU non utilise de toute facon) mais ne pas la croire responsable
+    # d'un futur correctif GPU.
+    Option "ProbeAllGpus" "false"
 EndSection
 
 # DRI3 se règle au niveau serveur (section Extensions), pas comme option du

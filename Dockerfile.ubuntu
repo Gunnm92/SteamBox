@@ -28,7 +28,16 @@
 # la distro ; si la cause réelle est côté KWin/X11, le gel pourrait
 # persister malgré tout.
 
-FROM ubuntu:24.04
+# Ubuntu 26.04 LTS "Resolute Raccoon" (audit 2026-08-26, migration depuis
+# 24.04) : 24.04 n'était pas un choix motivé, juste la LTS courante au
+# moment où ce Dockerfile a été écrit. Migration vers 26.04 vérifiée avant
+# coup (apt-cache policy sur une image ubuntu:26.04 éphémère, pas à
+# l'aveugle) : winehq-staging (11.16~resolute-1), le PPA ppa:libretro/testing
+# et gamescope (natif, plus besoin de PPA/compilation) supportent déjà
+# "resolute". Plasma 6.6.x est ici la version par défaut (contre 5.27 sur
+# 24.04) — x11-session.sh gère déjà cette bascule dynamiquement
+# (kwriteconfig6/kbuildsycoca6 détectés en priorité).
+FROM ubuntu:26.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -40,18 +49,19 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     apt-get install --no-install-recommends -y \
       sudo vim openssh-client curl wget tar xz-utils zstd git jq unzip \
       seatd libinput10 \
-      plasma-desktop kwin-x11 konsole dolphin kate \
+      plasma-desktop plasma-session-x11 kwin-x11 konsole dolphin kate \
       xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent-1 \
       kscreen breeze breeze-gtk-theme kde-spectacle systemsettings \
-      qml-module-qt-labs-platform \
+      qml6-module-qt-labs-platform \
       xserver-xorg x11-utils x11vnc xserver-xorg-input-evdev python3-pip \
       mesa-utils libgl1-mesa-dri vulkan-tools mesa-vulkan-drivers \
       libvulkan1 libvulkan1:i386 \
       pipewire pipewire-pulse wireplumber \
-      libpipewire-0.3-0:i386 libpulse0:i386 \
+      libpulse0:i386 \
+      gamescope \
       ffmpeg \
       gamemode mangohud \
-      dbus policykit-1 network-manager \
+      dbus polkitd network-manager \
       xdg-desktop-portal \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify-bin cabextract p7zip-full binutils libnss3 \
@@ -61,7 +71,47 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
       fonts-jetbrains-mono \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# kdeplasma-addons n'existe pas comme paquet fonctionnel sur Ubuntu 24.04
+# qml6-module-qt-labs-platform (Qt6) au lieu de qml-module-qt-labs-platform
+# (Qt5, utilisé sur 24.04/Plasma 5) — Plasma 6 (ci-dessus) est entièrement
+# Qt6, le paquet Qt5 ne correspond plus aux widgets Plasma qui le chargent
+# (fix historique : widget clavier manquant, commit 9679799).
+#
+# plasma-session-x11 ajouté (crash-loop constaté en direct le 26/08, après
+# le premier déploiement de cette migration) : sur 24.04, le binaire
+# startplasma-x11 (appelé en dernière ligne de x11-session.sh) faisait
+# partie du paquet plasma-workspace. Sur 26.04/Plasma 6, Ubuntu l'a
+# déplacé dans ce paquet séparé — plasma-workspace ne fournit plus que
+# startplasma-wayland. Sans lui : "startplasma-x11: command not found" en
+# toute fin de x11-session.sh, qui fait sortir le script (donc tuer Xorg
+# via le trap EXIT en tête de fichier) et boucler indéfiniment tout le
+# service svc-kde. Le "Failed to initialize the NVIDIA GPU at PCI:x:0:0"
+# visible dans les logs Xorg à ce moment est un red herring (non fatal,
+# lié à PRIME Render Offload — voir commentaire ProbeAllGpus dans
+# x11-session.sh) : la vraie cause était uniquement ce binaire manquant.
+#
+# gamescope ajouté (audit 2026-08-26) : absent de ce Dockerfile depuis sa
+# création (jamais porté depuis Dockerfile.cachyos, où il est présent), et
+# de toute façon sans paquet apt sur 24.04. Disponible nativement sur 26.04
+# (resolute/multiverse) — candidat pour isoler les jeux Proton dont le
+# changement de résolution en cours de partie interagit mal avec KWin (piste
+# ouverte sur le freeze GE-Proton constaté en direct le 26/08, pas encore
+# testée : compilation gamescope depuis les sources jugée disproportionnée
+# avant d'avoir confirmé la piste plus légère — esync/fsync, chemin FUSE).
+#
+# libpipewire-0.3-0:i386 retiré : plus de candidat sur 26.04 (32-bit
+# PipeWire abandonné par Ubuntu). Sans conséquence attendue — les jeux Wine
+# 32-bit passent par winepulse.drv (libpulse0:i386, conservé) ou l'émulation
+# ALSA (libasound2-plugins, installée plus loin avec Wine), pas par une
+# liaison directe à libpipewire.
+#
+# policykit-1 → polkitd (build réel du 26/08, échec confirmé : "Package
+# 'policykit-1' has no installation candidate") : paquet transitionnel
+# supprimé sur 26.04, polkitd est le vrai nom du démon désormais. Raté par
+# les vérifications apt-cache d'avant-migration (faites sur un sous-ensemble
+# ciblé de paquets à risque, pas la liste complète) — la vraie build l'a
+# détecté immédiatement, sans ambiguïté.
+
+# kdeplasma-addons n'existe pas comme paquet fonctionnel sur Ubuntu (vérifié encore vrai sur 26.04/resolute lors de la migration du 26/08)
 # (seul "kdeplasma-addons-data", fichiers de locale uniquement) — abandonné,
 # pas critique (widgets Plasma additionnels, pas requis pour la session).
 #
@@ -132,12 +182,13 @@ RUN mkdir -pm755 /etc/apt/keyrings && \
 
 # ── 1a3. RetroArch + cœurs libretro — PPA officiel ────────────────────────────
 # retroarch lui-même installé AVANT le PPA, depuis le dépôt universe standard
-# (1.18.0+dfsg-1) — ppa:libretro/testing publie une version de retroarch qui
-# exige des libcaca0/libdiscord-rpc3 plus récents que ceux réellement
+# — sur 24.04/noble, ppa:libretro/testing publiait une version de retroarch
+# qui exigeait des libcaca0/libdiscord-rpc3 plus récents que ceux
 # disponibles sur noble (conflit de dépendances irrésolvable, confirmé en
-# direct). En installant retroarch depuis universe D'ABORD, sa dépendance
-# est déjà satisfaite quand le PPA est ajouté ensuite pour les cœurs — apt
-# n'a plus besoin de réévaluer/mettre à niveau retroarch lui-même.
+# direct). Sur 26.04/resolute (migration du 26/08), le PPA publie
+# directement un build "~ubuntu26.04" de retroarch sans ce conflit — l'étape
+# reste néanmoins en place par prudence (coût nul, filet de sécurité contre
+# un futur décalage de versions entre le PPA et la base Ubuntu).
 # ppa:libretro/stable (essayé en alternative) manque trop de cœurs modernes
 # (bsnes, fbneo, mupen64plus-next, picodrive, beetle-supergrafx, melonds,
 # yabause, mame2010, dolphin absents) — /testing est le bon choix une fois
@@ -146,17 +197,19 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y retroarch && \
     add-apt-repository -y ppa:libretro/testing && \
     apt-get update
-# libretro-dolphin (seul cœur encore bloqué : exige libxxhash0 >= 0.8.3,
-# noble ne fournit que 0.8.2 — confirmé en direct) volontairement omis.
-# Écarts connus par rapport à CachyOS (37 systèmes, cf. init_pegasus.sh),
-# vérifiés en direct sur ce PPA (noble) :
+# libretro-dolphin réintégré (migration resolute du 26/08) : bloqué sur
+# noble faute de libxxhash0 >= 0.8.3 (noble ne fournissait que 0.8.2),
+# resolute fournit 0.8.3 — vérifié avant coup (apt-cache policy sur une
+# image ubuntu:26.04 éphémère), plus de blocage.
+# Écarts encore présents par rapport à CachyOS (37 systèmes, cf.
+# init_pegasus.sh), reconfirmés sur ce même PPA pour resolute (pas de
+# régression liée à la migration, gaps préexistants sur noble) :
 #   - pas de "libretro-mame" (MAME moderne/complet) : seulement mame2003 et
 #     mame2010 (plus anciens). SYSTEMS["mame"]/["arcade"] à réévaluer.
 #   - pas de "libretro-flycast" (Dreamcast/Naomi/Atomiswave) : aucun
 #     équivalent packagé sur ce PPA. Systèmes concernés à réévaluer/retirer.
 #   - pas de cœur PPSSPP (PSP) ni de cœur ScummVM packagé séparément
 #     (le paquet scummvm autonome ci-dessus reste disponible).
-#   - pas de cœur Dolphin (GameCube/Wii, cf. ci-dessus).
 # À corriger dans init_pegasus.sh une fois le conteneur de test lancé, comme
 # ça a été fait pour la même classe de problème sur CachyOS.
 RUN apt-get install --no-install-recommends -y \
@@ -166,7 +219,7 @@ RUN apt-get install --no-install-recommends -y \
       libretro-mupen64plus-next libretro-beetle-psx libretro-fbneo \
       libretro-picodrive libretro-beetle-supergrafx \
       libretro-snes9x libretro-melonds libretro-yabause \
-      libretro-mame2010 libretro-beetle-pce-fast \
+      libretro-mame2010 libretro-beetle-pce-fast libretro-dolphin \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ── 1a4. Schémas GSettings / cache MIME — sécurité, ces hooks tournent déjà
@@ -481,7 +534,17 @@ RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
 
 # ── 1b. noVNC — fichiers statiques + websockify (pip, pas de paquet apt) ─────
-RUN pip install --break-system-packages --no-cache-dir websockify
+# --ignore-installed cryptography (build réel du 26/08, échec confirmé :
+# "Cannot uninstall cryptography 46.0.5 ... no RECORD file was found") : sur
+# 26.04, python3-cryptography est déjà présent (dépendance transitive d'un
+# paquet apt installé plus haut), packagé par dpkg sans le fichier RECORD
+# que pip exige pour désinstaller proprement une version existante avant
+# upgrade. --ignore-installed (ciblé sur ce seul paquet, pas un blanket
+# ignore) fait installer la version pip par-dessus dans
+# /usr/local/lib/.../dist-packages, qui passe avant le chemin apt sur le
+# PYTHONPATH par défaut — vérifié en direct : websockify s'importe et son
+# CLI fonctionne après coup, sans toucher au paquet système.
+RUN pip install --break-system-packages --ignore-installed cryptography --no-cache-dir websockify
 
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
@@ -519,7 +582,7 @@ RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tm
 # ── 4. Utilisateur non-root pour la session bureau ────────────────────────────
 ARG PUID=1000
 ARG PGID=1000
-# L'image ubuntu:24.04 embarque déjà un utilisateur "ubuntu" en uid 1000
+# L'image ubuntu:26.04 (vrai aussi sur 24.04, migration du 26/08 sans changement ici) embarque déjà un utilisateur "ubuntu" en uid 1000
 # (convention cloud-init) — en conflit direct avec notre PUID par défaut.
 RUN userdel -r ubuntu 2>/dev/null || true && \
     groupadd -g "${PGID}" arcade 2>/dev/null || true && \
@@ -566,7 +629,7 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
     XDG_CURRENT_DESKTOP=KDE \
     XDG_SESSION_TYPE=x11 \
-    KDE_SESSION_VERSION=5 \
+    KDE_SESSION_VERSION=6 \
     GSK_RENDERER=cairo \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
