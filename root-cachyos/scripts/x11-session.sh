@@ -110,6 +110,22 @@ runuser -u arcade -- env \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 
+# Bus D-Bus de session RÉEL, au chemin standard $XDG_RUNTIME_DIR/bus —
+# remplace dbus-run-session (portait le bus, mais seulement accessible aux
+# enfants directs de startplasma-x11 plus bas, pas aux autres processus
+# arcade comme wireplumber ou les jeux Proton lancés depuis Heroic).
+# Confirmé en direct, deux bugs distincts causés par cette absence :
+#   - wireplumber : tente de lancer "dbus-launch" (absent sur Ubuntu, non
+#     installé par défaut) faute de bus trouvable -> aucun routage audio,
+#     pipewire/pipewire-pulse tournent mais sans effet ("plus de son").
+#   - pressure-vessel (Steam Runtime, invoqué par Heroic/umu-launcher pour
+#     Proton) : "bwrap: Cant find source path /run/pressure-vessel/bus" ->
+#     bloque tout lancement de jeu Proton avant même la phase de rendu.
+if [ ! -S "${XDG_RUNTIME_DIR}/bus" ]; then
+    dbus-daemon --session --fork --address="unix:path=${XDG_RUNTIME_DIR}/bus"
+fi
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+
 KWRITECONFIG=$(command -v kwriteconfig6 || command -v kwriteconfig5)
 KBUILDSYCOCA=$(command -v kbuildsycoca6 || command -v kbuildsycoca5)
 
@@ -184,5 +200,7 @@ sleep 1
 # loadTemplate precedent). Piste principale aussi pour l ecran noir de Steam
 # Remote Play (capture GLX cassee sous notre lancement a la main non standard) -
 # a confirmer en usage reel, Valve ne testant/supportant que de vraies sessions.
-dbus-run-session startplasma-x11
+# Plus besoin de dbus-run-session ici : DBUS_SESSION_BUS_ADDRESS pointe deja
+# vers le bus reel demarre plus haut.
+startplasma-x11
 '
