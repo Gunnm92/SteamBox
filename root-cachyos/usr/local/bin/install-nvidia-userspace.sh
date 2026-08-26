@@ -37,10 +37,37 @@ fi
 
 echo "[nvidia] Version driver host : ${nvidia_host_driver_version}"
 
+# L'installeur NVIDIA place nvidia_drv.so et libglxserver_nvidia.so dans
+# /usr/lib64/xorg/modules/... par défaut avec les options --no-x-check
+# --no-distro-scripts utilisées ici (désactivent sa détection auto du
+# layout Xorg de la distro). Ça fonctionne par coïncidence sur CachyOS/Arch
+# mais pas sur Ubuntu/Debian (Xorg n'y cherche que /usr/lib/xorg/modules,
+# sans "64") — confirmé en direct : GLX servi par le module générique Xorg
+# ("server glx vendor string: SGI") au lieu de NVIDIA, tout OpenGL retombe
+# sur le rendu logiciel llvmpipe malgré un vrai GPU disponible. --x-module-
+# path plus bas règle ça pour une INSTALLATION FRAÎCHE, mais ce correctif
+# ne suffit pas seul : si le driver est déjà "installé" (version identique
+# détectée ci-dessous), le script s'arrête avant d'atteindre l'installeur
+# et les liens ne sont jamais créés/réparés. fix_xorg_module_paths corrige
+# ça dans TOUS les cas (frais ou déjà présent), en symlinkant depuis
+# lib64 si besoin.
+fix_xorg_module_paths() {
+    mkdir -p /usr/lib/xorg/modules/extensions /usr/lib/xorg/modules/drivers
+    for f in /usr/lib64/xorg/modules/extensions/*nvidia*; do
+        [ -e "${f}" ] || continue
+        ln -sf "${f}" "/usr/lib/xorg/modules/extensions/$(basename "${f}")"
+    done
+    for f in /usr/lib64/xorg/modules/drivers/*nvidia*; do
+        [ -e "${f}" ] || continue
+        ln -sf "${f}" "/usr/lib/xorg/modules/drivers/$(basename "${f}")"
+    done
+}
+
 installed_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version)
 
 if [ "${installed_version}" = "${nvidia_host_driver_version}" ]; then
     echo "[nvidia] Driver ${installed_version} déjà installé — rien à faire"
+    fix_xorg_module_paths
     exit 0
 fi
 
@@ -113,6 +140,11 @@ fi
 
 "${RUN_FILE}" "${INSTALL_ARGS[@]}" >"${LOG_FILE}" 2>&1
 exit_code=$?
+
+# Filet de sécurité même après une installation fraîche : --x-module-path
+# ne couvre pas forcément tous les sous-chemins (ex: modules/extensions/
+# pour libglxserver_nvidia.so) selon la version de l'installeur.
+fix_xorg_module_paths
 
 installed_after=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version)
 if [ "${installed_after}" = "${nvidia_host_driver_version}" ]; then

@@ -60,6 +60,20 @@ Section "Device"
     Option "TripleBuffer" "true"
 EndSection
 
+# DRI3 se règle au niveau serveur (section Extensions), pas comme option du
+# pilote — mis par erreur dans Section "Device" au premier essai, rejeté
+# avec "(WW) modeset(0): Option "DRI3" is not used" (confirmé en direct,
+# xdpyinfo -queryExtensions ne listait toujours que DRI2 après). Sans DRI3,
+# tout client GLX/EGL (glxinfo, GTK, OpenGL natif dans Wine) retombe
+# silencieusement sur le rendu logiciel llvmpipe au lieu du vrai GPU -
+# confirmé en direct : "OpenGL renderer string: llvmpipe" malgré "direct
+# rendering: Yes". Sans conséquence pour les jeux DXVK/VKD3D (Vulkan direct
+# vers le pilote NVIDIA, ne passe pas par ce chemin), mais casse tout
+# OpenGL réel.
+Section "Extensions"
+    Option "DRI3" "Enable"
+EndSection
+
 Section "Screen"
     Identifier "Screen0"
     Device "Device0"
