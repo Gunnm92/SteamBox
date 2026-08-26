@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
       plasma-desktop kwin-x11 konsole dolphin kate \
       xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent-1 \
       kscreen breeze breeze-gtk-theme kde-spectacle systemsettings \
+      qml-module-qt-labs-platform \
       xserver-xorg x11-utils x11vnc xserver-xorg-input-evdev python3-pip \
       mesa-utils libgl1-mesa-dri vulkan-tools mesa-vulkan-drivers \
       libvulkan1 libvulkan1:i386 \
