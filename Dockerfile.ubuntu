@@ -529,6 +529,13 @@ COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh && \
     find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \;
 
+# /usr/games:/usr/local/games absents du PATH par défaut de l'image minimale
+# (présents nativement sur un vrai Ubuntu via /etc/environment, jamais lu par
+# notre session headless sans PAM) — confirmé en direct : gamemoderun
+# (paquet gamemode, /usr/games/gamemoderun) introuvable pour Steam malgré le
+# paquet installé, même symptôme probable pour d'autres outils "games".
+ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games"
+
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
     DISPLAY=:0 \
     SEATD_VTBOUND=0 \

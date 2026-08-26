@@ -120,6 +120,7 @@ runuser -u arcade -- env \
     QT_QPA_PLATFORM=xcb XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=x11 \
     KDE_SESSION_VERSION="${KDE_SESSION_VER}" SDL_VIDEODRIVER=x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
     GSK_RENDERER=cairo \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 
