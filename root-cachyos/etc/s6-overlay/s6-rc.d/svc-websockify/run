@@ -2,4 +2,13 @@
 # Proxy websocket devant le RFB brut de x11vnc (127.0.0.1:5901) — architecture
 # noVNC classique. x11vnc se relance seul si la connexion échoue par
 # client, pas besoin de l'attendre explicitement ici.
-exec websockify 0.0.0.0:5900 127.0.0.1:5901
+#
+# --web sert aussi les fichiers statiques noVNC (audit 2026-08-26) : websockify
+# embarque un serveur HTTP minimal, capable de servir un répertoire ET de faire
+# le pont websocket->RFB sur le même port. Fusionne ce qui était deux services
+# s6 distincts (svc-novnc-web sur 6080 en python3 -m http.server, + ce proxy
+# sur 5900) en un seul port unique 6080 — un service en moins à superviser, un
+# port en moins à exposer/mapper côté docker-compose, et le serveur HTTP de
+# websockify (event-loop, pas de fork par requête) sert en pratique le petit
+# lot de fichiers noVNC plus vite qu'http.server en mono-thread.
+exec websockify --web=/usr/share/webapps/novnc 0.0.0.0:6080 127.0.0.1:5901

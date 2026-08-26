@@ -74,10 +74,34 @@ Section "Extensions"
     Option "DRI3" "Enable"
 EndSection
 
+# Aucune section Monitor jusqu'ici (audit 2026-08-26) : sans EDID (sortie
+# headless/virtuelle), le mode et le taux de rafraîchissement retenus par le
+# pilote NVIDIA ne sont pas garantis stables d'un démarrage à l'autre — un
+# décalage entre le refresh du serveur X et le fps réellement encodé par
+# Sunshine produit du judder qu'aucun réglage d'encodeur ne corrige ensuite.
+# Rend 1920x1080@60 disponible et préféré, AVEC repli explicite sur
+# "nvidia-auto-select" (comportement précédent) dans la SubSection Display
+# plus bas — jamais un mode unique sans filet, non vérifié en direct sur ce
+# matériel, qui pourrait casser l'affichage plutôt que le stabiliser.
+Section "Monitor"
+    Identifier "Monitor0"
+    Option "DPMS" "false"
+    Option "ModeValidation" "AllowNonEdidModes, NoMaxPClkCheck, NoEdidMaxPClkCheck"
+    Modeline "1920x1080_60.00" 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync
+EndSection
+
 Section "Screen"
     Identifier "Screen0"
     Device "Device0"
+    Monitor "Monitor0"
     Option "ForceCompositionPipeline" "true"
+    SubSection "Display"
+        # "1920x1080_60.00" en tête (préféré) puis "nvidia-auto-select" en
+        # repli — conserve le comportement précédent (choix automatique du
+        # pilote) si ce mode explicite est refusé pour une raison imprévue,
+        # plutôt que de forcer un seul mode sans filet.
+        Modes "1920x1080_60.00" "nvidia-auto-select"
+    EndSubSection
 EndSection
 EOF
 
@@ -186,7 +210,25 @@ touch "${HOME}/.local/share/user-places.xbel"
 # pour Steam Big Picture (fenetre CEF/Chromium plein ecran) sur ce driver
 # NVIDIA, sans doute lie a la meme famille de bugs GLX/compositeur que la
 # capture bureau de Steam Remote Play.
+#
+# Reglage global plutot qu une regle de fenetre ciblee sur Steam Big Picture :
+# volontaire (audit 2026-08-26). Une regle par WM_CLASS serait plus fine
+# (naffecterait pas les autres jeux plein ecran) mais son identifiant exact
+# (WM_CLASS de la fenetre CEF/gamepadui) na jamais ete verifie en direct sur
+# ce conteneur - un mauvais identifiant reintroduirait silencieusement
+# l ecran noir corrige ici. A affiner uniquement en le verifiant sur un
+# conteneur de test (xprop WM_CLASS sur la fenetre Steam BP), jamais en prod.
 "${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group Compositing --key UnredirectFullscreen false 2>/dev/null || true
+
+# Reglages de latence de composition (audit 2026-08-26) : independants du
+# unredirect ci-dessus, sans risque connu de regression ecran noir -
+# LatencyPolicy Low reduit la file d attente de rendu de KWin ; blur/contrast
+# et les animations d interface n ont aucune utilite en streaming/manette et
+# ajoutent un cout de composition a chaque frame.
+"${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group Compositing --key LatencyPolicy Low 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group Plugins --key blurEnabled false 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kwinrc" --group Plugins --key contrastEnabled false 2>/dev/null || true
+"${KWRITECONFIG}" --file "${HOME}/.config/kdeglobals" --group KDE --key AnimationDurationFactor 0 2>/dev/null || true
 
 # Thème de curseur — sans ça, confirmé en direct sous KWin/Wayland : curseur
 # invisible. Gardé par précaution ici aussi.

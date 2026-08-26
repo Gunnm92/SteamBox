@@ -34,6 +34,29 @@ chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
 # gère déjà l'accès cgroup, ceci couvre la permission Unix classique.
 chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
 
+# ── Groupe GID 71 (/dev/uinput, /dev/input/* côté hôte) ────────────────────
+# Régression identifiée dans l'audit du 2026-08-26 : l'ancienne image
+# webstation faisait de 71 un membre RÉEL et persistant du compte de session
+# dans /etc/group (custom-cont-init.d/05-input-group.sh), avec ce
+# commentaire explicite : le --group-add de docker-compose ajoute bien ce
+# GID au process racine du conteneur, mais s6-setuidgid (utilisé par tous
+# les services : svc-kde, svc-sunshine...) recalcule les groupes
+# supplémentaires depuis /etc/group à CHAQUE bascule vers arcade — ça
+# écrase silencieusement le --group-add. Cette variante Ubuntu/CachyOS ne
+# faisait jusqu'ici que chmod 666 les devices présents au boot (ligne
+# ci-dessus), ce qui ne couvre ni le hotplug (manette branchée après coup)
+# ni les périphériques virtuels uinput que Sunshine crée à chaque connexion
+# Moonlight. group_add: ["71"] doit être présent côté docker-compose (voir
+# docker-compose.yml/.ubuntu.yml/.cachyos.yml) pour que ce bloc ait un GID
+# 71 à rejoindre.
+if getent group 71 >/dev/null 2>&1; then
+    HOSTINPUT_GROUP="$(getent group 71 | cut -d: -f1)"
+    if ! id -nG arcade 2>/dev/null | grep -qw "${HOSTINPUT_GROUP}"; then
+        usermod -aG "${HOSTINPUT_GROUP}" arcade
+        echo "[init-system] arcade ajouté au groupe GID 71 (${HOSTINPUT_GROUP})"
+    fi
+fi
+
 for script in init_system init_audio init_sunshine init_pegasus; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
         "/usr/local/bin/scripts/${script}.sh"

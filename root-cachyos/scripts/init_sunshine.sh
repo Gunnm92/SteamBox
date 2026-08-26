@@ -19,13 +19,36 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # ("GPU ne prend pas en charge le décodage HEVC/AV1 10 bits pour le
     # streaming HDR") si son GPU ne décode pas le 10-bit. "disabled" laisse
     # l'affichage tel quel plutôt que de laisser Sunshine changer son état.
+    #
+    # encoder = nvenc : sans le forcer, Sunshine peut retomber sur un
+    # encodeur logiciel si sa détection GPU échoue silencieusement — sur ce
+    # matériel (NVIDIA direct, pas de passthrough) nvenc doit toujours être
+    # disponible.
+    # min_log_level = info (audit 2026-08-26) : par défaut Sunshine ne dit
+    # jamais explicitement quelle méthode de capture d'écran il a retenue
+    # (NvFBC vs. repli logiciel X11). Sans le patch keylase/nvidia-patch
+    # (verrou NvFBC réservé aux Quadro, à appliquer côté HOST Unraid — les
+    # libs NVIDIA sont injectées en lecture seule par le runtime, un patch
+    # dans ce conteneur ne survivrait de toute façon pas), Sunshine capture
+    # en logiciel (XGetImage, un des postes de CPU les plus coûteux
+    # identifiés dans l'audit) sans jamais le signaler. Ce niveau de log
+    # permet de vérifier dans `docker logs` quelle méthode est réellement
+    # utilisée avant d'aller plus loin sur ce point.
     cat > "${CONF_DIR}/sunshine.conf" <<'EOF'
 locale = fr
 csrf_allowed_origins = https://10.1.1.1:47990
 system_tray = 0
 dd_hdr_option = disabled
+encoder = nvenc
+min_log_level = info
 EOF
 fi
+# NOTE : ce bloc n'écrit sunshine.conf que s'il est absent — sur un /config
+# déjà provisionné (prod existante), les clés ci-dessus ne sont PAS ajoutées
+# rétroactivement. Pour les appliquer à une install existante : ajouter les
+# deux lignes à la main dans /config/.config/sunshine/sunshine.conf, ou
+# supprimer ce fichier pour le laisser être régénéré (perd la config
+# personnalisée éventuelle : PIN, résolutions, apps.json custom...).
 
 if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct

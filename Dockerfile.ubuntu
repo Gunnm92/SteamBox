@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
       dbus policykit-1 network-manager \
       xdg-desktop-portal \
       squashfuse squashfs-tools fuse-overlayfs \
-      mako-notifier libnotify-bin cabextract p7zip-full binutils libnss3 \
+      libnotify-bin cabextract p7zip-full binutils libnss3 \
       ark unrar zip \
       libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 libsdl2-gfx-1.0-0 \
       scummvm \
@@ -67,6 +67,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
 #
 # Papirus (icônes) — pas de paquet apt direct, PPA tiers non retenu ici pour
 # limiter les dépendances externes ; à ajouter plus tard si besoin visuel.
+#
+# mako retiré (audit 2026-08-26) : démon de notifications wlroots-only
+# (couche layer-shell), jamais fonctionnel ni lancé sous cette session
+# KDE/X11 réel — reliquat de l'ère Hyprland/Wayland de ce projet.
 
 # Pilote NetworkManager en mode passif — voir commentaire équivalent dans
 # Dockerfile.cachyos : Steam (gamepadui) reste bloqué sur "waiting for
@@ -484,7 +488,11 @@ RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/
     mkdir -p /usr/share/webapps/novnc && \
     curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
 
-RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
+# port=5900 retiré (audit 2026-08-26, fusion avec svc-websockify/svc-novnc-web
+# ci-dessous) : websockify sert désormais les fichiers noVNC et le pont
+# websocket sur le MÊME port (6080) — location.port réutilise donc simplement
+# le port sur lequel cette page a été chargée, plus besoin de le coder en dur.
+RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
@@ -536,6 +544,19 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
 # paquet installé, même symptôme probable pour d'autres outils "games".
 ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games"
 
+# Caches de shaders (DXVK/NVIDIA) HORS de /config (audit 2026-08-26) : /config
+# est monté sur /mnt/user/appdata/arcadebox en prod, un partage Unraid servi
+# par shfs/FUSE — beaucoup plus lent qu'un accès disque direct pour le très
+# grand nombre de petits fichiers qu'un cache de shaders écrit/relit. Le
+# stockage écrivable du conteneur (ce chemin, hors volume) vit lui sur le pool
+# Docker de l'hôte (typiquement le pool cache Unraid, accès direct sans FUSE).
+# Contrepartie assumée : ce cache ne survit pas à une recréation du conteneur
+# (recompilation ponctuelle des shaders au prochain démarrage) — sans
+# conséquence fonctionnelle, juste un coût one-shot, contre un accès disque
+# ~systématiquement plus rapide pour tous les jeux à chaque session.
+RUN mkdir -p /var/cache/arcadebox/dxvk /var/cache/arcadebox/nv-shader && \
+    chmod -R 1777 /var/cache/arcadebox
+
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
     DISPLAY=:0 \
     SEATD_VTBOUND=0 \
@@ -551,11 +572,14 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
     DOOMWADDIR=/usr/local/share/doom \
+    DXVK_STATE_CACHE_PATH=/var/cache/arcadebox/dxvk \
+    __GL_SHADER_DISK_CACHE_PATH=/var/cache/arcadebox/nv-shader \
+    __GL_SHADER_DISK_CACHE_SIZE=1073741824 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
 
 VOLUME /config
-EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
+EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]

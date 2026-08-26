@@ -63,10 +63,27 @@ fix_xorg_module_paths() {
     done
 }
 
-installed_version=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version)
+# Bug corrigé (audit 2026-08-26) : "installed_version" était dérivé de
+# nvidia-smi, exactement comme "nvidia_host_driver_version" ci-dessus —
+# nvidia-smi rapporte TOUJOURS la version du module noyau de l'hôte, que les
+# modules X server de ce .run (nvidia_drv.so, libglxserver_nvidia.so) aient
+# ou non déjà été installés dans CE conteneur. Les deux valeurs étaient donc
+# structurellement toujours égales : la branche "déjà installé, rien à
+# faire" était prise à CHAQUE démarrage, et le .run n'était en réalité
+# jamais exécuté. Resté sans conséquence pratique jusqu'ici (le runtime
+# nvidia-container-toolkit injecte déjà les libs GL/Vulkan userspace, seuls
+# les modules Xorg ci-dessous dépendaient réellement de ce script), mais
+# rendait ce garde inopérant. On trace maintenant nous-mêmes, dans un fichier
+# sur /config (persistant), la version pour laquelle CE script a réellement
+# terminé une installation Xorg — seule source fiable de "déjà fait".
+INSTALLED_STAMP="${CACHE_DIR}/xorg-modules-version"
+installed_version=""
+if [ -f "${INSTALLED_STAMP}" ] && [ -e /usr/lib/xorg/modules/drivers/nvidia_drv.so ]; then
+    installed_version=$(cat "${INSTALLED_STAMP}")
+fi
 
 if [ "${installed_version}" = "${nvidia_host_driver_version}" ]; then
-    echo "[nvidia] Driver ${installed_version} déjà installé — rien à faire"
+    echo "[nvidia] Modules Xorg ${installed_version} déjà installés — rien à faire"
     fix_xorg_module_paths
     exit 0
 fi
@@ -149,12 +166,15 @@ fix_xorg_module_paths
 installed_after=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version)
 if [ "${installed_after}" = "${nvidia_host_driver_version}" ]; then
     echo "[nvidia] Installation réussie — ${installed_after}"
+    echo "${nvidia_host_driver_version}" > "${INSTALLED_STAMP}"
 elif [ ${exit_code} -eq 0 ]; then
     echo "[nvidia] Installation réussie (exit 0)"
+    echo "${nvidia_host_driver_version}" > "${INSTALLED_STAMP}"
 else
     non_busy_errors=$(grep "^ERROR" "${LOG_FILE}" | grep -v "Device or resource busy" | wc -l)
     if [ "${non_busy_errors}" -eq 0 ]; then
         echo "[nvidia] Installation OK (fichiers toolkit déjà en place, erreurs 'busy' ignorées)"
+        echo "${nvidia_host_driver_version}" > "${INSTALLED_STAMP}"
     else
         echo "[nvidia] ERREUR installation (code ${exit_code}) — voir ${LOG_FILE}"
         tail -20 "${LOG_FILE}"

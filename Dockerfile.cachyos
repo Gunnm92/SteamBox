@@ -44,6 +44,9 @@
 
 FROM cachyos/cachyos-v3:latest
 
+# mako retiré (audit 2026-08-26) : démon de notifications wlroots-only
+# (couche layer-shell), jamais fonctionnel ni lancé sous cette session
+# KDE/X11 réel — reliquat de l'ère Hyprland/Wayland de ce projet.
 # ── 1. Base système + KDE Plasma (X11) + seatd/libinput + GPU (Mesa/Vulkan) ──
 RUN pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
@@ -76,7 +79,7 @@ RUN pacman -Syu --noconfirm && \
       libretro-snes9x libretro-melonds libretro-scummvm \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
       squashfuse squashfs-tools fuse-overlayfs \
-      mako libnotify cabextract p7zip binutils nss \
+      libnotify cabextract p7zip binutils nss \
       ark unrar zip \
       sdl2_image sdl2_mixer sdl2_ttf sdl2_gfx \
       dolphin-emu scummvm \
@@ -450,7 +453,11 @@ RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/
 # en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
 # d'IP en dur) et le port websockify pour que l'URL de base se connecte
 # directement.
-RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=5900&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
+# port=5900 retiré (audit 2026-08-26, fusion avec svc-websockify/svc-novnc-web
+# ci-dessous) : websockify sert désormais les fichiers noVNC et le pont
+# websocket sur le MÊME port (6080) — location.port réutilise donc simplement
+# le port sur lequel cette page a été chargée, plus besoin de le coder en dur.
+RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
@@ -507,6 +514,14 @@ COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh && \
     find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \;
 
+# Caches de shaders (DXVK/NVIDIA) HORS de /config — voir commentaire détaillé
+# dans Dockerfile.ubuntu (audit 2026-08-26) : /config est sur un partage
+# Unraid FUSE/shfs, le stockage écrivable du conteneur est sur le pool Docker
+# direct (typiquement le pool cache Unraid). Cache non persistant entre
+# recréations du conteneur, contre un accès disque nettement plus rapide.
+RUN mkdir -p /var/cache/arcadebox/dxvk /var/cache/arcadebox/nv-shader && \
+    chmod -R 1777 /var/cache/arcadebox
+
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
     DISPLAY=:0 \
     SEATD_VTBOUND=0 \
@@ -522,11 +537,14 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
     DOOMWADDIR=/usr/local/share/doom \
+    DXVK_STATE_CACHE_PATH=/var/cache/arcadebox/dxvk \
+    __GL_SHADER_DISK_CACHE_PATH=/var/cache/arcadebox/nv-shader \
+    __GL_SHADER_DISK_CACHE_SIZE=1073741824 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
 
 VOLUME /config
-EXPOSE 6080 5900 47990 47984 47989 47998-48000/udp 48010
+EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]

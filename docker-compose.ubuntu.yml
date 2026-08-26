@@ -22,9 +22,11 @@ services:
     # host networking) tourne en parallèle — jamais l'arrêter pour ce test.
     # Sunshine (découverte LAN mDNS) ne fonctionnera pas correctement ainsi,
     # sans conséquence pour valider juste le freeze Heroic/Proton via VNC.
+    # Un seul port noVNC (websockify sert désormais les fichiers ET le pont
+    # websocket ensemble depuis la fusion svc-websockify/svc-novnc-web —
+    # audit 2026-08-26, voir root-cachyos/etc/s6-overlay/.../svc-websockify/run).
     ports:
-      - "15900:5900"   # x11vnc
-      - "16080:6080"   # noVNC web
+      - "16080:6080"   # noVNC (fichiers + websocket)
     devices:
       - /dev/dri:/dev/dri
       - /dev/uinput:/dev/uinput
@@ -32,6 +34,18 @@ services:
     device_cgroup_rules:
       - 'c 13:* rmw'                       # /dev/input/*
       - 'c 226:* rmw'                      # /dev/dri/*
+    # GID hôte propriétaire de /dev/uinput et /dev/input/* — présent sur le
+    # compose prod (docker-compose.yml) mais jamais porté ici (audit
+    # 2026-08-26) : sans lui, seul le chmod 666 one-shot d'init-system/run
+    # couvre l'accès, et rien ne couvre le hotplug (manette branchée après
+    # coup, périphériques virtuels créés par Sunshine à la connexion).
+    group_add:
+      - "71"
+    # Aligné sur l'IpcMode host de la prod (audit 2026-08-26) : les tests SHM
+    # menés sur ce compose sans ipc: host ne reproduisaient pas forcément les
+    # mêmes conditions que le "BadAccess" MIT-SHM documenté sur x11vnc (voir
+    # svc-x11vnc/run) — à retester -noshm avec cette parité avant de le retirer.
+    ipc: host
     cap_add:
       - SYS_NICE                           # priorité temps réel audio/vidéo (sunshine, pipewire)
       - SYS_ADMIN

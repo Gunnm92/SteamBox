@@ -30,6 +30,12 @@ services:
     device_cgroup_rules:
       - 'c 13:* rmw'                       # /dev/input/*
       - 'c 226:* rmw'                      # /dev/dri/*
+    # GID hôte propriétaire de /dev/uinput et /dev/input/* — présent sur le
+    # compose prod (docker-compose.yml) mais jamais porté ici (audit
+    # 2026-08-26), voir commentaire équivalent dans docker-compose.ubuntu.yml.
+    group_add:
+      - "71"
+    ipc: host                              # parité avec l'IpcMode host de la prod (audit 2026-08-26)
     cap_add:
       - SYS_NICE                           # priorité temps réel audio/vidéo (sunshine, pipewire)
       - SYS_ADMIN

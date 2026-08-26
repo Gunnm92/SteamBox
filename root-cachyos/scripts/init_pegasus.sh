@@ -213,9 +213,13 @@ else
 fi
 
 # ── Import gamelist.xml (EmulationStation/ARRM) → metadata.pegasus.txt ────────
-# Contrairement à la génération ci-dessus, tourne à chaque démarrage : safe et
-# idempotent (saute les jeux déjà présents dans metadata.pegasus.txt), donc
-# capture les gamelist.xml ajoutés après la première génération.
+# Contrairement à la génération ci-dessus, s'exécute (le script Python) à
+# chaque démarrage : safe et idempotent (saute les jeux déjà présents dans
+# metadata.pegasus.txt), donc capture les gamelist.xml ajoutés après la
+# première génération. Mais chaque système individuel est ignoré tant que
+# son gamelist.xml n'a pas changé depuis le dernier import (garde mtime,
+# audit 2026-08-26, voir plus bas) — le coût réel à chaque boot reste
+# proportionnel aux systèmes modifiés, pas à la ludothèque entière.
 python3 - "${ROMS_DIR}" <<'PYEOF'
 import sys, os, xml.etree.ElementTree as ET
 
@@ -254,6 +258,18 @@ for system in sorted(os.listdir(roms_dir)):
     meta_file  = os.path.join(system_dir, "metadata.pegasus.txt")
 
     if not os.path.isfile(gamelist) or not os.path.isfile(meta_file):
+        continue
+
+    # Garde mtime (audit 2026-08-26) : ce bloc tourne à CHAQUE démarrage sur
+    # TOUTE la ludothèque (parcours XML complet + un os.path.isfile() par
+    # asset et par jeu, à travers le partage Unraid FUSE/shfs) — sur une
+    # grosse collection, plusieurs minutes passées avant même que Xorg ne
+    # démarre, puisque init-system est un oneshot bloquant dont dépendent
+    # tous les autres services. metadata.pegasus.txt n'est ré-écrit
+    # (append) QUE quand ce système importe au moins un nouveau jeu — si son
+    # gamelist.xml n'a pas été modifié depuis, il n'y a par construction rien
+    # de nouveau à y trouver.
+    if os.path.getmtime(gamelist) <= os.path.getmtime(meta_file):
         continue
 
     # Lire les fichiers déjà présents dans metadata.pegasus.txt

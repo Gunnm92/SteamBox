@@ -9,6 +9,16 @@
 # est refusée dans ce conteneur (x11vnc et le serveur X n'ont pas le même
 # contexte de permissions). Léger coût en perf (XGetImage au lieu de SHM),
 # sans conséquence pour un usage de configuration/setup, pas de jeu.
+#
+# -noxdamage retiré (audit 2026-08-26) : cette option désactive l'extension
+# X DAMAGE, qui permet à x11vnc de ne relire QUE les zones d'écran modifiées
+# entre deux images. Sans elle, x11vnc rescanne l'écran entier en boucle
+# (XGetImage plein écran plusieurs fois par seconde) même bureau immobile —
+# un des postes de CPU permanent les plus probables identifiés dans l'audit.
+# Aucun rapport documenté avec le bug SHM ci-dessus (BadAccess) : ajouté par
+# précaution, jamais nécessaire pour corriger un symptôme précis. À remettre
+# uniquement si DAMAGE se révèle lui aussi cassé dans ce conteneur (rects
+# de mise à jour visiblement incorrects/manquants dans le client VNC).
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
 TIMEOUT=30
@@ -19,4 +29,4 @@ done
 
 exec s6-setuidgid arcade \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
-    x11vnc -display :0 -forever -shared -rfbport 5901 -nopw -noshm -noxdamage
+    x11vnc -display :0 -forever -shared -rfbport 5901 -nopw -noshm
