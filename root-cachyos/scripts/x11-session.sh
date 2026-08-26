@@ -103,10 +103,23 @@ else
     KDE_SESSION_VER=5
 fi
 
+# GSK_RENDERER=cairo : les applis GTK4 (ex. zenity — popup EULA de
+# steam-installer) se mappaient bien côté X11 (fenêtre positionnée,
+# IsViewable) mais ne peignaient jamais aucun pixel, avec en boucle
+# "MESA: error: Failed to attach to x11 shm". Tracé en direct (strace) :
+# juste avant l'échec, le code appelle geteuid()/getuid() (= 99, arcade) et
+# abandonne — GSK (le moteur de rendu accéléré de GTK4, DRI3/Mesa) refuse le
+# SHM X11 quand le client n'est pas root, très probablement lié à Xorg qui
+# tourne en root ici (cf. commentaire en tête de fichier) pendant que la
+# session tourne en arcade. Les applis Qt/KDE (systemsettings, kwin,
+# plasmashell) ne sont pas touchées, seul GSK est concerné. Forcer le rendu
+# logiciel cairo (pas de DRI3/GL) contourne le problème à la racine —
+# confirmé en direct : la popup Steam s'affiche et devient utilisable.
 runuser -u arcade -- env \
     HOME=/home/arcade DISPLAY=:0 XDG_RUNTIME_DIR="${ARCADE_RUNTIME_DIR}" \
     QT_QPA_PLATFORM=xcb XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=x11 \
     KDE_SESSION_VERSION="${KDE_SESSION_VER}" SDL_VIDEODRIVER=x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
+    GSK_RENDERER=cairo \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 

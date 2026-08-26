@@ -28,12 +28,18 @@ EOF
 fi
 
 if [ ! -f "${CONF_DIR}/apps.json" ]; then
+    # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
+    # très tôt dans ce projet — l'ancien Big Picture (CEF) capturait en écran
+    # noir via Steam Link/Remote Play, l'interface gamepadui (façon Steam
+    # Deck) fonctionne. Régression retrouvée sur la nouvelle image Ubuntu
+    # (apps.json généré avant cette correction pointait encore vers
+    # steam://open/bigpicture).
     cat > "${CONF_DIR}/apps.json" <<'EOF'
 {
   "env": {},
   "apps": [
     { "name": "Desktop", "image-path": "desktop.png" },
-    { "name": "Steam Big Picture", "detached": ["steam steam://open/bigpicture"], "image-path": "steam.png" }
+    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png" }
   ]
 }
 EOF
