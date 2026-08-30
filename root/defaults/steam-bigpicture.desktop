@@ -1,9 +1,0 @@
-[Desktop Entry]
-Name=Steam — Mode Gaming
-Comment=Lance Steam en mode SteamOS (gamescope + gamepadui)
-Exec=/bin/bash /defaults/steam-gaming-mode.sh
-Icon=steam
-Terminal=false
-Type=Application
-Categories=Game;
-Keywords=Steam;SteamOS;Gaming;BigPicture;GamepadUI;
