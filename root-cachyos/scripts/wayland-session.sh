@@ -38,6 +38,30 @@ XKB_DEFAULT_LAYOUT=fr
 XKB_DEFAULT_VARIANT=mac
 EOF
 
+# focus-follows-mouse (31/08) : le clavier virtuel Sunshine/evdev-bridge
+# perdait le focus après un changement de fenêtre côté client Moonlight
+# (overlay Steam, alt-tab, fermeture d'un jeu...) — les touches partaient
+# dans le vide jusqu'à ce qu'un nouveau changement de fenêtre le redonne par
+# hasard, confirmé en direct. Le clavier virtuel Wayland n'a pas de notion
+# de clic pour redemander le focus lui-même, contrairement à une vraie
+# souris/clavier physiques ; followMouseRequiresMovement=no comble ça en
+# refocalisant sur la fenêtre sous le curseur à CHAQUE changement de
+# fenêtre (pas seulement au mouvement de souris) — le curseur virtuel étant
+# piloté en continu par evdev-bridge, le focus doit rester juste sans
+# action de l'utilisateur. ~/.config/labwc/rc.xml, même mécanisme que
+# environment ci-dessus : partagé par les deux compositeurs labwc (bureau
+# visible wayland-0 et headless Sunshine wayland-1), même $HOME.
+cat > "${HOME}/.config/labwc/rc.xml" <<EOF
+<?xml version="1.0"?>
+<labwc_config>
+  <focus>
+    <followMouse>yes</followMouse>
+    <followMouseRequiresMovement>no</followMouseRequiresMovement>
+    <raiseOnFocus>yes</raiseOnFocus>
+  </focus>
+</labwc_config>
+EOF
+
 # Bus D-Bus de session réel, au chemin standard $XDG_RUNTIME_DIR/bus —
 # indépendant du compositeur (identique aux sessions précédentes de ce
 # projet). Nécessaire pour wireplumber (audio) et pressure-vessel/Proton
