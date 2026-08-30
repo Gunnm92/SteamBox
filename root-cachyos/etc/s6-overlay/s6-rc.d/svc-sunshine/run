@@ -28,6 +28,19 @@ while [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ "${TIMEOUT}" -gt 0 ]; do
     TIMEOUT=$((TIMEOUT - 1))
 done
 
+# DISPLAY=:1 (30/08, audit "Steam Big Picture" cassé) : labwc démarre son
+# Xwayland interne PARESSEUSEMENT, seulement quand un premier client en a
+# besoin (confirmé en direct : rien ne l'annonce à l'avance, pas de
+# protocole/variable à interroger avant coup) — mais une fois démarré, il
+# reste vivant tant que le compositeur tourne. Steam a besoin de ce DISPLAY
+# pour son petit écran "vérification des mises à jour" (Xlib brut, pas
+# Wayland) : sans lui, "XOpenDisplay failed" puis un dialogue d'erreur
+# zenity qui bloque le lancement complet de gamepadui — confirmé en direct.
+# :1 plutôt que :0 : le bureau XFCE (svc-labwc, wayland-0) démarre TOUJOURS
+# avant ce service headless (svc-labwc-headless attend wayland-0 avant de se
+# lancer, voir son run) et prend systématiquement :0 pour son propre
+# Xwayland — ce service-ci est donc toujours le second, :1 est fiable tant
+# qu'aucune troisième session Xwayland ne s'intercale.
 exec s6-setuidgid arcade \
-    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY=:1 \
     sunshine /config/.config/sunshine/sunshine.conf
