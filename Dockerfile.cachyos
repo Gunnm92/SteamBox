@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Waybox (ex-ArcadeBox) — variante CachyOS + labwc/XFCE (session Wayland réelle).
+# SteamBox (ex-Waybox, ex-ArcadeBox) — variante CachyOS + labwc/XFCE (session Wayland réelle).
 #
 # Historique des architectures essayées sur cette branche, chacune abandonnée
 # pour une raison concrète, testée en direct :

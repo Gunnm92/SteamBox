@@ -1,5 +1,5 @@
 REGISTRY     ?= registry.elfenn.eu
-IMAGE        ?= waybox
+IMAGE        ?= steambox
 TAG          ?= latest
 GITHUB_TOKEN ?=
 FULL_IMAGE   = $(REGISTRY)/$(IMAGE):$(TAG)
@@ -16,7 +16,7 @@ endif
 
 .PHONY: build push run stop logs clean help
 
-# Seul Dockerfile restant depuis le pivot Waybox (Dockerfile et
+# Seul Dockerfile restant depuis le pivot Waybox -> SteamBox (Dockerfile et
 # Dockerfile.ubuntu supprimés — plus de variante webstation/Debian ni
 # Ubuntu, uniquement CachyOS/Arch + KDE Plasma Wayland).
 # Contexte "." (pas ".." comme avant le renommage ArcadeBox -> Waybox) :
