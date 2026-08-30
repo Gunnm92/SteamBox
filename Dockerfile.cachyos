@@ -190,7 +190,22 @@ RUN pacman -Syyu --noconfirm && \
       papirus-icon-theme hicolor-icon-theme adwaita-icon-theme \
       ttf-jetbrains-mono-nerd cantarell-fonts noto-fonts ttf-dejavu \
       libva-utils \
+      qt6-multimedia \
+      flatpak \
     && pacman -Scc --noconfirm
+
+# qt6-multimedia (audit menu XFCE 31/08) : melonDS a besoin de
+# libQt6Multimedia.so.6 au runtime mais ne l'embarque pas dans son zip
+# (contrairement à RPCS3/Azahar/ShadPS4 qui embarquent leur propre copie
+# dans leur AppDir) — "cannot open shared object file" confirmé en direct
+# sans ce paquet.
+#
+# flatpak (demandé 31/08) — xdg-desktop-portal(-gtk/-wlr) déjà installés
+# ci-dessus couvrent les besoins runtime des apps Flatpak (permissions,
+# ouverture de fichiers). Flathub ajouté comme remote système juste
+# en dessous pour que le paquet soit utilisable dès le premier lancement,
+# sans étape manuelle côté utilisateur.
+RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 # nvidia-vaapi-driver — pont VA-API→NVDEC/NVENC pour NVIDIA (projet
 # elFarto/nvidia-vaapi-driver), porté depuis le fix Dockerfile.ubuntu (audit
@@ -372,11 +387,16 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # (gamepadui, niché dans gamescope via scripts/steam-gamescope-launch.sh),
 # PAS Pegasus en direct — Pegasus se lance DEPUIS Steam, ajouté comme "jeu
 # non-Steam" dans la bibliothèque (config manuelle côté utilisateur, liée à
-# son compte Steam, pas automatisable proprement dans l'image). Lancé ainsi,
-# Pegasus hérite du DISPLAY Xwayland déjà mis en place par gamescope pour
-# Steam — pas besoin de son propre wrapper gamescope séparé. Une fois lancé :
-# détecte Steam/GOG/manettes automatiquement (confirmé en direct : 20 jeux
-# Steam trouvés).
+# son compte Steam, pas automatisable proprement dans l'image). Une fois
+# lancé : détecte Steam/GOG/manettes automatiquement (confirmé en direct :
+# 20 jeux Steam trouvés).
+#
+# DISPLAY=:0 explicite dans l'Exec= (audit menu XFCE 31/08) : Pegasus force
+# QT_QPA_PLATFORM=xcb (pas de plugin Wayland dans ce build), mais la session
+# labwc (wayland-session.sh) unset DISPLAY globalement — sans le fixer ici,
+# lancé depuis le menu XFCE Pegasus échoue immédiatement ("could not connect
+# to display", confirmé en direct). Même pattern que "Steam (Bureau)"
+# ci-dessous ; labwc démarre son Xwayland interne à la demande sur :0.
 RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
     [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
@@ -384,7 +404,7 @@ RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-fro
     mkdir -p /opt/pegasus && \
     unzip -q /tmp/pegasus.zip -d /opt/pegasus && \
     ln -sf /opt/pegasus/pegasus-fe /usr/local/bin/pegasus-fe && \
-    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env DISPLAY=:0 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/pegasus.desktop && \
     rm -f /tmp/pegasus.zip
 
@@ -443,7 +463,8 @@ RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-m
     [ -d squashfs-root ] || { echo "FATAL: extraction srm.AppImage échouée"; exit 1; } && \
     mv /tmp/squashfs-root /opt/steam-rom-manager && \
     chmod -R a+rX /opt/steam-rom-manager && \
-    ln -sf /opt/steam-rom-manager/AppRun /usr/local/bin/steam-rom-manager && \
+    printf '#!/bin/sh\nexport APPDIR=/opt/steam-rom-manager\nexec /opt/steam-rom-manager/AppRun "$@"\n' \
+      > /usr/local/bin/steam-rom-manager && chmod +x /usr/local/bin/steam-rom-manager && \
     printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-rom-manager.desktop && \
     rm -rf /tmp/srm.AppImage /tmp/squashfs-root
@@ -517,6 +538,17 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # de paquet Arch/AUR-free, mais chaque projet publie une AppImage/archive
 # Linux officielle — même approche curl+extraction que Pegasus/SRM/Lindbergh/
 # Chrome ci-dessus, pas de build depuis les sources.
+#
+# wrapper "exec /opt/X/AppRun" au lieu d'un ln -sf (audit menu XFCE 31/08) :
+# l'AppRun de Cemu/RPCS3/Azahar/ShadPS4/SRM est un SCRIPT (linuxdeploy) qui
+# calcule son propre dossier via `dirname "$0"` AVANT de résoudre les liens
+# symboliques — lancé via un ln -sf sous /usr/local/bin, dirname donne
+# /usr/local/bin au lieu de /opt/X, et le script part chercher ses hooks/
+# libs au mauvais endroit ("No such file", "No desktop file found").
+# Confirmé en direct dans le conteneur : PCSX2/DuckStation/Xemu n'ont pas ce
+# problème car leur AppRun est un lien direct vers le vrai binaire (aucun
+# script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
+# absolu évite complètement le calcul de dossier.
 RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
@@ -525,7 +557,8 @@ RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/rele
     for i in 1 2 3; do rm -rf squashfs-root; ./cemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     [ -d squashfs-root ] || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/cemu && \
-    ln -sf /opt/cemu/AppRun /usr/local/bin/cemu && \
+    printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
+    chmod +x /usr/local/bin/cemu && \
     printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
@@ -551,7 +584,8 @@ RUN RPCS3_URL=$(curl -sX GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-
     for i in 1 2 3; do rm -rf squashfs-root AppDir; ./rpcs3.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction rpcs3.AppImage échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/rpcs3 || mv squashfs-root /opt/rpcs3; } && \
-    ln -sf /opt/rpcs3/AppRun /usr/local/bin/rpcs3 && \
+    printf '#!/bin/sh\nexec /opt/rpcs3/AppRun "$@"\n' > /usr/local/bin/rpcs3 && \
+    chmod +x /usr/local/bin/rpcs3 && \
     printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nIcon=/opt/rpcs3/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
@@ -590,7 +624,8 @@ RUN AZAHAR_URL=$(curl -sX GET "https://api.github.com/repos/azahar-emu/azahar/re
     for i in 1 2 3; do rm -rf squashfs-root; ./azahar.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     [ -d squashfs-root ] || { echo "FATAL: extraction azahar.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/azahar && \
-    ln -sf /opt/azahar/AppRun /usr/local/bin/azahar && \
+    printf '#!/bin/sh\nexec /opt/azahar/AppRun "$@"\n' > /usr/local/bin/azahar && \
+    chmod +x /usr/local/bin/azahar && \
     printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nIcon=/opt/azahar/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
@@ -604,7 +639,7 @@ RUN XENIA_URL=$(curl -sX GET "https://api.github.com/repos/has207/xenia-edge/rel
     [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xenia && \
     ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
-    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=env DISPLAY=:0 /usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/xenia.desktop && \
     rm -f /tmp/xenia.AppImage
 
@@ -666,7 +701,8 @@ RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4
     for i in 1 2 3; do rm -rf squashfs-root; "./${APPIMAGE##./}" --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     [ -d squashfs-root ] || { echo "FATAL: extraction shadps4 échouée"; exit 1; } && \
     mv squashfs-root /opt/shadps4 && \
-    ln -sf /opt/shadps4/AppRun /usr/local/bin/shadps4 && \
+    printf '#!/bin/sh\nexec /opt/shadps4/AppRun "$@"\n' > /usr/local/bin/shadps4 && \
+    chmod +x /usr/local/bin/shadps4 && \
     printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nIcon=/opt/shadps4/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/shadps4.desktop && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4

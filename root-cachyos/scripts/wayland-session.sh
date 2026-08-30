@@ -61,6 +61,17 @@ cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
 
 xdg-mime default wine.desktop application/x-ms-dos-executable application/x-msi application/x-ms-shortcut application/x-bat 2>/dev/null || true
 
+# Verrou Chrome périmé (audit menu XFCE 31/08) : SingletonLock/-Cookie/
+# -Socket dans le profil persistant (/config, monté depuis lhôte) encodent
+# le hostname du conteneur au moment où Chrome a été lancé pour la dernière
+# fois. Un renommage de conteneur/image (ArcadeBox -> Waybox -> SteamBox)
+# laisse un lien SingletonLock pointant sur un hostname qui nexiste plus
+# ("WayBox-25845" trouvé en direct) — Chrome refuse alors de démarrer
+# ("profile appears to be in use by another Google Chrome process on
+# another computer"). Un seul processus Chrome à la fois sur cette session
+# arcade : sans risque de le nettoyer inconditionnellement à chaque boot.
+rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null || true
+
 # PipeWire — audio (PulseAudio via pipewire-pulse) + capture vidéo Sunshine
 # (confirmé fonctionnel via KMS contre kwin_wayland le 29/08, labwc étant
 # lui aussi un backend DRM direct).
