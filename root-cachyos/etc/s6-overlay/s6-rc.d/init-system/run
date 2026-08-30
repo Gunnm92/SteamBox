@@ -24,6 +24,23 @@ ln -sfn /config /home/arcade
 # ── Driver NVIDIA userspace (matché au host) ───────────────────────────────
 /usr/local/bin/install-nvidia-userspace.sh || echo "[init-system] Continuer sans match NVIDIA (voir logs ci-dessus)"
 
+# ── ICD Vulkan NVIDIA aussi dans /usr/share (audit 29/08, Eden) ────────────
+# nvidia-container-toolkit injecte nvidia_icd.json UNIQUEMENT dans
+# /etc/vulkan/icd.d/ sur cet hôte (confirmé en direct) — /etc a priorité sur
+# /usr/share dans l'ordre de recherche standard du loader Vulkan, donc tout
+# ce qui utilise ce loader normalement (jeux natifs, Proton/DXVK, vulkaninfo)
+# le trouve déjà très bien. Mais certaines apps embarquées en AppImage
+# (Eden/Yuzu) font leur propre vérification codée en dur sur le chemin
+# /usr/share/vulkan/icd.d spécifiquement (message "YOU HAVE AN INCOMPLETE
+# NVIDIA DRIVER INSTALLATION" au lancement) sans consulter /etc — symlink
+# ajouté pour satisfaire ce genre de vérification étroite, sans dupliquer
+# le vrai fichier (qui n'existe qu'au runtime, injecté par le toolkit,
+# jamais présent au moment du build de cette image).
+if [ -f /etc/vulkan/icd.d/nvidia_icd.json ] && [ ! -e /usr/share/vulkan/icd.d/nvidia_icd.json ]; then
+    mkdir -p /usr/share/vulkan/icd.d
+    ln -sf /etc/vulkan/icd.d/nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
+fi
+
 XDG_RUNTIME_DIR="/run/user/${PUID}"
 rm -rf "${XDG_RUNTIME_DIR}" /run/seatd.sock /tmp/.X* 2>/dev/null || true
 mkdir -p "${XDG_RUNTIME_DIR}"
@@ -32,7 +49,19 @@ chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
 
 # Permissions génériques input/GPU — device_cgroup_rules côté docker-compose
 # gère déjà l'accès cgroup, ceci couvre la permission Unix classique.
-chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
+#
+# /dev/uhid ajouté (audit 29/08, rumble manette jamais fonctionnel) :
+# contrairement à /dev/uinput (crw-rw---- root:input dès le passthrough
+# Docker), /dev/uhid arrivait en crw------- root:root — inaccessible à
+# arcade (Sunshine ne tourne pas root). Sunshine (libvirtualhid) crée ses
+# manettes virtuelles via l'interface uhid, PAS uinput seul — sans accès à
+# ce device, aucune manette virtuelle Sunshine ne peut être créée du tout
+# (ni tactile/gyro DualSense, ni rumble sur aucun type de manette). Une
+# règle udev seule ne suffit pas ici : ce node vient d'un passthrough Docker
+# statique (--device), pas d'un événement udev interne au conteneur —
+# udevadm trigger ne le touche jamais, d'où ce chmod one-shot comme pour
+# les autres devices ci-dessus.
+chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
 
 # ── Groupe GID 71 (/dev/uinput, /dev/input/* côté hôte) ────────────────────
 # Régression identifiée dans l'audit du 2026-08-26 : l'ancienne image
@@ -40,7 +69,7 @@ chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/
 # dans /etc/group (custom-cont-init.d/05-input-group.sh), avec ce
 # commentaire explicite : le --group-add de docker-compose ajoute bien ce
 # GID au process racine du conteneur, mais s6-setuidgid (utilisé par tous
-# les services : svc-kde, svc-sunshine...) recalcule les groupes
+# les services : svc-labwc, svc-sunshine...) recalcule les groupes
 # supplémentaires depuis /etc/group à CHAQUE bascule vers arcade — ça
 # écrase silencieusement le --group-add. Cette variante Ubuntu/CachyOS ne
 # faisait jusqu'ici que chmod 666 les devices présents au boot (ligne
@@ -49,6 +78,20 @@ chmod 666 /dev/uinput /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/
 # Moonlight. group_add: ["71"] doit être présent côté docker-compose (voir
 # docker-compose.yml/.ubuntu.yml/.cachyos.yml) pour que ce bloc ait un GID
 # 71 à rejoindre.
+# Ne pas supposer que le GID 71 existe déjà côté image/hôte (30/08) : sur ce
+# conteneur précis, `getent group 71` ne renvoie RIEN malgré `--group-add 71`
+# côté docker run — Docker injecte ce GID brut au niveau noyau pour le
+# process racine et docker exec en hérite, mais ça ne crée AUCUNE entrée
+# /etc/group. runuser/s6-setuidgid recalculent les groupes via /etc/group
+# (comportement normal, volontaire, d'un outil de changement d'utilisateur)
+# et ne voient donc jamais ce GID brut sans entrée nommée — confirmé en
+# direct : evdev-bridge ne pouvait jamais ouvrir "Keyboard passthrough"
+# (appartenant au GID 71), resté bloqué indéfiniment sur "Waiting for
+# Sunshine devices...". On crée le groupe nous-mêmes si absent, plutôt que
+# d'espérer qu'il soit déjà là.
+if ! getent group 71 >/dev/null 2>&1; then
+    groupadd -g 71 waybox-input 2>/dev/null || true
+fi
 if getent group 71 >/dev/null 2>&1; then
     HOSTINPUT_GROUP="$(getent group 71 | cut -d: -f1)"
     if ! id -nG arcade 2>/dev/null | grep -qw "${HOSTINPUT_GROUP}"; then

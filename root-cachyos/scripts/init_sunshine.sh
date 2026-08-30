@@ -34,6 +34,15 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # identifiés dans l'audit) sans jamais le signaler. Ce niveau de log
     # permet de vérifier dans `docker logs` quelle méthode est réellement
     # utilisée avant d'aller plus loin sur ce point.
+    #
+    # gamepad volontairement PAS forcé sur "ds4" (essayé puis annulé le
+    # 29/08) : casse l'émulation Xbox quand une manette Xbox ET une
+    # DualShock/DualSense sont utilisées en alternance sur le même client
+    # (cas réel ici, Android TV) — tout se retrouve émulé en DS4 y compris
+    # la manette Xbox. "auto" (défaut Sunshine) est censé détecter le bon
+    # profil par manette selon ce que Moonlight négocie ; si le pavé tactile
+    # DS4 ne remonte quand même pas, creuser côté client Moonlight Android
+    # TV (négociation des capacités manette), pas côté ce fichier.
     cat > "${CONF_DIR}/sunshine.conf" <<'EOF'
 locale = fr
 csrf_allowed_origins = https://10.1.1.1:47990
@@ -57,12 +66,37 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # Deck) fonctionne. Régression retrouvée sur la nouvelle image Ubuntu
     # (apps.json généré avant cette correction pointait encore vers
     # steam://open/bigpicture).
+    #
+    # "Mode SteamOS (Gamescope)" ajouté (29/08) : gamepadui nu plein écran
+    # X11 classique VS ici gamepadui hébergé dans une fenêtre gamescope
+    # imbriquée (scaling FSR, limitation de frame rate) — gamescope tourne
+    # comme client normal de la session existante (pas de remplacement du
+    # serveur d'affichage). --backend sdl requis explicitement : le mode
+    # "auto" de gamescope se trompe dans ce conteneur et bascule sur le
+    # backend "headless" (aucun affichage) au lieu de nester correctement
+    # (testé en direct 29/08, SOUS X11 à l'époque — SDL_VIDEODRIVER valait
+    # x11). Pivot Wayland (voir Dockerfile.cachyos, point 5 de l'historique) :
+    # SDL_VIDEODRIVER vaut désormais "wayland,x11", donc --backend sdl
+    # devrait nester nativement en Wayland, mais ça n'a jamais été revérifié
+    # en direct dans ce nouveau contexte — à confirmer avant de faire
+    # confiance à cette entrée. Résolution/refresh alignés sur le bureau
+    # (2560x1440@120, voir Sunshine "Streaming bitrate"/xrandr).
+    # prep-cmd set-resolution.sh/reset-resolution.sh (30/08) : ajuste la
+    # sortie du labwc headless (wayland-1, cible de Sunshine depuis le pivot
+    # post-audit HDR/gamescope) à la résolution réelle du client Moonlight
+    # à la connexion, et la remet à 1920x1080 à la déconnexion — sans ça
+    # le headless reste bloqué sur son mode par défaut (1280x720) quel que
+    # soit le client. Voir scripts/set-resolution.sh.
     cat > "${CONF_DIR}/apps.json" <<'EOF'
 {
   "env": {},
   "apps": [
-    { "name": "Desktop", "image-path": "desktop.png" },
-    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png" }
+    { "name": "Desktop", "image-path": "desktop.png",
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
+    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
+    { "name": "Mode SteamOS (Gamescope)", "detached": ["gamescope --backend sdl -W 2560 -H 1440 -r 120 -f -e -C 0 -- steam -gamepadui"], "image-path": "steam.png",
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
 EOF

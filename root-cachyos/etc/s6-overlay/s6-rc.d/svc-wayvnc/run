@@ -1,0 +1,28 @@
+#!/command/with-contenv bash
+# wayvnc capture labwc via wlr-screencopy (protocole wlroots natif) — marche
+# ici contrairement à KWin (voir point 6 de l'historique Dockerfile.cachyos).
+# Sert le RFB brut sur 5900, en local uniquement : websockify (svc-websockify)
+# fait le pont websocket pour l'accès navigateur.
+# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : cette variable est déjà
+# fixée globalement dans le Dockerfile à /run/user/1000 (UID générique), qui
+# ne correspond PAS à l'UID réel d'arcade (99 côté Unraid/PUID) — le repli
+# ":-" ne se déclenche donc jamais puisque la variable est déjà définie
+# (juste avec la mauvaise valeur). Confirmé en direct le 30/08 : le service
+# cherchait le socket au mauvais endroit et ne démarrait jamais wayvnc.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+SOCKET_PATH="${XDG_RUNTIME_DIR}/wayland-0"
+
+TIMEOUT=30
+while [ ! -S "${SOCKET_PATH}" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
+
+mkdir -p /config/logs
+# -k fr-mac (30/08) : wayvnc a son propre chemin d'input, indépendant
+# d'evdev-bridge/Sunshine — sans ce flag il utilise un clavier par défaut
+# (US). Syntaxe <layout>-<variant> propre à wayvnc (voir --help), pas
+# fr(mac) comme le reste (labwc/evdev-bridge).
+exec s6-setuidgid arcade \
+  env HOME=/home/arcade WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+  wayvnc --render-cursor --max-fps=60 -k fr-mac 127.0.0.1 5900

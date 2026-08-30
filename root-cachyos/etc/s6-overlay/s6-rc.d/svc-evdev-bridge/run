@@ -1,0 +1,42 @@
+#!/command/with-contenv bash
+# evdev-bridge lit les périphériques uinput virtuels de Sunshine (souris/
+# clavier) en direct, indépendant d'udev (dont le tagging ne persiste jamais
+# dans ce conteneur — bug non élucidé, voir point 6 de l'historique
+# Dockerfile.cachyos), et les rejoue via les protocoles wlroots
+# (zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1) — QUE le
+# labwc HEADLESS (svc-labwc-headless, wayland-1) implémente nativement,
+# contrairement à gamescope (passé à libei, jamais capturable par Sunshine
+# de toute façon — voir svc-sunshine/run). Ciblé sur ce labwc headless
+# depuis le 30/08 : c'est la session que Sunshine capture, pas le bureau
+# XFCE visible en local/VNC (wayland-0), donc c'est là que doit atterrir
+# l'input Sunshine.
+# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : cette variable est déjà
+# fixée globalement dans le Dockerfile à /run/user/1000 (UID générique), qui
+# ne correspond PAS à l'UID réel d'arcade (99 côté Unraid/PUID) — le repli
+# ":-" ne se déclenche donc jamais puisque la variable est déjà définie
+# (juste avec la mauvaise valeur). Confirmé en direct le 30/08 : "Cannot
+# connect to Wayland display" en boucle, evdev-bridge cherchait le socket
+# au mauvais endroit malgré le zwlr_virtual_pointer_manager_v1 bien présent
+# côté labwc.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+SOCKET_PATH="${XDG_RUNTIME_DIR}/wayland-1"
+
+TIMEOUT=30
+while [ ! -S "${SOCKET_PATH}" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
+
+# runuser, pas s6-setuidgid (30/08) : confirmé en direct qu'un process lancé
+# via s6-setuidgid arcade N'A PAS le groupe 71 dans ses groupes supplémentaires
+# (id: "100,983,987,992,995,998"), alors que runuser/docker exec -u l'ont bien
+# ("100,71,983,987,992,995,998") — pour une raison non élucidée, s6-setuidgid
+# ne récupère pas ce groupe ajouté dynamiquement par init-system/run
+# (usermod -aG, voir son commentaire). Or "Keyboard passthrough" (le device
+# uinput du clavier virtuel Sunshine) appartient précisément au groupe 71,
+# pas "input" — sans ce groupe, evdev-bridge ne peut jamais l'ouvrir, donc ne
+# le trouve jamais ("Waiting for Sunshine devices..." indéfiniment) malgré
+# le device bien présent et le protocole wlroots bien disponible côté labwc.
+exec runuser -u arcade -- \
+  env WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+  /usr/local/bin/evdev-bridge-native

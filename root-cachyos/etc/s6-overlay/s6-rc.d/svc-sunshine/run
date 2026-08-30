@@ -1,7 +1,14 @@
 #!/command/with-contenv bash
-# DISPLAY=:0 : Sunshine tourne indépendamment de la session KDE (pas un
-# enfant lancé par elle), donc n'hérite de rien d'autre que ce qu'on lui
-# passe explicitement.
+# WAYLAND_DISPLAY=wayland-1 (socket du labwc HEADLESS, voir svc-labwc-
+# headless/run) au lieu de wayland-0 (bureau XFCE visible) — 30/08, suite à
+# l'audit HDR/gamescope : gamescope ne peut jamais être capturé par Sunshine
+# (portail D-Bus absent, XDG_OUTPUT manquant, EGL_BAD_ACCESS, testé sous
+# toutes ses formes), alors qu'un second labwc dédié, headless, fonctionne
+# nativement (labwc implémente les protocoles de capture modernes que
+# gamescope n'a pas). Sunshine tourne donc maintenant contre une session
+# séparée du bureau visible en local/VNC — Steam lancé depuis cette session
+# (voir apps.json, "detached" hérite de cet environnement) est ce que
+# Moonlight affiche ; le bureau XFCE local reste inchangé et indépendant.
 #
 # s6-setuidgid change l'UID/GID mais PAS HOME — contrairement à runuser/su,
 # il ne fait rien de plus (pas de vraie session utilisateur). Sans le
@@ -11,15 +18,16 @@
 # denied [/root/.config/sunshine]" en boucle jusqu'à ce crash-loop soit fixé.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
-# Attend que Xorg réponde réellement (svc-kde le lance mais ne le signale
-# pas comme "up" avant la fin de tout le script — Sunshine échouerait sa
-# capture s'il démarre avant que le serveur X n'accepte de connexions).
+# Attend que le socket Wayland du labwc headless existe réellement (le
+# service le lance mais ne le signale pas comme "up" avant la fin du
+# script) — Sunshine échouerait sa capture s'il démarre avant que le
+# compositeur n'accepte de connexions.
 TIMEOUT=30
-while ! DISPLAY=:0 s6-setuidgid arcade xdpyinfo >/dev/null 2>&1 && [ "${TIMEOUT}" -gt 0 ]; do
+while [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ "${TIMEOUT}" -gt 0 ]; do
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
 
 exec s6-setuidgid arcade \
-    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" DISPLAY=:0 \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 \
     sunshine /config/.config/sunshine/sunshine.conf

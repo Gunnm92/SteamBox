@@ -1,0 +1,29 @@
+# Filet de secours pour l'accès manette DS4/DS5 (tactile, gyro, rumble) —
+# les règles udev de game-devices-udev (sony-gdu.rules etc.) utilisent
+# TAG+="uaccess", un mécanisme qui délègue l'octroi effectif des permissions
+# à systemd-logind (ACL de session/seat). Ce conteneur tourne sous s6
+# (PID 1 = s6-svscan, pas systemd) : logind n'y fonctionne pas, confirmé en
+# direct dans les logs Xorg ("systemd-logind: failed to get session: Launch
+# helper exited with unknown return code 1"). Résultat : uaccess ne
+# s'applique JAMAIS ici, les nodes hidraw/uhid gardent leurs permissions par
+# défaut (souvent root:root), inaccessibles à l'utilisateur arcade — casse
+# notamment le pavé tactile/gyro de la manette virtuelle DualSense que
+# Sunshine crée via uhid pour les clients Moonlight PS4/PS5.
+#
+# Fix : GROUP="input" statique en plus de MODE="0660" — arcade est déjà
+# membre du groupe input (voir useradd -G wheel,video,input,render,audio
+# dans le Dockerfile), donc l'accès ne dépend plus de logind du tout.
+#
+# ATTRS{idVendor} corrigé en KERNELS=="*054C:*" (audit 29/08, testé en
+# direct) : un hidraw créé par uhid (manette virtuelle Sunshine) n'a PAS
+# d'attribut idVendor/idProduct comme un vrai périphérique USB — confirmé
+# via `udevadm info -a`, seuls KERNEL(S), SUBSYSTEM(S), DRIVERS="hid-generic"
+# et le nom du device parent HID ("0005:054C:0CE6.000E", bus:vendor:produit:
+# instance) sont disponibles. Sans ce correctif la règle ne matchait jamais
+# et hidraw4 restait crw-rw---- root:root — inaccessible à arcade, casse le
+# rumble et la détection HIDAPI (SDL2) même une fois le node bien créé.
+# Même pattern KERNELS que sony-gdu.rules plus haut dans ce dossier.
+ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="*054C:*", MODE="0660", GROUP="input"
+ACTION!="remove", SUBSYSTEM=="input", ATTRS{name}=="Sunshine*", MODE="0660", GROUP="input"
+ACTION!="remove", KERNEL=="uhid", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+ACTION!="remove", KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"

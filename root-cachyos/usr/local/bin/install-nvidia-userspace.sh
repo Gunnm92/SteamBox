@@ -37,6 +37,37 @@ fi
 
 echo "[nvidia] Version driver host : ${nvidia_host_driver_version}"
 
+# Téléchargement/cache du .run déplacé ici (avant le garde "déjà installé"
+# plus bas) : install_nvngx_wine_dll (voir plus bas) a besoin de RUN_FILE
+# même quand les modules Xorg sont déjà en place et que le script sortirait
+# sinon avant d'avoir jamais défini cette variable.
+RUN_FILE="${CACHE_DIR}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
+
+if [ ! -f "${RUN_FILE}" ]; then
+    echo "[nvidia] Téléchargement du driver ${nvidia_host_driver_version}..."
+    declare -a SOURCES=(
+        "https://download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
+        "https://us.download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
+        "https://international.download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
+    )
+    downloaded=false
+    for url in "${SOURCES[@]}"; do
+        echo "[nvidia]   essai : ${url}"
+        if wget -q -O "${RUN_FILE}.tmp" "${url}" 2>&1; then
+            mv "${RUN_FILE}.tmp" "${RUN_FILE}"
+            downloaded=true
+            break
+        else
+            rm -f "${RUN_FILE}.tmp"
+            echo "[nvidia]   échec"
+        fi
+    done
+    if [ "${downloaded}" != "true" ]; then
+        echo "[nvidia] ERREUR : téléchargement impossible pour ${nvidia_host_driver_version} — DLSS/modules Xorg ne pourront pas être (ré)installés"
+    fi
+fi
+chmod +x "${RUN_FILE}" 2>/dev/null || true
+
 # L'installeur NVIDIA place nvidia_drv.so et libglxserver_nvidia.so dans
 # /usr/lib64/xorg/modules/... par défaut avec les options --no-x-check
 # --no-distro-scripts utilisées ici (désactivent sa détection auto du
@@ -51,16 +82,67 @@ echo "[nvidia] Version driver host : ${nvidia_host_driver_version}"
 # et les liens ne sont jamais créés/réparés. fix_xorg_module_paths corrige
 # ça dans TOUS les cas (frais ou déjà présent), en symlinkant depuis
 # lib64 si besoin.
+#
+# [ ! -L "${f}" ] AJOUTÉ (bug constaté en direct sur CachyOS 27/08) : sur
+# Arch, /usr/lib64 est un symlink VERS /usr/lib (pas deux dossiers séparés
+# comme Ubuntu/Debian) — donc le symlink créé par CETTE fonction au premier
+# démarrage (ex: libglxserver_nvidia.so -> .../libglxserver_nvidia.so.VER)
+# est LUI-MÊME visible par le glob "*nvidia*" au démarrage suivant (même
+# dossier réel, vu via l'alias lib64). Sans ce garde, le script re-symlinkait
+# ce lien sur lui-même via le chemin lib64 → boucle ("Too many levels of
+# symbolic links"), Xorg ne charge plus le module GLX NVIDIA → écran noir
+# (VNC et Moonlight identiquement, rendu cassé au niveau X, pas un bug
+# client). En ignorant les entrées qui sont déjà des liens symboliques (donc
+# nos propres liens d'un run précédent), seul le vrai fichier installé par
+# le .run est jamais utilisé comme source — idempotent sur Arch, sans effet
+# sur Ubuntu/Debian où lib64 et lib sont réellement distincts.
 fix_xorg_module_paths() {
     mkdir -p /usr/lib/xorg/modules/extensions /usr/lib/xorg/modules/drivers
     for f in /usr/lib64/xorg/modules/extensions/*nvidia*; do
-        [ -e "${f}" ] || continue
+        [ -e "${f}" ] && [ ! -L "${f}" ] || continue
         ln -sf "${f}" "/usr/lib/xorg/modules/extensions/$(basename "${f}")"
     done
     for f in /usr/lib64/xorg/modules/drivers/*nvidia*; do
-        [ -e "${f}" ] || continue
+        [ -e "${f}" ] && [ ! -L "${f}" ] || continue
         ln -sf "${f}" "/usr/lib/xorg/modules/drivers/$(basename "${f}")"
     done
+}
+
+# Audit DLSS du 30/08 : nvngx.dll/_nvngx.dll (le loader NGX, différent de
+# nvngx_dlss.dll fourni par chaque jeu) ne sont PAS installés par
+# nvidia-container-toolkit (qui ne monte que les .so), ni par --install-
+# compat32-libs ci-dessous (fichiers Windows, absents d'une install Linux
+# normale) — pourtant bien présents dans l'archive .run elle-même. Proton/
+# GE-Proton les cherche à la création d'un prefix dans un dossier "nvidia/
+# wine/" juste à côté de la vraie libGLX_nvidia.so.VERSION en cours d'usage
+# (résolu ici via ldconfig, pas un chemin figé — coïncide avec /usr/lib sur
+# CachyOS/Arch mais pas garanti ailleurs), et copie silencieusement RIEN si
+# absent (confirmé en direct : jeu DX12 + Streamline fonctionnel mais DLSS
+# invisible, seul FSR proposé). Extrait une fois depuis le .run déjà en
+# cache (même version que le host, pas de téléchargement séparé) et posé à
+# cet endroit — un prefix Proton déjà créé avant ce fix doit recevoir une
+# copie manuelle dans son propre drive_c/windows/system32/.
+install_nvngx_wine_dll() {
+    local libglx
+    libglx=$(ldconfig -p 2>/dev/null | awk '/libGLX_nvidia\.so\./ {print $NF; exit}')
+    [ -n "${libglx}" ] || return 0
+    local nvidia_wine_dir
+    nvidia_wine_dir="$(dirname "$(readlink -f "${libglx}")")/nvidia/wine"
+    [ -f "${nvidia_wine_dir}/nvngx.dll" ] && return 0
+
+    local extract_dir="${CACHE_DIR}/extract-${nvidia_host_driver_version}"
+    if [ ! -f "${extract_dir}/nvngx.dll" ]; then
+        rm -rf "${extract_dir}"
+        "${RUN_FILE}" --extract-only --target "${extract_dir}" >/dev/null 2>&1
+    fi
+    if [ -f "${extract_dir}/nvngx.dll" ]; then
+        mkdir -p "${nvidia_wine_dir}"
+        cp "${extract_dir}/nvngx.dll" "${extract_dir}/_nvngx.dll" "${nvidia_wine_dir}/"
+        chmod 644 "${nvidia_wine_dir}/nvngx.dll" "${nvidia_wine_dir}/_nvngx.dll"
+        echo "[nvidia] nvngx.dll/_nvngx.dll (DLSS) installés dans ${nvidia_wine_dir}"
+    else
+        echo "[nvidia] nvngx.dll introuvable dans le .run ${nvidia_host_driver_version} — DLSS indisponible sous Proton"
+    fi
 }
 
 # Bug corrigé (audit 2026-08-26) : "installed_version" était dérivé de
@@ -85,40 +167,18 @@ fi
 if [ "${installed_version}" = "${nvidia_host_driver_version}" ]; then
     echo "[nvidia] Modules Xorg ${installed_version} déjà installés — rien à faire"
     fix_xorg_module_paths
+    install_nvngx_wine_dll
     exit 0
 fi
 
 echo "[nvidia] Installé : ${installed_version:-aucun} → cible : ${nvidia_host_driver_version}"
 
-RUN_FILE="${CACHE_DIR}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
-
 if [ ! -f "${RUN_FILE}" ]; then
-    echo "[nvidia] Téléchargement du driver ${nvidia_host_driver_version}..."
-    declare -a SOURCES=(
-        "https://download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
-        "https://us.download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
-        "https://international.download.nvidia.com/XFree86/Linux-x86_64/${nvidia_host_driver_version}/NVIDIA-Linux-x86_64-${nvidia_host_driver_version}.run"
-    )
-    downloaded=false
-    for url in "${SOURCES[@]}"; do
-        echo "[nvidia]   essai : ${url}"
-        if wget -q -O "${RUN_FILE}.tmp" "${url}" 2>&1; then
-            mv "${RUN_FILE}.tmp" "${RUN_FILE}"
-            downloaded=true
-            break
-        else
-            rm -f "${RUN_FILE}.tmp"
-            echo "[nvidia]   échec"
-        fi
-    done
-    if [ "${downloaded}" != "true" ]; then
-        echo "[nvidia] ERREUR : téléchargement impossible pour ${nvidia_host_driver_version}"
-        exit 1
-    fi
+    echo "[nvidia] ERREUR : ${RUN_FILE} absent (échec de téléchargement) — impossible d'installer les modules Xorg"
+    exit 1
 fi
 
 echo "[nvidia] Installation en cours... (log : ${LOG_FILE})"
-chmod +x "${RUN_FILE}"
 
 INSTALL_ARGS=(
     --silent
@@ -162,6 +222,7 @@ exit_code=$?
 # ne couvre pas forcément tous les sous-chemins (ex: modules/extensions/
 # pour libglxserver_nvidia.so) selon la version de l'installeur.
 fix_xorg_module_paths
+install_nvngx_wine_dll
 
 installed_after=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | extract_driver_version)
 if [ "${installed_after}" = "${nvidia_host_driver_version}" ]; then

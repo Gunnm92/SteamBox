@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+# Session Wayland réelle via labwc (compositeur wlroots, seatd/libinput,
+# driver NVIDIA) — second pivot Waybox (29/08) : remplace KWin, qui
+# n'implémente pas les protocoles wlroots dont dépendent evdev-bridge (input
+# souris/clavier Sunshine) et wayvnc — voir point 6 de l'historique en tête
+# de Dockerfile.cachyos. Tourne de bout en bout en arcade via seatd, comme
+# la session KWin précédente (pas de dance root/runuser type Xorg.wrap).
+exec /usr/local/bin/scripts/wayland-session.sh

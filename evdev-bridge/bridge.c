@@ -149,11 +149,19 @@ static int setup_keyboard(void) {
         return -1;
     }
 
+    /* layout "fr" (AZERTY) au lieu de "us" (30/08) : evdev-bridge définit et
+     * envoie sa PROPRE keymap au clavier virtuel Wayland — indépendant de
+     * tout réglage local labwc/XFCE (~/.config/labwc/environment), qui
+     * n'affecte que le clavier physique/local, pas ce chemin distant
+     * Sunshine/Moonlight. Codé en dur ici faute d'un moyen simple de le
+     * rendre configurable pour l'instant (pas de lecture de variable
+     * d'environnement dans ce binaire) — à revoir si un jour plusieurs
+     * dispositions doivent cohabiter. */
     struct xkb_rule_names names = {
         .rules = "evdev",
         .model = "pc105",
-        .layout = "us",
-        .variant = NULL,
+        .layout = "fr",
+        .variant = "mac",
         .options = NULL,
     };
 
@@ -202,7 +210,8 @@ static int setup_keyboard(void) {
     xkb_keymap_unref(keymap);
     xkb_context_unref(ctx);
 
-    fprintf(stderr, "[bridge] Keyboard keymap uploaded (%zu bytes, us/pc105)\n", keymap_size);
+    fprintf(stderr, "[bridge] Keyboard keymap uploaded (%zu bytes, %s/%s)\n",
+            keymap_size, names.layout, names.model);
     return 0;
 }
 
@@ -595,11 +604,28 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "[bridge] Cannot open keyboard %s: %s\n", kbd_path, strerror(errno));
         return 1;
     }
+    /* EVIOCGRAB (30/08) : verrouille l'accès EXCLUSIF à ce device au niveau
+     * noyau, indépendamment d'udev. Sans ça, labwc/libinput lit ces mêmes
+     * périphériques uinput virtuels de Sunshine EN PARALLÈLE de nous —
+     * double saisie confirmée en direct. Un tag udev (LIBINPUT_IGNORE_DEVICE)
+     * ne suffit pas de façon fiable : il n'est appliqué qu'à la création du
+     * device (ADD event), pas retrouvé par un labwc qui redémarre ensuite et
+     * réénumère via la base persistée (cassée, voir historique
+     * Dockerfile.cachyos) — EVIOCGRAB, lui, ne dépend jamais d'udev.
+     * Non-fatal si ça échoue (log seulement) : mieux vaut une double saisie
+     * visible qu'un service qui refuse de démarrer pour ça.
+     */
+    if (ioctl(kbd_fd, EVIOCGRAB, 1) < 0) {
+        fprintf(stderr, "[bridge] Warning: EVIOCGRAB failed on keyboard: %s\n", strerror(errno));
+    }
 
     rel_mouse_fd = open(rel_mouse_path, O_RDONLY | O_NONBLOCK);
     if (rel_mouse_fd < 0) {
         fprintf(stderr, "[bridge] Cannot open mouse %s: %s\n", rel_mouse_path, strerror(errno));
         return 1;
+    }
+    if (ioctl(rel_mouse_fd, EVIOCGRAB, 1) < 0) {
+        fprintf(stderr, "[bridge] Warning: EVIOCGRAB failed on rel mouse: %s\n", strerror(errno));
     }
 
     if (abs_mouse_path[0]) {
@@ -608,6 +634,8 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "[bridge] Warning: Cannot open abs mouse %s: %s\n",
                     abs_mouse_path, strerror(errno));
             /* Non-fatal */
+        } else if (ioctl(abs_mouse_fd, EVIOCGRAB, 1) < 0) {
+            fprintf(stderr, "[bridge] Warning: EVIOCGRAB failed on abs mouse: %s\n", strerror(errno));
         }
     }
 

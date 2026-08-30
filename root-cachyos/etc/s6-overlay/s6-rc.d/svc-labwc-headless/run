@@ -1,0 +1,46 @@
+#!/command/with-contenv bash
+# Deuxième compositeur labwc, headless (aucun vrai écran, DRM jamais
+# touché) — dédié à Sunshine/Moonlight, indépendant du bureau XFCE visible
+# en local/VNC (svc-labwc, wayland-0). Ajouté le 30/08 suite à l'échec
+# confirmé de gamescope comme cible de capture Sunshine (portail D-Bus
+# absent, XDG_OUTPUT manquant, EGL_BAD_ACCESS — testé avec ET sans HDR,
+# en --backend drm ET headless, jamais fonctionnel) : gamescope n'implémente
+# jamais les protocoles de capture (ext_image_copy_capture_manager_v1) que
+# labwc, lui, expose nativement. Pattern repris de github.com/daaaaan/
+# sunshine-headless-sway (Sway à la place de labwc là-bas — même famille
+# wlroots, même principe), validé en direct le 30/08 : capture NVENC
+# fonctionnelle contre ce labwc headless (vraies keyframes IDR), input
+# souris/clavier fonctionnel via evdev-bridge-native inchangé (labwc
+# implémente zwlr_virtual_pointer/zwp_virtual_keyboard nativement, pas
+# besoin du bridge libei exploré pour gamescope).
+#
+# LIBSEAT_BACKEND=noop : pas de vrai accès DRM/VT nécessaire ici (aucune
+# sortie physique) — seatd resterait bloqué à attribuer un VT à un
+# compositeur qui n'en a pas besoin. WLR_BACKENDS=headless force wlroots à
+# créer un backend de rendu hors écran au lieu de chercher un GPU/VT réel.
+#
+# unset WAYLAND_DISPLAY/DISPLAY avant lancement : même piège que labwc
+# principal (voir wayland-session.sh) — hérités depuis l'ENV Dockerfile, ce
+# compositeur tenterait sinon de s'y CONNECTER comme client au lieu de créer
+# son propre socket.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+# Attend que le labwc PRINCIPAL (svc-labwc) ait déjà créé wayland-0 avant de
+# démarrer celui-ci — sans ça, rien ne garantit l'ordre : wlroots numérote
+# les sockets par ordre d'arrivée (premier lancé = wayland-0), et le
+# marqueur "up" d'un service s6 longrun sans notification-fd se déclenche
+# dès le fork du script, pas une fois labwc réellement lancé dedans
+# (wayland-session.sh fait dbus/pipewire/GTK avant sa ligne `labwc &`) — une
+# simple dépendances.d/svc-labwc ne suffit donc pas à empêcher ce service-ci
+# de gagner la course et de prendre wayland-0 à la place du bureau visible,
+# cassant wayvnc/evdev-bridge/xfce qui le codent tous en dur.
+TIMEOUT=30
+while [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
+
+exec runuser -u arcade -- \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        LIBSEAT_BACKEND=noop WLR_BACKENDS=headless \
+    bash -c 'unset WAYLAND_DISPLAY DISPLAY; exec labwc'

@@ -1,4 +1,5 @@
-# ArcadeBox — variante CachyOS + KDE Plasma (session X11 réelle).
+# syntax=docker/dockerfile:1.7
+# Waybox (ex-ArcadeBox) — variante CachyOS + labwc/XFCE (session Wayland réelle).
 #
 # Historique des architectures essayées sur cette branche, chacune abandonnée
 # pour une raison concrète, testée en direct :
@@ -25,38 +26,141 @@
 #      élucidée) — souris inopérante.
 #
 # 4. KDE Plasma/KWin (X11 réel — Xorg + driver NVIDIA direct sur le GPU,
-#    PAS Xvfb) — architecture actuelle. X11 règle le problème VNC du point 3
-#    structurellement : x11vnc fonctionne avec n'importe quel gestionnaire de
-#    fenêtres (capture native au protocole, pas de fragmentation par
-#    compositeur). Le problème souris, lui, PERSISTE sous X11 (pas
-#    spécifique à Wayland/KWin comme supposé initialement) : Sunshine injecte
-#    l'input via de vrais périphériques uinput (pas XTest), et le pilote
-#    X11 'libinput' interroge la même base udev on-disk qui ne persiste
-#    jamais ses tags dans ce conteneur (cause exacte toujours non élucidée —
-#    udevd calcule et diffuse bien les bons tags en temps réel, confirmé via
-#    `udevadm monitor`, mais `/run/udev/data/` reste vide). Contourné en
-#    forçant le pilote 'evdev' (n'a pas besoin d'udev, ouvre le device node
+#    PAS Xvfb) — abandonnée au profit du point 5 ci-dessous (pivot Waybox,
+#    29/08). X11 réglait le problème VNC du point 3 structurellement :
+#    x11vnc fonctionne avec n'importe quel gestionnaire de fenêtres (capture
+#    native au protocole, pas de fragmentation par compositeur). Le problème
+#    souris, lui, PERSISTAIT sous X11 (pas spécifique à Wayland/KWin comme
+#    supposé initialement) : Sunshine injecte l'input via de vrais
+#    périphériques uinput (pas XTest), et le pilote X11 'libinput' interroge
+#    la même base udev on-disk qui ne persiste jamais ses tags dans ce
+#    conteneur (cause exacte toujours non élucidée — udevd calcule et
+#    diffuse bien les bons tags en temps réel, confirmé via `udevadm
+#    monitor`, mais `/run/udev/data/` reste vide). Contourné en forçant le
+#    pilote 'evdev' (n'a pas besoin d'udev, ouvre le device node
 #    directement) sur les périphériques Sunshine via une règle InputClass —
-#    voir `root-cachyos/etc/X11/xorg.conf.d/99-sunshine-input.conf`.
+#    cette règle n'a pas d'équivalent sous Wayland (libinput est la seule
+#    voie, aucun pilote de contournement comme 'evdev' côté X11).
 #
-# Steam Big Picture se lance en plein écran DANS cette session X11 (pas de
-# bascule vers un second serveur type Gamescope).
+# 5. KDE Plasma/KWin (Wayland réel, via seatd — reprise du point 3, sans
+#    VNC) — architecture Waybox (29/08). wayvnc est abandonné explicitement
+#    (décision utilisateur : accès distant uniquement via Sunshine/Moonlight,
+#    donc le point bloquant "wayvnc = wlroots only" du point 3 ne s'applique
+#    plus). Reste le problème souris/clavier virtuel de Sunshine (uinput/udev,
+#    point 3 et 4 ci-dessus) : sans pilote 'evdev' équivalent sous Wayland,
+#    la seule parade connue dans ce dépôt est `evdev-bridge` (vendored à la
+#    racine, ex-projet Desarso/evdev-bridge utilisé sur l'ancien Dockerfile
+#    webstation/labwc) — il lit les devices uinput de Sunshine en direct
+#    (indépendant d'udev) et les rejoue via les protocoles Wayland
+#    zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1, QUE
+#    KWin n'implémente PAS (protocoles wlroots-only, même famille que le
+#    blocage wayvnc du point 3). Pegasus et les jeux tournent donc nichés
+#    dans **gamescope** (déjà installé, compositeur wlroots, lancé comme
+#    client Wayland ordinaire à l'intérieur de cette session KWin plutôt
+#    qu'en root DRM — pour ne pas rouvrir le risque connu gamescope+NVIDIA
+#    en mode DRM direct, jamais testé ici) : c'est CE socket Wayland-là que
+#    ciblent evdev-bridge et Sunshine pour l'input pendant le jeu. La
+#    capture vidéo Sunshine, elle, reste sur le bureau KWin externe — déjà
+#    confirmée fonctionnelle au point 3 ("capture Sunshine fonctionnelle"),
+#    gamescope plein écran y est simplement ce qui s'affiche à l'écran.
+#    Le gamepad réel/virtuel n'est PAS concerné par ce contournement :
+#    SDL_JOYSTICK_DISABLE_UDEV=1 (déjà en place, voir ENV plus bas) fait
+#    déjà lire les manettes hors udev côté SDL/RetroArch, quel que soit le
+#    compositeur — seuls souris/clavier virtuels Sunshine restent à risque,
+#    non revérifiés en direct sur gamescope (seulement sur Hyprland/labwc
+#    historiquement).
+#
+# 6. labwc (Wayland, compositeur wlroots) + panneau/bureau XFCE (xfce4-panel,
+#    Thunar, xfce4-settings) — architecture Waybox définitive (29/08, second
+#    pivot). KWin abandonné : ni wayvnc ni evdev-bridge n'y fonctionnent
+#    (protocoles wlroots absents, point 5), et gamescope a lui aussi
+#    abandonné ces protocoles au profit de libei entre-temps (confirmé en
+#    direct : `zwlr_virtual_pointer_manager_v1 not available` contre
+#    gamescope 3.16.25) — Sunshine, lui, n'est PAS lié à libei (confirmé via
+#    `ldd`), donc aucun des deux compositeurs récemment essayés n'offre de
+#    chemin d'input fonctionnel pour Sunshine. Hyprland (point 2) écarté à
+#    nouveau : décision utilisateur, expérience tiling jugée inutilisable au
+#    quotidien pour ce projet, malgré un input fonctionnel là aussi.
+#
+#    labwc est le SEUL choix qui coche toutes les cases déjà validées dans
+#    l'historique de ce projet : c'est exactement le compositeur de l'ancien
+#    Dockerfile webstation (avant migration CachyOS), où wayvnc ET
+#    evdev-bridge fonctionnaient tous les deux en direct — voir le
+#    commentaire d'origine d'evdev-bridge/bridge.c ("into Hyprland" y fait
+#    référence à un test antérieur encore, mais le déploiement réel
+#    utilisait labwc). xfce4-panel/Thunar/xfce4-settings ajoutés par-dessus
+#    pour un bureau conventionnel (fenêtres empilées, pas de tiling) sans le
+#    poids de KDE — Steam reste l'interface principale de la session, ce
+#    bureau ne sert qu'à l'administration (fichiers, réglages).
+#
+#    Le gamepad réel/virtuel n'a jamais été concerné par le bug souris/clavier
+#    (SDL_JOYSTICK_DISABLE_UDEV=1, voir ENV plus bas, bypasse udev côté
+#    SDL/RetroArch indépendamment du compositeur) — seul le input Sunshine
+#    (uinput) en dépendait, et evdev-bridge/labwc règle spécifiquement ce cas.
+#
+# 7. Deuxième labwc HEADLESS dédié à Sunshine (svc-labwc-headless, wayland-1,
+#    30/08) — suite à une demande HDR, exploration complète de gamescope
+#    comme cible de capture Sunshine (compositeur racine, --backend drm ET
+#    headless, avec et sans --hdr-enabled/--expose-wayland) : jamais
+#    fonctionnel, 3 échecs systématiques — portalgrab (RemoteDesktop/
+#    ScreenCast absents du bus D-Bus), capture=kms ("Missing Wayland wire
+#    XDG_OUTPUT", liste de moniteurs KMS vide), wlgrab par défaut
+#    (EGL_BAD_ACCESS/[00003002] à l'init EGL). Confirmé indépendamment par
+#    le projet Wolf (games-on-whales, streaming Docker+libei) : abandon de
+#    gamescope pour Sway, support NVIDIA jugé insuffisant. HDR non atteignable
+#    de toute façon avec Sunshine actuel : WLR_RENDERER=vulkan (requis pour
+#    exposer wp_color_manager_v1) casse la capture NVIDIA quel que soit le
+#    compositeur wlroots (confirmé sur labwc ET documenté indépendamment par
+#    github.com/daaaaan/sunshine-headless-sway sur Sway, qui reste sciemment
+#    sur WLR_RENDERER=gles2 pour cette raison).
+#
+#    Piste retenue à la place (même repo daaaaan, adaptée à labwc plutôt que
+#    Sway — même famille wlroots, même principe) : un SECOND labwc, headless
+#    (WLR_BACKENDS=headless, LIBSEAT_BACKEND=noop, aucun accès DRM/VT réel),
+#    strictement dédié à Sunshine/evdev-bridge, indépendant du bureau XFCE
+#    visible en local/VNC (svc-labwc, wayland-0). Validé en direct : capture
+#    NVENC fonctionnelle (vraies keyframes IDR) contre ce labwc headless —
+#    labwc implémente nativement ext_image_copy_capture_manager_v1 (capture
+#    moderne) là où gamescope n'expose jamais assez de protocole. Input
+#    (evdev-bridge-native inchangé, zwlr_virtual_pointer/zwp_virtual_keyboard)
+#    fonctionne aussi nativement, sans le bridge libei exploré pour
+#    gamescope (écrit, testé fonctionnel côté input, puis retiré : code mort
+#    sans cible de capture viable). Pas de HDR dans cette architecture non
+#    plus (toujours WLR_RENDERER par défaut/GLES2) — le seul gain réel est
+#    l'isolation bureau/streaming, pas le HDR, qui reste hors de portée.
 
 FROM cachyos/cachyos-v3:latest
 
-# mako retiré (audit 2026-08-26) : démon de notifications wlroots-only
-# (couche layer-shell), jamais fonctionnel ni lancé sous cette session
-# KDE/X11 réel — reliquat de l'ère Hyprland/Wayland de ce projet.
-# ── 1. Base système + KDE Plasma (X11) + seatd/libinput + GPU (Mesa/Vulkan) ──
-RUN pacman -Syu --noconfirm && \
+# ── 1. Base système + labwc (Wayland) + bureau XFCE + seatd/libinput + GPU (Mesa/Vulkan) ──
+# Panne CachyOS multilib (29/08) : lib32-gcc-libs/lib32-glibc — les DEUX
+# SEULS paquets multilib que CachyOS rebuild elle-même (pour matcher sa
+# toolchain optimisée x86_64_v3) — étaient absents de TOUS les miroirs
+# cachyos-v3 (testé un par un), alors que le reste du multilib (dépôt Arch
+# standard) fonctionnait très bien. Panne confirmée récurrente sur ce
+# rebuild maison (incident quasi identique déjà documenté sur le forum
+# CachyOS avec une version antérieure de ces deux mêmes paquets), et étendue
+# en cascade à d'autres paquets 64-bit v3 (libpulse, libasyncns) au moment du
+# test. Contournement RÉEL (pas une dégradation) trouvé en forçant ces 4
+# paquets depuis le dépôt Arch standard (core/extra, mêmes versions logicielles,
+# juste non-optimisées v3) plutôt que cachyos-v3/cachyos-extra-v3 — vérifié
+# en direct, tout le reste de la chaîne (lib32-vulkan-*, lib32-pipewire,
+# lib32-libpulse, dxvk-mingw-git) se résout et télécharge alors sans erreur.
+# Si cette panne CachyOS est résolue au moment d'un futur rebuild, ces 4
+# lignes "repo/paquet" explicites peuvent être simplifiées en noms de paquet
+# nus sans risque (pacman retombera sur cachyos-v3 par défaut, prioritaire).
+RUN pacman -Syyu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
-      plasma-desktop kwin-x11 konsole dolphin kate \
-      xdg-desktop-portal-kde plasma-nm plasma-pa polkit-kde-agent \
-      kscreen breeze breeze-gtk kdeplasma-addons spectacle \
-      xorg-server xorg-xdpyinfo x11vnc xf86-input-evdev python-pip \
+      labwc xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
+      thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
+      network-manager-applet polkit-gnome \
+      xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
+      wayvnc python-pip wlr-randr \
+      gtk3 \
+      xorg-xwayland wayland libxkbcommon \
       mesa vulkan-icd-loader vulkan-tools \
+      core/lib32-gcc-libs core/lib32-glibc extra/libpulse extra/libasyncns \
       vulkan-radeon lib32-vulkan-radeon \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
       pipewire pipewire-pulse wireplumber \
@@ -83,8 +187,114 @@ RUN pacman -Syu --noconfirm && \
       ark unrar zip \
       sdl2_image sdl2_mixer sdl2_ttf sdl2_gfx \
       dolphin-emu scummvm \
-      papirus-icon-theme ttf-jetbrains-mono-nerd \
+      papirus-icon-theme hicolor-icon-theme adwaita-icon-theme \
+      ttf-jetbrains-mono-nerd cantarell-fonts noto-fonts ttf-dejavu \
+      libva-utils \
     && pacman -Scc --noconfirm
+
+# nvidia-vaapi-driver — pont VA-API→NVDEC/NVENC pour NVIDIA (projet
+# elFarto/nvidia-vaapi-driver), porté depuis le fix Dockerfile.ubuntu (audit
+# 2026-08-26, "steam link fait crasher steam" : Steam Remote Play encode
+# TOUJOURS via VA-API sous Linux, quel que soit le vendeur GPU, jamais un
+# appel NVENC direct). Aucun paquet officiel Arch/CachyOS (core/extra/
+# cachyos-*) — AUR-only, et PAS sous le nom du projet upstream : le paquet
+# AUR s'appelle "libva-nvidia-driver-git" (confirmé via l'API AUR, URL
+# github.com/elFarto/nvidia-vaapi-driver) — "nvidia-vaapi-driver" tout court
+# clone un dépôt AUR vide (aucune erreur git, juste 0 commit). Buildé via
+# makepkg (git/gcc/make/fakeroot déjà présents dans l'image — voir
+# dxvk-mingw-git/vkd3d-proton-git plus haut, déjà des paquets -git) plutôt
+# qu'extrait binaire comme Chrome : projet C minuscule, build de quelques
+# secondes, pas la même échelle qu'un navigateur. meson/ninja/libva/
+# ffnvcodec-headers = makedepends du PKGBUILD AUR, supprimés après coup
+# avec le user de build temporaire.
+# ludusavi (sauvegarde/restauration des saves de jeux, backend de la
+# fonctionnalité "Ludusavi Manager" de Heroic) ajouté dans la MÊME session
+# de build AUR que nvidia-vaapi-driver ci-dessus (un seul aller-retour
+# useradd/userdel) : suite à l'audit du 29/08 sur le prefix Wine "shared"
+# corrompu par nos changements de Proton successifs (voir commit sur
+# install-nvidia-userspace.sh) — le prefix Wine ne doit plus être la seule
+# copie des sauvegardes. Version "-bin" choisie (binaire précompilé upstream)
+# plutôt que "ludusavi" source : évite d'ajouter toute la toolchain Rust/
+# cargo à l'image pour un seul outil. depends du PKGBUILD (bzip2, gtk3,
+# hicolor-icon-theme, libgcc) ajoutés aux paquets normaux car ce sont des
+# dépendances RUNTIME (pas des makedepends) — elles doivent rester après
+# le nettoyage, contrairement à meson/ninja plus bas.
+# eden-nightly-bin (29/08) — build nightly de l'émulateur Switch Eden (fork
+# de yuzu), ajouté dans la même session AUR. Variante "-bin" (AppImage
+# précompilée par le CI du projet, juste extraite/installée) plutôt que
+# "eden-nightly" source : évite d'ajouter Qt/LLVM/boost et une compilation
+# C++ énorme à l'image pour un émulateur qui sort déjà un binaire tout fait.
+# Dépendance runtime unique : hicolor-icon-theme (déjà installé plus haut).
+#
+# PKGBUILD upstream patché (bloc package(), via un petit script Python plutôt
+# qu'un sed en ligne : trop d'imbrication de guillemets Dockerfile+shell+sed
+# pour un remplacement multi-lignes propre) pour extraire l'AppImage
+# (squashfs-root, déjà produit par prepare()/build() du PKGBUILD via
+# --appimage-extract) et l'installer sous /opt/eden avec un wrapper shell
+# exécutant AppRun — au lieu de copier le .AppImage brut sous
+# /opt/${pkgname} (nécessite FUSE à chaque lancement). Exactement le
+# comportement de l'ancien install manuel retiré plus haut : pas de FUSE
+# requis au runtime, et des raccourcis/scripts existants pointent sur ce
+# chemin /opt/eden précis.
+RUN pacman -S --noconfirm --needed \
+      meson ninja libva ffnvcodec-headers \
+      bzip2 gtk3 hicolor-icon-theme libgcc && \
+    useradd -m -s /bin/bash aur-builder && \
+    echo 'aur-builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aur-builder
+
+COPY <<'PATCH_EDEN_EOF' /tmp/patch-eden-pkgbuild.py
+import pathlib
+p = pathlib.Path("/tmp/eden-nightly-bin/PKGBUILD")
+c = p.read_text()
+old = (
+    'package() {\n'
+    '    install -Dm755 "${_appimage}" "${pkgdir}/opt/${pkgname}/${pkgname}.AppImage"\n'
+)
+new = (
+    'package() {\n'
+    '    install -dm755 "${pkgdir}/opt/eden"\n'
+    '    cp -a squashfs-root/. "${pkgdir}/opt/eden/"\n'
+    '    install -dm755 "${pkgdir}/usr/bin"\n'
+    '    printf \'#!/bin/sh\\ncd /opt/eden && exec ./AppRun "$@"\\n\' > "${pkgdir}/usr/bin/eden"\n'
+    '    chmod +x "${pkgdir}/usr/bin/eden"\n'
+)
+assert old in c, "bloc install introuvable dans PKGBUILD"
+c = c.replace(old, new)
+old2 = '    install -dm755 "${pkgdir}/usr/bin"\n    ln -s "/opt/${pkgname}/${pkgname}.AppImage" "${pkgdir}/usr/bin/eden"\n'
+assert old2 in c, "bloc ln -s introuvable dans PKGBUILD"
+c = c.replace(old2, "")
+p.write_text(c)
+print("PKGBUILD eden patche avec succes")
+PATCH_EDEN_EOF
+
+COPY <<'BUILD_AUR_EOF' /tmp/build-aur.sh
+#!/bin/bash
+set -e
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/libva-nvidia-driver-git.git
+cd libva-nvidia-driver-git
+makepkg -si --noconfirm --needed
+
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/ludusavi-bin.git
+cd ludusavi-bin
+makepkg -si --noconfirm --needed
+
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/eden-nightly-bin.git
+python3 /tmp/patch-eden-pkgbuild.py
+cd eden-nightly-bin
+makepkg -si --noconfirm --needed
+BUILD_AUR_EOF
+
+RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
+    chmod +x /tmp/build-aur.sh && \
+    su aur-builder -c /tmp/build-aur.sh && \
+    rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
+    userdel -r aur-builder && \
+    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin && \
+    pacman -Rns --noconfirm meson ninja && \
+    pacman -Scc --noconfirm
 
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
@@ -133,15 +343,28 @@ RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire "$@"\n' > /usr/local/bin/st
 
 # ── 1a6. DXVK — injecte les DLL dans les préfixes Wine (dxvk-mingw-git ne le
 # fait pas tout seul, contrairement à un vrai paquet dxvk-bin ; setup.sh doit
-# tourner explicitement, généralement au 1er lancement d'un préfixe — voir
-# scripts/init_system.sh qui lance dxvk_setup pour le préfixe par défaut).
-RUN ln -sf /opt/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null || true
+# tourner explicitement, généralement au 1er lancement d'un préfixe). Non
+# automatisé : tous les jeux de ce conteneur tournent en Proton (GE-Proton
+# via Heroic), qui embarque et configure sa propre DXVK/DXVK-NVAPI — vérifié
+# le 30/08 sur le prefix Alan Wake 2 (nvapi64.dll + DXVK_ENABLE_NVAPI=1 déjà
+# présents, posés par Proton lui-même). Un wrapper wine avait été ajouté
+# puis retiré le 30/08 : aucun jeu ne passe par le wine système, donc aucune
+# utilité réelle tant que ça reste le cas.
+RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null || true
 
 # ── 1a7. Pegasus Frontend — pas de paquet Arch/CachyOS, build x11-static
 # officiel (Qt5 sans plugin Wayland compilé — testé en direct : "Could not
-# find the Qt platform plugin wayland", il faut forcer QT_QPA_PLATFORM=xcb
-# pour tourner via Xwayland). Une fois lancé : détecte Steam/GOG/manettes
-# automatiquement (confirmé en direct : 20 jeux Steam trouvés).
+# find the Qt platform plugin wayland"), donc QT_QPA_PLATFORM=xcb explicite
+# ici (l'ENV globale du Dockerfile vaut "wayland" par défaut). Décision
+# utilisateur (29/08) : Steam est l'interface principale de la session
+# (gamepadui, niché dans gamescope via scripts/steam-gamescope-launch.sh),
+# PAS Pegasus en direct — Pegasus se lance DEPUIS Steam, ajouté comme "jeu
+# non-Steam" dans la bibliothèque (config manuelle côté utilisateur, liée à
+# son compte Steam, pas automatisable proprement dans l'image). Lancé ainsi,
+# Pegasus hérite du DISPLAY Xwayland déjà mis en place par gamescope pour
+# Steam — pas besoin de son propre wrapper gamescope séparé. Une fois lancé :
+# détecte Steam/GOG/manettes automatiquement (confirmé en direct : 20 jeux
+# Steam trouvés).
 RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
     [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
@@ -149,9 +372,45 @@ RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-fro
     mkdir -p /opt/pegasus && \
     unzip -q /tmp/pegasus.zip -d /opt/pegasus && \
     ln -sf /opt/pegasus/pegasus-fe /usr/local/bin/pegasus-fe && \
-    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb DISPLAY=:0 /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/pegasus.desktop && \
     rm -f /tmp/pegasus.zip
+
+# ── 1a7b. Steam (gamepadui) niché dans gamescope — remplace l'entrée de
+# menu XFCE "Steam" générique du paquet (Exec=/usr/bin/steam nu, sans
+# wrapper gamescope) qui échoue avec "Check your DISPLAY environment
+# variable" — confirmé en direct le 30/08, aucun serveur X dans cette
+# session Wayland pure sans passer par gamescope. Une seule entrée "Steam"
+# désormais, celle qui fonctionne réellement.
+RUN printf '[Desktop Entry]\nType=Application\nName=Steam\nExec=/usr/local/bin/scripts/steam-gamescope-launch.sh\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/steam.desktop
+
+# "Steam (Bureau)" — client Steam classique (bibliothèque, réglages, ajout
+# de jeux non-Steam comme Pegasus) en fenêtre normale sur le bureau XFCE/
+# labwc, via l'Xwayland de labwc (DISPLAY=:0, confirmé en direct le 30/08 —
+# distinct de l'Xwayland niché de gamescope utilisé par l'entrée "Steam"
+# gamepadui ci-dessus). Pas de -gamepadui : interface desktop normale.
+RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env DISPLAY=:0 QT_QPA_PLATFORM=xcb /usr/local/bin/steam\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/steam-desktop.desktop
+
+# "Retour au bureau" — ferme gamescope (et Steam avec) pour retrouver XFCE/
+# labwc en dessous, sans dépendre du menu Quitter de Steam.
+RUN printf '[Desktop Entry]\nType=Application\nName=Retour au bureau\nExec=/usr/local/bin/scripts/exit-to-desktop.sh\nIcon=go-home\nTerminal=false\nCategories=System;\n' \
+      > /usr/share/applications/exit-to-desktop.desktop
+
+# ── 1a7c. Thème GTK "Mc-OS-CTLina-XFCE-Dark" (macOS Catalina, sombre) —
+# fourni par l'utilisateur (gnome-look.org, page bloquée par anti-bot Anubis,
+# récupéré manuellement), vendored à la racine du dépôt comme evdev-bridge.
+# Pas d'index.theme dans l'archive (contient juste gtk-2.0/ + gtk-3.0/,
+# aucun xfwm4/ — sans importance, labwc gère les décorations de fenêtre, pas
+# xfwm4) : on en génère un minimal pour qu'il apparaisse correctement dans
+# le sélecteur de thème xfce4-appearance-settings.
+COPY Mc-OS-CTLina-XFCE-Dark.tar.xz /tmp/theme.tar.xz
+RUN mkdir -p /usr/share/themes && \
+    tar -xJf /tmp/theme.tar.xz -C /usr/share/themes && \
+    printf '[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Mc-OS-CTLina-XFCE-Dark\nComment=macOS Catalina, sombre\n' \
+      > /usr/share/themes/Mc-OS-CTLina-XFCE-Dark/index.theme && \
+    rm -f /tmp/theme.tar.xz
 
 # ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
 # Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
@@ -400,32 +659,12 @@ RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4
       > /usr/share/applications/shadps4.desktop && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 
-# Eden (Nintendo Switch) — le dépôt GitHub officiel (eden-emulator/Releases)
-# est bloqué sur ordre DMCA de Nintendo (confirmé en direct : l'API GitHub
-# renvoie "Repository access blocked"/"reason":"dmca"), le projet publie
-# donc sur sa propre infrastructure (eden-emu.dev). Build clang-pgo
-# recommandé par le projet (~10-30% plus rapide que le build gcc standard).
-#
-# Le AppRun de ce build (basé sur "sharun") calcule son dossier via $0 sans
-# résoudre les liens symboliques (APPDIR=$(cd "${0%/*}" && pwd)) — un simple
-# `ln -sf .../AppRun /usr/local/bin/eden` casse tout (cherche les binaires
-# dans /usr/local/bin/bin au lieu de /opt/eden/bin, confirmé en direct).
-# Wrapper shell qui se place dans le bon dossier avant de lancer, au lieu
-# du symlink direct utilisé pour les autres émulateurs AppImage.
-RUN EDEN_TAG=$(curl -sX GET "https://git.eden-emu.dev/api/v1/repos/eden-emu/eden/releases/latest" \
-      | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
-    [ -n "${EDEN_TAG}" ] || { echo "FATAL: EDEN_TAG vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/eden.AppImage \
-      "https://stable.eden-emu.dev/${EDEN_TAG}/Eden-Linux-${EDEN_TAG}-amd64-clang-pgo.AppImage" && \
-    chmod +x /tmp/eden.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./eden.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction eden.AppImage échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/eden || mv squashfs-root /opt/eden; } && \
-    printf '#!/bin/sh\ncd /opt/eden && exec ./AppRun "$@"\n' > /usr/local/bin/eden && \
-    chmod +x /usr/local/bin/eden && \
-    printf '[Desktop Entry]\nType=Application\nName=Eden\nExec=/usr/local/bin/eden\nIcon=/opt/eden/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
-      > /usr/share/applications/eden.desktop && \
-    rm -f /tmp/eden.AppImage
+# Eden (Nintendo Switch) — remplacé par le paquet AUR eden-nightly-bin
+# (voir plus haut, section AUR avec libva-nvidia-driver-git/ludusavi-bin) :
+# gardait ici un doublon de build "stable" téléchargé à la main depuis
+# stable.eden-emu.dev (audit 29/08) — deux entrées "Eden" dans le menu, deux
+# binaires potentiellement différents. Nightly seule conservée, plus simple
+# à tenir à jour (juste rebuild l'image) qu'un script curl+extraction ad hoc.
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
 RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
@@ -436,10 +675,35 @@ RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases
     install -Dm755 flips /usr/local/bin/flips && \
     rm -rf /tmp/flips.zip /tmp/flips
 
-# ── 1b. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
-# x11vnc lui-même sert du RFB brut (5901, interne) ; websockify (pip, absent
-# des dépôts Arch/CachyOS) le websocket-ifie pour noVNC — architecture
-# classique, x11vnc n'a pas le bug websocket natif de wayvnc.
+# ── 1b. evdev-bridge — injection input Wayland pour Sunshine (voir point 6
+# de l'historique en tête de fichier). Lit les périphériques uinput virtuels
+# de Sunshine (souris/clavier) en direct, indépendant d'udev, et les rejoue
+# via zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1 — QUE
+# labwc (wlroots) implémente, pas KWin, plus gamescope depuis sa bascule
+# vers libei. Source vendored dans ce dépôt (ex-projet Desarso/evdev-bridge,
+# pas de licence explicite — usage privé uniquement, jamais republié), déjà
+# utilisée telle quelle sur l'ancien Dockerfile webstation/labwc. Cible
+# maintenant le labwc HEADLESS dédié au streaming (voir svc-labwc-headless
+# et point 7 ci-dessus), pas le bureau XFCE visible.
+#
+# Piste gamescope-racine + libei explorée puis abandonnée le 30/08 (voir
+# point 7) : input fonctionnel, mais capture Sunshine impossible contre
+# gamescope quel que soit le mode (portail D-Bus absent, XDG_OUTPUT
+# manquant, EGL_BAD_ACCESS) — confirmé aussi par le projet Wolf (games-on-
+# whales), qui a abandonné gamescope pour la même raison. Bridge libei
+# retiré : code mort sans cible fonctionnelle.
+COPY evdev-bridge /tmp/evdev-bridge
+RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
+    install -Dm755 /tmp/evdev-bridge/evdev-bridge-native /usr/local/bin/evdev-bridge-native && \
+    rm -rf /tmp/evdev-bridge
+
+# ── 1c. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
+# wayvnc sert le RFB brut (5900, interne, voir svc-wayvnc) ; websockify (pip,
+# absent des dépôts Arch/CachyOS) fait le pont websocket->RFB pour un accès
+# navigateur direct sans client VNC, ET sert les fichiers statiques noVNC sur
+# le même port via --web (voir svc-websockify) — même montage que l'ancien
+# Dockerfile webstation/labwc, où wayvnc fonctionnait déjà (KWin n'était pas
+# encore dans l'équation à l'époque).
 RUN pip install --break-system-packages --no-cache-dir websockify
 
 RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
@@ -449,14 +713,8 @@ RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/
 
 # La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
 # (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
-# (l'utilisateur doit les saisir à la main dans le formulaire) — on redirige
-# en JS avec l'hôte déduit dynamiquement (window.location.hostname, pas
-# d'IP en dur) et le port websockify pour que l'URL de base se connecte
-# directement.
-# port=5900 retiré (audit 2026-08-26, fusion avec svc-websockify/svc-novnc-web
-# ci-dessous) : websockify sert désormais les fichiers noVNC et le pont
-# websocket sur le MÊME port (6080) — location.port réutilise donc simplement
-# le port sur lequel cette page a été chargée, plus besoin de le coder en dur.
+# — redirection en JS avec l'hôte déduit dynamiquement (window.location.hostname)
+# et le port websockify (même port que la page grâce à --web).
 RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
@@ -465,7 +723,7 @@ RUN printf '<script>location.replace("vnc.html?host=" + location.hostname + "&po
 # host. On réutilise l'approche .run (agnostique à la distro, déjà éprouvée
 # sur l'image webstation) : installée au runtime par un script d'init, pas ici
 # au build (le driver du host n'est pas connu à ce stade).
-COPY ArcadeBox/root-cachyos/usr/local/bin/install-nvidia-userspace.sh /usr/local/bin/install-nvidia-userspace.sh
+COPY root-cachyos/usr/local/bin/install-nvidia-userspace.sh /usr/local/bin/install-nvidia-userspace.sh
 RUN chmod +x /usr/local/bin/install-nvidia-userspace.sh
 
 # ── 2b. s6-overlay — vrai supervisor de conteneur (comme l'ancienne image
@@ -492,6 +750,17 @@ RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tm
     cp /tmp/gdu/src/*.rules /etc/udev/rules.d/ && \
     rm -rf /tmp/gdu
 
+# ── 3b. Règle udev anti-double-saisie clavier/souris (30/08) — evdev-bridge
+# ne fait pas d'EVIOCGRAB exclusif sur les périphériques uinput virtuels de
+# Sunshine, donc libinput (labwc) les lit EN PARALLÈLE via son propre
+# hotplug udev en temps réel (qui fonctionne, contrairement à
+# l'énumération initiale basée sur la base persistée cassée — voir point 6
+# de l'historique) : chaque touche/clic est donc traité deux fois. Cette
+# règle fait ignorer ces devices précis à libinput, laissant evdev-bridge
+# seul consommateur — testé nécessaire en direct (double saisie confirmée).
+RUN printf 'ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="*passthrough*", ENV{LIBINPUT_IGNORE_DEVICE}="1"\n' \
+      > /etc/udev/rules.d/99-sunshine-passthrough-no-libinput.rules
+
 # ── 4. Utilisateur non-root pour la session bureau ────────────────────────────
 ARG PUID=1000
 ARG PGID=1000
@@ -502,17 +771,33 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
     mkdir -p /home/arcade/.config/sunshine && \
     chown -R arcade:arcade /home/arcade
 
-RUN setcap 'cap_sys_nice+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
+# cap_sys_admin ajouté (29/08, pivot Wayland) : Sunshine tourne en arcade
+# (non-root) — avoir CAP_SYS_ADMIN dans le conteneur (docker-compose.cachyos.yml
+# cap_add) ne suffit pas, un process non-root ne l'a dans son set effectif
+# que si le binaire la porte en capacité fichier. Sans ça, confirmé en
+# direct : Sunshine échoue son accès KMS ("Failed to gain CAP_SYS_ADMIN"),
+# retombe sur le portail XDG/PipeWire, qui reste bloqué indéfiniment en
+# attente d'un consentement qu'il n'y a personne pour valider en headless —
+# le serveur web/streaming de Sunshine ne démarre jamais (aucun port
+# 47984-47990 en écoute), symptôme : "impossible de se connecter à Sunshine".
+RUN setcap 'cap_sys_nice+p cap_sys_admin+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
+
+# Rafraîchit la base des .desktop (/usr/share/applications) — au cas où le
+# menu XFCE (garcon) ne les reprendrait pas correctement sans ça, non
+# confirmé en direct mais coût nul.
+RUN update-desktop-database /usr/share/applications 2>/dev/null || true
 
 # ── 5. Scripts de démarrage ────────────────────────────────────────────────────
 # root-cachyos/etc/ apporte l'arborescence s6-rc.d (services) par-dessus les
 # fichiers déjà installés par s6-overlay lui-même (section 2b) — remplace
 # l'ancien entrypoint.sh (boucle bash artisanale) entièrement.
-COPY ArcadeBox/root-cachyos/etc/ /etc/
-COPY ArcadeBox/root-cachyos/scripts/ /usr/local/bin/scripts/
+COPY root-cachyos/etc/ /etc/
+COPY root-cachyos/scripts/ /usr/local/bin/scripts/
 RUN chmod +x /usr/local/bin/scripts/*.sh && \
-    find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \;
+    find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \; && \
+    ln -sf /usr/local/bin/scripts/steamos-session-select.sh /usr/bin/steamos-session-select && \
+    ln -sf /usr/local/bin/scripts/os-session-select.sh /usr/lib/os-session-select
 
 # Caches de shaders (DXVK/NVIDIA) HORS de /config — voir commentaire détaillé
 # dans Dockerfile.ubuntu (audit 2026-08-26) : /config est sur un partage
@@ -522,17 +807,23 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
 RUN mkdir -p /var/cache/arcadebox/dxvk /var/cache/arcadebox/nv-shader && \
     chmod -R 1777 /var/cache/arcadebox
 
+# GSK_RENDERER=cairo (fix GTK4 de l'ère X11) retiré : la cause identifiée
+# était le SHM X11 refusé par un client non-root (arcade) face à un Xorg
+# root — plus de root/Xorg du tout dans cette session Wayland (labwc tourne
+# entièrement en arcade via seatd, voir wayland-session.sh). À remettre si
+# un bug de rendu GTK4 identique resurgit ici, non revérifié en direct sous
+# Wayland.
 ENV XDG_RUNTIME_DIR=/run/user/1000 \
-    DISPLAY=:0 \
+    WAYLAND_DISPLAY=wayland-0 \
     SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
-    QT_QPA_PLATFORM=xcb \
-    SDL_VIDEODRIVER=x11 \
+    QT_QPA_PLATFORM=wayland \
+    SDL_VIDEODRIVER=wayland,x11 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
-    XDG_CURRENT_DESKTOP=KDE \
-    XDG_SESSION_TYPE=x11 \
-    KDE_SESSION_VERSION=6 \
-    GSK_RENDERER=cairo \
+    XDG_CURRENT_DESKTOP=XFCE \
+    XDG_SESSION_TYPE=wayland \
+    LIBVA_DRIVER_NAME=nvidia \
+    NVD_BACKEND=direct \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \

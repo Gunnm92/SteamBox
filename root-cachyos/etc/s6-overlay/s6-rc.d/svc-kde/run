@@ -1,8 +1,0 @@
-#!/command/with-contenv bash
-# Session KDE Plasma en X11 réel (Xorg + driver NVIDIA). Tourne en ROOT :
-# Xorg.wrap refuse de démarrer le serveur X pour un utilisateur non-root
-# sans session console/logind ("Only console users are allowed to run the
-# X server") — confirmé en direct, arcade n'a jamais de session logind ici
-# (pas de systemd). Le script lui-même bascule vers arcade (via runuser)
-# pour tout le reste (thème, kwin_x11, plasmashell) une fois Xorg démarré.
-exec /usr/local/bin/scripts/x11-session.sh

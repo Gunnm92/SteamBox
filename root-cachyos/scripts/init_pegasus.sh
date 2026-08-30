@@ -21,7 +21,7 @@ RA="retroarch -L"
 # Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
 # d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
 # root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre
-# session KDE/wine tourne en tant qu'"arcade" (non-root) — squashfuse monte le
+# session bureau/wine tourne en tant qu'"arcade" (non-root) — squashfuse monte le
 # paquet en préservant ces UID/permissions d'origine, donc "arcade" se voit
 # refuser la lecture (confirmé en direct : erreurs "Permission denied" sur
 # autorun.cmd, jeu qui ne démarre pas). Confirmé aussi que les fichiers ne
