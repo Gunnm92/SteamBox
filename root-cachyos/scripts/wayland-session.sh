@@ -144,6 +144,21 @@ xfconf-query -c xsettings -p /Net/ThemeName -n -t string -s "Mc-OS-CTLina-XFCE-D
 xfconf-query -c xsettings -p /Net/IconThemeName -n -t string -s "Papirus-Dark" 2>/dev/null || true
 xfconf-query -c xsettings -p /Gtk/FontName -n -t string -s "Cantarell 10" 2>/dev/null || true
 
+# xfdesktop (30/08) : jamais lancé jusque-là — sans lui, aucun fond
+# décran/bureau nest géré du tout (canal xfconf xfce4-desktop vide,
+# confirmé en direct), do l impression de bureau "nu" malgré thème/icônes/
+# police correctement réglés par ailleurs. monitorHDMI-A-1 codé en dur
+# (nom de connecteur réel, cohérent avec le reste du projet) : le dialogue
+# graphique "Réglages du bureau" écrit lui sur "monitorUnknown" (mauvaise
+# détection de sortie sous Wayland, confirmé en direct) — un changement fait
+# depuis ce dialogue nest donc JAMAIS repris par le xfdesktop réellement
+# affiché tant quon ne le recopie pas à la main sur cette clé precise.
+xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorHDMI-A-1/workspace0/last-image \
+    -n -t string -s "/usr/share/backgrounds/xfce/xfce-cp-dark.svg" 2>/dev/null || true
+xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorHDMI-A-1/workspace0/image-style \
+    -n -t int -s 5 2>/dev/null || true
+xfdesktop &
+
 xfce4-panel &
 nm-applet &
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &

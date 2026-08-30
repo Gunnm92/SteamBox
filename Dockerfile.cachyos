@@ -152,7 +152,7 @@ RUN pacman -Syyu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
-      labwc xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
+      labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
       network-manager-applet polkit-gnome \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
@@ -340,6 +340,18 @@ RUN update-mime-database /usr/share/mime
 # /usr/bin dans le PATH.
 RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
+
+# ── 1a3d. xfdesktop-settings forcé sur Xwayland (30/08) — sous labwc/
+# Wayland natif, sa détection de sortie échoue et il écrit ses réglages
+# (fond d'écran) sur "monitorUnknown" au lieu du vrai connecteur
+# "monitorHDMI-A-1" que le xfdesktop réellement affiché lit — un changement
+# fait depuis le dialogue (clic droit bureau > Réglages du bureau) restait
+# donc sans aucun effet visible, confirmé en direct. Forcer GDK_BACKEND=x11
+# fait passer sa détection de sortie par XRandR (Xwayland), qui remonte le
+# vrai nom de connecteur — écrit alors correctement sur monitorHDMI-A-1.
+RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 DISPLAY=:0 /usr/sbin/xfdesktop-settings "$@"\n' \
+      > /usr/local/bin/xfdesktop-settings && \
+    chmod +x /usr/local/bin/xfdesktop-settings
 
 # ── 1a6. DXVK — injecte les DLL dans les préfixes Wine (dxvk-mingw-git ne le
 # fait pas tout seul, contrairement à un vrai paquet dxvk-bin ; setup.sh doit
@@ -787,6 +799,14 @@ RUN setcap 'cap_sys_nice+p cap_sys_admin+p' "$(readlink -f /usr/bin/sunshine)" 2
 # menu XFCE (garcon) ne les reprendrait pas correctement sans ça, non
 # confirmé en direct mais coût nul.
 RUN update-desktop-database /usr/share/applications 2>/dev/null || true
+
+# Papirus/Papirus-Dark livrés sans icon-theme.cache (30/08, warning constaté
+# en direct) — contrairement à hicolor/Adwaita qui l'ont déjà. Sans ce
+# fichier, GTK doit re-scanner le thème à chaque lookup d'icône au lieu de
+# lire l'index précompilé — coût de performance, pas de cassure fonctionnelle,
+# mais gtk-update-icon-cache est quasi gratuit au build.
+RUN gtk-update-icon-cache -f /usr/share/icons/Papirus 2>/dev/null || true && \
+    gtk-update-icon-cache -f /usr/share/icons/Papirus-Dark 2>/dev/null || true
 
 # ── 5. Scripts de démarrage ────────────────────────────────────────────────────
 # root-cachyos/etc/ apporte l'arborescence s6-rc.d (services) par-dessus les
