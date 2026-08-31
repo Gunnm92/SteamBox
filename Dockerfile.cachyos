@@ -279,13 +279,15 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 # buildées à la main juste avant dans build-aur.sh. Runtime deps du PKGBUILD
 # (python-aiohttp/-watchdog/-certifi/-packaging/-multidict/-setproctitle,
 # python-jinja) ajoutées aux paquets normaux ci-dessous ; nodejs/npm/pnpm/
-# python-poetry/-build/-installer/-wheel sont des makedepends pures
-# (frontend JS + empaquetage wheel), supprimées après coup comme meson/
-# ninja. python-setuptools gardé malgré tout : trop de code Python
-# existant (pip, autres paquets déjà installés) importe pkg_resources au
-# runtime, pas seulement à l'installation — retirer ce paquet casserait
-# potentiellement des choses sans rapport avec decky-loader. Le PKGBUILD
-# upstream installe un service systemd
+# python-poetry/-build/-installer sont des makedepends pures (frontend JS +
+# empaquetage wheel), supprimées après coup comme meson/ninja.
+# python-setuptools ET python-wheel gardés malgré tout : setuptools parce
+# que trop de code Python existant importe pkg_resources au runtime, pas
+# seulement à l'installation ; wheel parce que c'est une dépendance DURE de
+# python-pip et python-setuptools déjà présents dans l'image de base —
+# tenter de le retirer casse la transaction pacman entière (confirmé en
+# échec de build le 31/08 : "removing python-wheel breaks dependency...").
+# Le PKGBUILD upstream installe un service systemd
 # (decky-loader@.service, tourne en root) — inerte sous s6 (PID 1 = s6-
 # svscan, pas systemd, même piège que logind déjà documenté sur ce projet) :
 # équivalent réécrit à la main en service s6, voir root-cachyos/etc/s6-
@@ -368,7 +370,7 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py 
     rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin \
            /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/decky-loader && \
     pacman -Rns --noconfirm meson ninja nodejs npm pnpm python-poetry \
-      python-build python-installer python-wheel && \
+      python-build python-installer && \
     pacman -Scc --noconfirm
 
 # DISPLAY=:0 sur Ludusavi et Dolphin (audit menu XFCE, 31/08) — même bug que
