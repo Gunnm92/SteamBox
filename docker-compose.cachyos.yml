@@ -30,6 +30,18 @@ services:
     device_cgroup_rules:
       - 'c 13:* rmw'                       # /dev/input/*
       - 'c 226:* rmw'                      # /dev/dri/*
+      - 'c 242:* rmw'                      # /dev/hidraw* — Steam Input a besoin du HID
+                                            # brut pour les manettes PlayStation (tactile/
+                                            # gyro/vibration, et apparemment les boutons de
+                                            # base aussi dans son cas) ; sans cette règle le
+                                            # noyau crée bien /sys/class/hidraw/hidrawN pour
+                                            # le pad virtuel Sunshine mais udevd, à l'intérieur
+                                            # du conteneur, ne peut pas matérialiser le noeud
+                                            # /dev/hidrawN correspondant — confirmé en direct
+                                            # le 31/08 (DualShock 5 détectée par Sunshine,
+                                            # aucun bouton reçu par Steam). Xbox fonctionne
+                                            # sans cette règle car son chemin evdev seul
+                                            # (déjà couvert par la règle major 13) suffit.
     # GID hôte propriétaire de /dev/uinput et /dev/input/* — présent sur le
     # compose prod (docker-compose.yml) mais jamais porté ici (audit
     # 2026-08-26), voir commentaire équivalent dans docker-compose.ubuntu.yml.
