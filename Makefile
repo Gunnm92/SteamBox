@@ -18,10 +18,10 @@ endif
 
 # Seul Dockerfile restant depuis le pivot Waybox -> SteamBox (Dockerfile et
 # Dockerfile.ubuntu supprimés — plus de variante webstation/Debian ni
-# Ubuntu, uniquement CachyOS/Arch + KDE Plasma Wayland).
-# Contexte "." (pas ".." comme avant le renommage ArcadeBox -> Waybox) :
-# les COPY du Dockerfile sont désormais relatifs à la racine de ce dépôt
-# lui-même, plus besoin d'un dossier parent nommé "ArcadeBox".
+# Ubuntu, uniquement CachyOS/Arch + labwc/XFCE Wayland).
+# Contexte "." : les COPY du Dockerfile sont relatifs à la racine de ce
+# dépôt. Le contexte est filtré par Dockerfile.cachyos.dockerignore
+# (nommage par-Dockerfile requis par BuildKit — audit 31/08).
 build:
 	$(BUILDX) $(BUILD_ARGS) \
 		--file Dockerfile.cachyos \

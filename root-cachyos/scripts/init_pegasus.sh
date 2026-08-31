@@ -1,5 +1,5 @@
 #!/bin/bash
-# ArcadeBox — Génération automatique des métadonnées Pegasus Frontend.
+# SteamBox — Génération automatique des métadonnées Pegasus Frontend.
 # Crée un metadata.pegasus.txt dans chaque dossier système de /userdata/roms/
 # et met à jour game_dirs.txt pour que Pegasus scanne les bons répertoires.
 #

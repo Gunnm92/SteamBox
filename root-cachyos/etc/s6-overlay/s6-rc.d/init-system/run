@@ -90,7 +90,7 @@ chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* /dev/input/even
 # Sunshine devices...". On crée le groupe nous-mêmes si absent, plutôt que
 # d'espérer qu'il soit déjà là.
 if ! getent group 71 >/dev/null 2>&1; then
-    groupadd -g 71 waybox-input 2>/dev/null || true
+    groupadd -g 71 steambox-input 2>/dev/null || true
 fi
 if getent group 71 >/dev/null 2>&1; then
     HOSTINPUT_GROUP="$(getent group 71 | cut -d: -f1)"

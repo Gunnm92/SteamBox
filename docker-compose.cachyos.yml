@@ -1,11 +1,17 @@
+# Compose de référence/développement SteamBox — le déploiement RÉEL passe par
+# un template Unraid (voir docs/deploiement-unraid.md, source de vérité,
+# extrait du conteneur en production le 31/08). Ce fichier est maintenu
+# aligné sur ce template : toute divergence constatée doit être résolue dans
+# LES DEUX (audit C3, 31/08 — la règle cgroup 226 avait déjà silencieusement
+# disparu du template pendant un ajout manuel).
 services:
-  arcadebox-cachyos:
+  steambox:
     build:
-      context: ..
-      dockerfile: ArcadeBox/Dockerfile.cachyos
-    image: arcadebox-cachyos:latest
-    container_name: arcadebox-cachyos
-    hostname: ArcadeBox-CachyOS
+      context: .
+      dockerfile: Dockerfile.cachyos
+    image: registry.elfenn.eu/steambox:latest
+    container_name: SteamBox
+    hostname: SteamBox
     runtime: nvidia
     environment:
       - PUID=99
@@ -14,22 +20,35 @@ services:
       - NVIDIA_VISIBLE_DEVICES=GPU-993ff90a-304b-da13-1287-c533c1073ab4
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
-      # Dossier SÉPARÉ de l'appdata ArcadeBox actuel — structure de fichiers
-      # incompatible (utilisateur arcade vs abc, pas de .XDG, chemins Steam/
-      # Sunshine différents). Ne jamais pointer vers /mnt/user/appdata/arcadebox.
-      - ./config-cachyos:/config
-      - ./userdata:/userdata               # ROMs, BIOS, saves — layout Batocera partagé, lecture seule prudente au départ
+      # Dossier SÉPARÉ de l'appdata ArcadeBox historique — structure de
+      # fichiers incompatible (utilisateur arcade vs abc, pas de .XDG,
+      # chemins Steam/Sunshine différents). Ne jamais pointer vers
+      # /mnt/user/appdata/arcadebox.
+      - /mnt/user/appdata/steambox:/config
+      - /mnt/user/Game/Batocera:/userdata   # ROMs, BIOS, saves — layout Batocera partagé
+      - /mnt/user/Game:/config/games        # bibliothèque de jeux complète (Steam, Epic, wsquashfs)
+      - /mnt/user/Download:/config/Downloads
+      # Bind du RÉPERTOIRE /dev/input entier (pas device par device) : les
+      # périphériques uinput que Sunshine crée à chaque connexion Moonlight
+      # apparaissent alors dynamiquement dans le conteneur. hidraw n'a pas
+      # d'équivalent — d'où la règle udev mknod du dépôt (voir
+      # 99-steambox-hidraw-fallback.rules) + la règle cgroup 242 ci-dessous.
+      - /dev/input:/dev/input
     network_mode: host                     # requis pour seatd/udev et la découverte LAN Sunshine
     devices:
-      - /dev/dri:/dev/dri
+      - /dev/fuse:/dev/fuse                # wsquashfs-launcher (squashfuse/fuse-overlayfs)
       - /dev/uinput:/dev/uinput
       - /dev/uhid:/dev/uhid                # requis par libvirtualhid (Sunshine) pour l'émulation
                                             # complète des manettes (vibrations/force-feedback) —
                                             # /dev/uinput seul ne suffit pas, cf. gamepad_profiles
                                             # dans virtualhid_input.cpp (LizardByte/Sunshine)
+      # /dev/dri volontairement absent : injecté par le runtime nvidia
+      # (NVIDIA_VISIBLE_DEVICES ci-dessus) — parité avec le template Unraid.
     device_cgroup_rules:
       - 'c 13:* rmw'                       # /dev/input/*
-      - 'c 226:* rmw'                      # /dev/dri/*
+      - 'c 226:* rmw'                      # /dev/dri/* — redondant avec le runtime nvidia mais
+                                            # gardé explicite : c'est cette règle qui a disparu
+                                            # du template Unraid sans que rien ne le signale
       - 'c 242:* rmw'                      # /dev/hidraw* — Steam Input a besoin du HID
                                             # brut pour les manettes PlayStation (tactile/
                                             # gyro/vibration, et apparemment les boutons de
@@ -42,9 +61,10 @@ services:
                                             # aucun bouton reçu par Steam). Xbox fonctionne
                                             # sans cette règle car son chemin evdev seul
                                             # (déjà couvert par la règle major 13) suffit.
-    # GID hôte propriétaire de /dev/uinput et /dev/input/* — présent sur le
-    # compose prod (docker-compose.yml) mais jamais porté ici (audit
-    # 2026-08-26), voir commentaire équivalent dans docker-compose.ubuntu.yml.
+    # GID hôte propriétaire de /dev/uinput et /dev/input/* — init-system/run
+    # crée l'entrée /etc/group correspondante au démarrage (les outils de
+    # changement d'utilisateur recalculent les groupes depuis /etc/group et
+    # ignorent un GID brut injecté par --group-add seul).
     group_add:
       - "71"
     ipc: host                              # parité avec l'IpcMode host de la prod (audit 2026-08-26)

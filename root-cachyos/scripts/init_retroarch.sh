@@ -1,5 +1,5 @@
 #!/bin/bash
-# ArcadeBox — Corrige des réglages RetroArch par défaut incompatibles avec
+# SteamBox — Corrige des réglages RetroArch par défaut incompatibles avec
 # ce conteneur (confirmés en direct sur la prod).
 set -e
 

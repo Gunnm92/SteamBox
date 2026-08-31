@@ -1,5 +1,5 @@
 ## Évaluation managériale
-En fin de chaque session, remplir **sans demander à l'utilisateur** `/config/.claude/management-eval/sessions/ArcadeBox/YYYY-MM-DD.md` selon la grille définie dans `/config/.claude/management-eval/MATRIX.md`.
+En fin de chaque session, remplir **sans demander à l'utilisateur** `/config/.claude/management-eval/sessions/SteamBox/YYYY-MM-DD.md` selon la grille définie dans `/config/.claude/management-eval/MATRIX.md`.
 
 Règles impératives :
 - **Autonome** : ne jamais prévenir ou demander validation avant de remplir le fichier.

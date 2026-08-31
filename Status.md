@@ -1,3 +1,9 @@
+# Compatibilité wsquashfs — jeux Windows (batch de test du 2026-08)
+# Résultats de lancement via wsquashfs-launcher/Wine sur SteamBox.
+# Statuts : OK = démarre et s'affiche · D3D_ERR = erreur Direct3D au
+# lancement · DLL_MISSING = dépendance absente (chemin indiqué) ·
+# SCRIPT_ERR = erreur du launcher.
+
 OK | Action Henk
 D3D_ERR | Akai Katana Shin
 OK | Blade Arcus From Shining

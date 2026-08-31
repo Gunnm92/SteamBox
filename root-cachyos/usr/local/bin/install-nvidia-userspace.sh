@@ -1,5 +1,5 @@
 #!/bin/bash
-# ArcadeBox (CachyOS) — Installation driver NVIDIA userspace, matché à la
+# SteamBox (CachyOS) — Installation driver NVIDIA userspace, matché à la
 # version du host. Adapté de custom-cont-init.d/10-nvidia.sh (image webstation) :
 # même approche .run agnostique à la distro, mais paquet nvidia-utils Arch
 # absent (on ne connaît pas la version du host au moment du build), donc
