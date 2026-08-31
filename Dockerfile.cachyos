@@ -270,9 +270,33 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 # comportement de l'ancien install manuel retiré plus haut : pas de FUSE
 # requis au runtime, et des raccourcis/scripts existants pointent sur ce
 # chemin /opt/eden précis.
+# decky-loader (31/08, demande utilisateur) — chargeur de plugins Steam Deck
+# (SteamDeckHomebrew/decky-loader), packagé AUR sous forme source (pas de
+# variante -bin) : build un frontend React/TS via pnpm + un wheel Python via
+# poetry. Deux dépendances du PKGBUILD (python-aiohttp-jinja2, python-aiohttp-
+# cors) sont elles-mêmes AUR-only — makepkg -si seul (pas d'AUR helper avec
+# résolution récursive ici) ne les installerait jamais automatiquement,
+# buildées à la main juste avant dans build-aur.sh. Runtime deps du PKGBUILD
+# (python-aiohttp/-watchdog/-certifi/-packaging/-multidict/-setproctitle,
+# python-jinja) ajoutées aux paquets normaux ci-dessous ; nodejs/npm/pnpm/
+# python-poetry/-build/-installer/-wheel sont des makedepends pures
+# (frontend JS + empaquetage wheel), supprimées après coup comme meson/
+# ninja. python-setuptools gardé malgré tout : trop de code Python
+# existant (pip, autres paquets déjà installés) importe pkg_resources au
+# runtime, pas seulement à l'installation — retirer ce paquet casserait
+# potentiellement des choses sans rapport avec decky-loader. Le PKGBUILD
+# upstream installe un service systemd
+# (decky-loader@.service, tourne en root) — inerte sous s6 (PID 1 = s6-
+# svscan, pas systemd, même piège que logind déjà documenté sur ce projet) :
+# équivalent réécrit à la main en service s6, voir root-cachyos/etc/s6-
+# overlay/s6-rc.d/svc-decky-loader.
 RUN pacman -S --noconfirm --needed \
       meson ninja libva ffnvcodec-headers \
-      bzip2 gtk3 hicolor-icon-theme libgcc && \
+      bzip2 gtk3 hicolor-icon-theme libgcc \
+      python python-aiohttp python-watchdog python-certifi python-packaging \
+      python-multidict python-setproctitle python-jinja \
+      nodejs npm pnpm python-poetry \
+      python-build python-installer python-setuptools python-wheel && \
     useradd -m -s /bin/bash aur-builder && \
     echo 'aur-builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aur-builder
 
@@ -319,6 +343,21 @@ git clone --depth 1 https://aur.archlinux.org/eden-nightly-bin.git
 python3 /tmp/patch-eden-pkgbuild.py
 cd eden-nightly-bin
 makepkg -si --noconfirm --needed
+
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/python-aiohttp-jinja2.git
+cd python-aiohttp-jinja2
+makepkg -si --noconfirm --needed
+
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/python-aiohttp-cors.git
+cd python-aiohttp-cors
+makepkg -si --noconfirm --needed
+
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/decky-loader.git
+cd decky-loader
+makepkg -si --noconfirm --needed
 BUILD_AUR_EOF
 
 RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
@@ -326,8 +365,10 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py 
     su aur-builder -c /tmp/build-aur.sh && \
     rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
     userdel -r aur-builder && \
-    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin && \
-    pacman -Rns --noconfirm meson ninja && \
+    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin \
+           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/decky-loader && \
+    pacman -Rns --noconfirm meson ninja nodejs npm pnpm python-poetry \
+      python-build python-installer python-wheel && \
     pacman -Scc --noconfirm
 
 # DISPLAY=:0 sur Ludusavi et Dolphin (audit menu XFCE, 31/08) — même bug que
@@ -942,7 +983,7 @@ VOLUME /config
 # network_mode: host, cette directive n'a donc aucun effet — gardée comme
 # inventaire des ports réellement utilisés : 6080 noVNC, 47984/47989/47990
 # Sunshine (HTTPS/HTTP/Web UI), 47998-48000/udp flux vidéo/audio/contrôle,
-# 48010 RTSP.
-EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010
+# 48010 RTSP, 1337 interface web decky-loader (gestion des plugins).
+EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010 1337
 
 ENTRYPOINT ["/init"]

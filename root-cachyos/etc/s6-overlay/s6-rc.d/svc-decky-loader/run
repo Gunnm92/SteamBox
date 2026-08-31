@@ -1,0 +1,38 @@
+#!/command/with-contenv bash
+# decky-loader (31/08, demande utilisateur) — équivalent écrit à la main du
+# service systemd que fournit le paquet AUR (decky-loader@.service, inerte
+# sous s6 : PID 1 = s6-svscan, pas systemd, même piège que logind déjà
+# documenté sur ce projet). Reprend exactement les deux étapes du
+# decky-loader-helper systemd d'origine (voir PKGBUILD AUR) :
+#   1. crée ~/.local/var/opt/decky-loader/plugins, appartenant à arcade
+#   2. active le debug distant CEF de Steam via le fichier flag que Steam
+#      lit à SON démarrage (.cef-enable-remote-debugging) — decky s'y
+#      connecte pour injecter son interface dans la Big Picture UI. Simple
+#      fichier vide à créer une fois ; aucun ordre strict requis avec Steam
+#      (jamais autostart dans ce projet, lancé manuellement — voir
+#      steam-gamescope-launch.sh), le flag est déjà là au prochain lancement.
+# User=root dans l'unit systemd d'origine : reproduit ici (pas de
+# s6-setuidgid/runuser vers arcade, contrairement à sunshine/wayvnc/etc.) —
+# decky-loader gère l'installation de plugins tiers, ce qui dépasse souvent
+# les permissions du dossier /home/arcade/.local/var/opt/decky-loader seul.
+DECKY_HOME="/home/arcade"
+DECKY_VAR_DATA="${DECKY_HOME}/.local/var/opt/decky-loader"
+
+install -d -o arcade -g arcade "${DECKY_VAR_DATA}/plugins"
+
+STEAM_DEBUGGING_FILE="${DECKY_HOME}/.steam/steam/.cef-enable-remote-debugging"
+if [ ! -f "${STEAM_DEBUGGING_FILE}" ]; then
+    install -d -o arcade -g arcade "$(dirname "${STEAM_DEBUGGING_FILE}")"
+    touch "${STEAM_DEBUGGING_FILE}"
+    chown arcade:arcade "${STEAM_DEBUGGING_FILE}"
+fi
+
+# WorkingDirectory=${HOMEBREW_FOLDER} dans l'unit systemd d'origine.
+cd "${DECKY_VAR_DATA}" || exit 1
+
+exec env \
+    UNPRIVILEGED_PATH="${DECKY_VAR_DATA}" \
+    PRIVILEGED_PATH="${DECKY_VAR_DATA}" \
+    LOG_LEVEL=INFO \
+    HOME="${DECKY_HOME}" \
+    /usr/bin/decky-loader
