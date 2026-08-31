@@ -330,6 +330,20 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py 
     pacman -Rns --noconfirm meson ninja && \
     pacman -Scc --noconfirm
 
+# DISPLAY=:0 sur Ludusavi et Dolphin (audit menu XFCE, 31/08) — même bug que
+# Chrome/Pegasus/Xenia : la session labwc unset DISPLAY globalement, ces deux
+# apps en ont besoin pour s'initialiser (Ludusavi : "neither WAYLAND_DISPLAY
+# nor WAYLAND_SOCKET nor DISPLAY is set", winit ne fait pas de repli
+# implicite contrairement à un client Wayland natif ; Dolphin : plante
+# silencieusement, "Aborted" sans autre message, résolu avec DISPLAY+
+# WAYLAND_DISPLAY). Patché sur le .desktop déjà installé (paquet AUR/pacman,
+# pas généré par ce Dockerfile) plutôt que réécrit, pour garder le reste du
+# fichier upstream (icône, catégories, MimeType...) intact.
+RUN sed -i 's|^Exec=ludusavi|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 ludusavi|' \
+      /usr/share/applications/com.mtkennerly.ludusavi.desktop && \
+    sed -i 's|^Exec=dolphin-emu|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 dolphin-emu|' \
+      /usr/share/applications/dolphin-emu.desktop
+
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
 # connectivité réelle est bonne (observé : ses propres tests de connectivité
@@ -484,7 +498,7 @@ RUN SRM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"
     chmod -R a+rX /opt/steam-rom-manager && \
     printf '#!/bin/sh\nexport APPDIR=/opt/steam-rom-manager\nexec /opt/steam-rom-manager/AppRun "$@"\n' \
       > /usr/local/bin/steam-rom-manager && chmod +x /usr/local/bin/steam-rom-manager && \
-    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=env DISPLAY=:0 /usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-rom-manager.desktop && \
     rm -rf /tmp/srm.AppImage /tmp/squashfs-root
 
@@ -566,6 +580,13 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # symboliques — lancé via un ln -sf sous /usr/local/bin, dirname donne
 # /usr/local/bin au lieu de /opt/X, et le script part chercher ses hooks/
 # libs au mauvais endroit ("No such file", "No desktop file found").
+# env DISPLAY=:0 sur Cemu et Steam ROM Manager (audit menu XFCE 31/08,
+# second passage) : au-delà du bug AppRun ci-dessus, ces deux-là ont aussi
+# besoin d'un serveur X — Cemu via le hook linuxdeploy-plugin-gtk.sh sourcé
+# par son AppRun ("Unable to initialize GTK+"), SRM via son Electron/ozone
+# ("Missing X server or $DISPLAY", segfault ensuite) — même bug que Chrome/
+# Pegasus/Xenia, la session labwc unset DISPLAY globalement.
+#
 # Confirmé en direct dans le conteneur : PCSX2/DuckStation/Xemu n'ont pas ce
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
 # script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
@@ -580,7 +601,7 @@ RUN CEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}
     mv squashfs-root /opt/cemu && \
     printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
     chmod +x /usr/local/bin/cemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=env DISPLAY=:0 /usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
