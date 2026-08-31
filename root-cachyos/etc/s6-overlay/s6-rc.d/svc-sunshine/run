@@ -37,10 +37,12 @@ done
 # Wayland) : sans lui, "XOpenDisplay failed" puis un dialogue d'erreur
 # zenity qui bloque le lancement complet de gamepadui — confirmé en direct.
 # :1 plutôt que :0 : le bureau XFCE (svc-labwc, wayland-0) démarre TOUJOURS
-# avant ce service headless (svc-labwc-headless attend wayland-0 avant de se
-# lancer, voir son run) et prend systématiquement :0 pour son propre
-# Xwayland — ce service-ci est donc toujours le second, :1 est fiable tant
-# qu'aucune troisième session Xwayland ne s'intercale.
+# avant ce service headless — garanti depuis l'audit C1 du 31/08 :
+# svc-labwc-headless refuse désormais de démarrer (exit 1, s6 relance)
+# tant que wayland-0 n'existe pas, au lieu de continuer après timeout et
+# de risquer de voler wayland-0/:0 au bureau (inversion des rôles vécue
+# en direct le 31/08). Ce service-ci est donc toujours le second, :1 est
+# fiable tant qu'aucune troisième session Xwayland ne s'intercale.
 exec s6-setuidgid arcade \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY=:1 \
     sunshine /config/.config/sunshine/sunshine.conf

@@ -1,0 +1,9 @@
+# Ignore par-Dockerfile (BuildKit) : doit s'appeler <nom-du-Dockerfile>.dockerignore
+# pour s'appliquer — l'ancien "Dockerfile.dockerignore" ne matchait que le
+# Dockerfile nu et n'a donc JAMAIS été appliqué (audit 31/08) : tout le dépôt,
+# .git compris, partait au builder à chaque build. On exclut tout et on ne
+# réintègre que ce que Dockerfile.cachyos COPY réellement.
+*
+!root-cachyos/
+!evdev-bridge/
+!Mc-OS-CTLina-XFCE-Dark.tar.xz

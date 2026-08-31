@@ -40,6 +40,21 @@ while [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "${TIMEOUT}" -gt 0 ]; do
     TIMEOUT=$((TIMEOUT - 1))
 done
 
+# Échec FRANC si wayland-0 n'existe toujours pas (audit C1, 31/08) : la
+# version précédente démarrait quand même après le timeout — si le bureau
+# visible tardait (crash-loop, seatd pas prêt), CE compositeur headless
+# créait alors wayland-0 à sa place et le bureau récupérait wayland-1,
+# inversant les rôles pour wayvnc/Sunshine/evdev-bridge qui codent ces
+# noms en dur (vécu en direct le 31/08 : bureau capturé par Moonlight,
+# flux headless sur le VNC). exit 1 + s6 qui relance ce service jusqu'à
+# ce que le bureau soit réellement up : l'invariant "headless = wayland-1"
+# ne peut plus être violé, quel que soit l'ordre réel de démarrage.
+if [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+    echo "[labwc-headless] wayland-0 absent après 15s — refus de démarrer" \
+         "(sinon ce compositeur volerait wayland-0 au bureau), s6 va relancer."
+    exit 1
+fi
+
 exec runuser -u arcade -- \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
         LIBSEAT_BACKEND=noop WLR_BACKENDS=headless \
