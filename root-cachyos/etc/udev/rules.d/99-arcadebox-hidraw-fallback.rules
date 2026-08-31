@@ -23,6 +23,23 @@
 # et hidraw4 restait crw-rw---- root:root — inaccessible à arcade, casse le
 # rumble et la détection HIDAPI (SDL2) même une fois le node bien créé.
 # Même pattern KERNELS que sony-gdu.rules plus haut dans ce dossier.
+#
+# RUN+= mknod explicite (31/08) : au-delà du problème de permissions
+# ci-dessus, le noeud /dev/hidrawN lui-même n'était JAMAIS matérialisé ici,
+# alors que /dev/input/eventN l'est correctement pour le même device
+# virtuel. udevd traite bien l'uevent (entrée complète en base udev,
+# confirmée via `udevadm info`/`udevadm test`), mais ne crée jamais le
+# fichier — cohérent avec le modèle devtmpfs moderne où udevd ne mknod
+# QUE si le noeud n'existe pas déjà créé par le noyau ; dans ce conteneur
+# /dev n'est visiblement pas un devtmpfs qui reçoit les nouveaux devices
+# uhid en direct pour la classe hidraw (contrairement à /dev/input, dont
+# le chemin est explicitement partagé). Confirmé en direct : la manette
+# DualShock 5 était détectée par Sunshine (event node input OK) mais
+# aucun bouton ne remontait dans Steam tant que /dev/hidrawN nexistait
+# pas — un mknod manuel suffisait à corriger immédiatement, HIDAPI/SDL2
+# détecte alors le controller normalement. RUN+= mknod ici pour ne plus
+# dépendre du comportement devtmpfs et rendre ce filet de secours complet.
+ACTION=="add", SUBSYSTEM=="hidraw", KERNELS=="*054C:*", TEST!="/dev/%k", RUN+="/usr/bin/sh -c 'mknod -m 0660 /dev/%k c $env{MAJOR} $env{MINOR} && chgrp input /dev/%k'"
 ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="*054C:*", MODE="0660", GROUP="input"
 ACTION!="remove", SUBSYSTEM=="input", ATTRS{name}=="Sunshine*", MODE="0660", GROUP="input"
 ACTION!="remove", KERNEL=="uhid", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
