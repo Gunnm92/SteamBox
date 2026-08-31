@@ -52,12 +52,12 @@ encoder = nvenc
 min_log_level = info
 EOF
 fi
-# NOTE : ce bloc n'écrit sunshine.conf que s'il est absent — sur un /config
-# déjà provisionné (prod existante), les clés ci-dessus ne sont PAS ajoutées
-# rétroactivement. Pour les appliquer à une install existante : ajouter les
-# deux lignes à la main dans /config/.config/sunshine/sunshine.conf, ou
-# supprimer ce fichier pour le laisser être régénéré (perd la config
-# personnalisée éventuelle : PIN, résolutions, apps.json custom...).
+# NOTE : ce bloc n'écrit sunshine.conf que s'il est absent. Depuis l'audit
+# M2 (31/08), la section "Migration des configs persistées" en fin de script
+# rattrape les installs existantes : clés manquantes ajoutées (jamais
+# écrasées si personnalisées), prep-cmd injectés dans apps.json — versionné
+# via ${CONF_DIR}/.config-version. Toute évolution future de ces fichiers
+# doit passer par une nouvelle étape de migration là-bas, pas seulement ici.
 
 if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
@@ -101,5 +101,51 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
 }
 EOF
 fi
+
+# ── Migration des configs persistées (audit M2, 31/08) ─────────────────────
+# Les blocs ci-dessus n'écrivent sunshine.conf/apps.json que s'ils sont
+# ABSENTS : un /config déjà provisionné ne recevait jamais les évolutions du
+# dépôt. Deux incidents réels : prep-cmd de résolution absents du apps.json
+# live (flux Moonlight figé en 1280x720, vécu le 31/08), et clés
+# sunshine.conf jamais rétro-appliquées (voir NOTE historique plus haut).
+# Mécanisme : un marqueur de version dans CONF_DIR, et des migrations
+# idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
+# jamais ce que l'utilisateur a personnalisé.
+VERSION_FILE="${CONF_DIR}/.config-version"
+CURRENT_VERSION=2
+INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
+
+if [ "${INSTALLED_VERSION}" -lt 2 ]; then
+    # v1 -> v2 : prep-cmd set-resolution/reset-resolution sur chaque app de
+    # apps.json qui n'en a pas (résolution dynamique pilotée par le client
+    # Moonlight, voir scripts/set-resolution.sh). jq préserve tout le reste
+    # de chaque entrée (commandes detached personnalisées incluses).
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        if jq -e '.apps[] | select(has("prep-cmd") | not)' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v2"
+            jq '{env, apps: [.apps[] | if has("prep-cmd") then . else . + {"prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]} end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v2 : prep-cmd ajoutés à apps.json (sauvegarde .bak-migration-v2)"
+        fi
+    fi
+    # v1 -> v2 : clés sunshine.conf ajoutées depuis, appliquées seulement si
+    # absentes (une valeur personnalisée existante n'est jamais écrasée).
+    if [ -f "${CONF_DIR}/sunshine.conf" ]; then
+        while IFS='=' read -r key value; do
+            grep -q "^${key} =" "${CONF_DIR}/sunshine.conf" || {
+                echo "${key} =${value}" >> "${CONF_DIR}/sunshine.conf"
+                echo "[init_sunshine] migration v2 : ${key} ajouté à sunshine.conf"
+            }
+        done <<'MIGRATE_EOF'
+dd_hdr_option= disabled
+encoder= nvenc
+min_log_level= info
+system_tray= 0
+MIGRATE_EOF
+    fi
+fi
+
+echo "${CURRENT_VERSION}" > "${VERSION_FILE}"
 
 chown -R "${PUID:-1000}:${PGID:-1000}" "${CONF_DIR}"
