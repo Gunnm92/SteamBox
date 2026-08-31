@@ -40,17 +40,22 @@ EOF
 
 # focus-follows-mouse (31/08) : le clavier virtuel Sunshine/evdev-bridge
 # perdait le focus après un changement de fenêtre côté client Moonlight
-# (overlay Steam, alt-tab, fermeture d'un jeu...) — les touches partaient
-# dans le vide jusqu'à ce qu'un nouveau changement de fenêtre le redonne par
-# hasard, confirmé en direct. Le clavier virtuel Wayland n'a pas de notion
+# (overlay Steam, alt-tab, fermeture dun jeu...) — les touches partaient
+# dans le vide jusqua ce quun nouveau changement de fenêtre le redonne par
+# hasard, confirmé en direct. Le clavier virtuel Wayland na pas de notion
 # de clic pour redemander le focus lui-même, contrairement à une vraie
 # souris/clavier physiques ; followMouseRequiresMovement=no comble ça en
 # refocalisant sur la fenêtre sous le curseur à CHAQUE changement de
 # fenêtre (pas seulement au mouvement de souris) — le curseur virtuel étant
 # piloté en continu par evdev-bridge, le focus doit rester juste sans
-# action de l'utilisateur. ~/.config/labwc/rc.xml, même mécanisme que
-# environment ci-dessus : partagé par les deux compositeurs labwc (bureau
-# visible wayland-0 et headless Sunshine wayland-1), même $HOME.
+# action de lutilisateur. NOTE apostrophes bannies dans TOUT ce bloc :
+# tout ce script tourne dans un bash -c entre apostrophes simples (ligne
+# 27) — une seule apostrophe francaise dans un commentaire casse la chaine
+# en plein milieu et fait planter tout le reste du script au demarrage,
+# confirme en direct le 31/08 (labwc/wayvnc/Sunshine tous morts, "erreur
+# de syntaxe pres du symbole inattendu"). rc.xml ci-dessous, meme mecanisme
+# que environment plus haut : partage par les deux compositeurs labwc
+# (bureau visible wayland-0 et headless Sunshine wayland-1), meme HOME.
 cat > "${HOME}/.config/labwc/rc.xml" <<EOF
 <?xml version="1.0"?>
 <labwc_config>
