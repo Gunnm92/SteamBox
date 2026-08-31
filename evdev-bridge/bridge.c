@@ -445,10 +445,18 @@ static uint32_t evdev_to_mod_bit(uint32_t code) {
     }
 }
 
-/* Key debounce tracking */
+/* Key debounce tracking.
+ * 20ms et pas 100ms (audit M4, 31/08) : ce filtre vise les doublons
+ * d'evenements uinput (meme touche re-pressee quasi instantanement par le
+ * pipeline Sunshine), pas les vraies frappes rapides — a 100ms un
+ * tapotement de jeu legitime (mash, double-tap esquive, navigation menu)
+ * tombait sous le seuil et se faisait jeter une fois sur deux. 20ms reste
+ * tres au-dessus d'un doublon logiciel (<1ms) et sous toute frappe humaine
+ * repetee (~50ms minimum physique). Chaque drop reste logge (DEBOUNCE)
+ * pour etre visible dans docker logs si ca refiltre trop. */
 #define MAX_KEYS 256
 static uint32_t key_last_press_time[MAX_KEYS]; /* timestamp of last press in ms */
-#define KEY_DEBOUNCE_MS 100 /* ignore re-press within this window */
+#define KEY_DEBOUNCE_MS 20 /* ignore re-press within this window */
 
 /* Process keyboard events */
 static void handle_keyboard_event(struct input_event *ev) {
