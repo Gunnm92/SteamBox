@@ -520,6 +520,41 @@ RUN mkdir -p /usr/share/themes && \
       > /usr/share/themes/Mc-OS-CTLina-XFCE-Dark/index.theme && \
     rm -f /tmp/theme.tar.xz
 
+# gtk.css du thème corrigé (audit 31/08) : 4 erreurs de syntaxe CSS réelles
+# dans le fichier fourni, provoquant les "Theme parsing error" au démarrage
+# de CHAQUE appli GTK3 du conteneur (RetroArch, Dolphin, Steam ROM Manager,
+# Eden, xfce4-terminal...), toujours aux mêmes numéros de ligne — confirmé
+# en isolant chaque erreur dans le fichier extrait :
+#   - url"linear-gradient(...) : un "url" parasite devant un gradient, pas
+#     une URL — probablement un artefact de recherche/remplacement en amont
+#   - bloc .nautilus-window .path-bar button (styles Nautilus/GNOME Files,
+#     jamais utilisés ici — ce projet utilise Thunar) : tentative de
+#     commenter tout le bloc en éparpillant des /* */ ligne par ligne au
+#     lieu d'un seul bloc propre — CSS ne supporte pas les commentaires
+#     imbriqués, le premier */ rencontré referme prématurément, et le reste
+#     du bloc est ensuite lu comme du vrai CSS invalide. Supprimé entièrement
+#     plutôt que réparé : déjà mort/désactivé dans l'intention d'origine.
+#   - "text-shadow: text-shadow: ..." : propriété dupliquée par erreur
+#   - "color:ffffff" : # manquant devant le hex
+COPY <<'PATCH_THEME_EOF' /tmp/patch-theme.py
+p = '/usr/share/themes/Mc-OS-CTLina-XFCE-Dark/gtk-3.0/gtk.css'
+lines = open(p, encoding='utf-8').read().splitlines(keepends=True)
+assert 'url"linear-gradient' in lines[7852], 'ligne 7853 inattendue'
+lines[7852] = lines[7852].replace('url"linear-gradient', 'linear-gradient')
+assert lines[11632].startswith('/*.nautilus-window .path-bar button {'), 'ligne 11633 inattendue'
+assert lines[11679].rstrip() == '}', 'ligne 11680 inattendue'
+del lines[11632:11680]
+c = ''.join(lines)
+assert 'text-shadow: text-shadow:' in c
+c = c.replace('text-shadow: text-shadow:', 'text-shadow:')
+assert 'color:ffffff;' in c
+c = c.replace('color:ffffff;', 'color:#ffffff;')
+open(p, 'w', encoding='utf-8').write(c)
+print('gtk.css theme patche avec succes')
+PATCH_THEME_EOF
+
+RUN python3 /tmp/patch-theme.py && rm -f /tmp/patch-theme.py
+
 # ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
 # Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
 # le script wsquashfs-batocera embarqué dans l'image webstation — plus
