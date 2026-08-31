@@ -56,9 +56,24 @@ EOF
 # de syntaxe pres du symbole inattendu"). rc.xml ci-dessous, meme mecanisme
 # que environment plus haut : partage par les deux compositeurs labwc
 # (bureau visible wayland-0 et headless Sunshine wayland-1), meme HOME.
+#
+# xwaylandPersistence=yes (31/08, meme audit) : par defaut labwc lance
+# Xwayland en mode paresseux (tue le process ~10s apres le dernier client
+# X11 deconnecte). Sur le bureau visible (wayland-0), sans activite X11
+# continue (contrairement a la session headless wayland-1, occupee en
+# permanence par Steam), Xwayland meurt entre deux usages -- confirme en
+# direct : Steam ROM Manager (et tout le reste des apps DISPLAY=:0 du
+# menu -- Chrome, Pegasus, Cemu, Dolphin, Ludusavi) echouait "Missing X
+# server or DISPLAY" des que le bureau restait quelques secondes sans
+# app X11 active, alors que le meme lancement reussissait juste apres un
+# autre test qui avait garde Xwayland chaud. Documente comme necessitant
+# un redemarrage de labwc pour prendre effet (man labwc-config).
 cat > "${HOME}/.config/labwc/rc.xml" <<EOF
 <?xml version="1.0"?>
 <labwc_config>
+  <core>
+    <xwaylandPersistence>yes</xwaylandPersistence>
+  </core>
   <focus>
     <followMouse>yes</followMouse>
     <followMouseRequiresMovement>no</followMouseRequiresMovement>
