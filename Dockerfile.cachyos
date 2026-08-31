@@ -131,6 +131,25 @@
 
 FROM cachyos/cachyos-v3:latest
 
+# GITHUB_TOKEN (audit M1, 31/08) : le build fait ~18 appels à l'API GitHub
+# (releases "latest" des émulateurs) — non authentifié, la limite est de
+# 60 requêtes/heure/IP : deux builds dans l'heure suffisent à faire échouer
+# le suivant en "FATAL: URL vide". Le Makefile passait déjà ce --build-arg
+# sans que le Dockerfile ne le consomme nulle part. Optionnel : sans token,
+# comportement inchangé (l'expansion ${GITHUB_TOKEN:+...} n'ajoute le header
+# Authorization que si la variable est non vide). ARG, pas ENV : jamais
+# persisté dans l'image finale.
+ARG GITHUB_TOKEN
+
+# BUILD_DATE : deuxième --build-arg passé par le Makefile jusqu'ici jamais
+# consommé — exposé en label OCI standard, utile pour dater une image
+# (`docker inspect` sur le registry) puisque les émulateurs sont tirés en
+# "latest" au moment du build.
+ARG BUILD_DATE
+LABEL org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.title="SteamBox" \
+      org.opencontainers.image.source="https://github.com/Gunnm92/SteamBox"
+
 # ── 1. Base système + labwc (Wayland) + bureau XFCE + seatd/libinput + GPU (Mesa/Vulkan) ──
 # Panne CachyOS multilib (29/08) : lib32-gcc-libs/lib32-glibc — les DEUX
 # SEULS paquets multilib que CachyOS rebuild elle-même (pour matcher sa
@@ -397,7 +416,7 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # lancé depuis le menu XFCE Pegasus échoue immédiatement ("could not connect
 # to display", confirmé en direct). Même pattern que "Steam (Bureau)"
 # ci-dessous ; labwc démarre son Xwayland interne à la demande sur :0.
-RUN PEGASUS_URL=$(curl -sX GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
+RUN PEGASUS_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
     [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
@@ -454,7 +473,7 @@ RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main
 
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
-RUN SRM_URL=$(curl -sX GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
+RUN SRM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
     [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
@@ -482,7 +501,7 @@ RUN curl -fSL -o /tmp/lindbergh.app \
     rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
-RUN SUPERMODEL_URL=$(curl -sX GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
+RUN SUPERMODEL_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*\.tar[^"]*"' | cut -d'"' -f4 | head -1) && \
     if [ -n "${SUPERMODEL_URL}" ]; then \
       curl -o /tmp/supermodel.tar.gz -L "${SUPERMODEL_URL}" && \
@@ -517,8 +536,10 @@ RUN GECKO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wi
 # ── 1a13. Google Chrome — pas de paquet Arch officiel (AUR-only, nécessite un
 # helper AUR + base-devel), extrait manuellement du .deb officiel Google
 # (même approche que Pegasus/SRM/Lindbergh ci-dessus : curl + extraction, pas
-# d'installeur). --ozone-platform=x11 explicite (session X11 réelle, cf.
-# section 2b) ; chmod 4755 sur chrome-sandbox reproduit ce que fait le
+# d'installeur). --ozone-platform=x11 + env DISPLAY=:0 explicites (audit C4,
+# 31/08) : la session labwc unset DISPLAY globalement, et Chrome forcé en
+# x11 sans DISPLAY échoue depuis le menu — même pattern que Pegasus/Xenia/
+# Steam (Bureau) ; chmod 4755 sur chrome-sandbox reproduit ce que fait le
 # postinst du .deb (on ne l'exécute pas, on ne prend que data.tar).
 RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
     cd /tmp && ar x chrome.deb && \
@@ -528,7 +549,7 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
     cp -a /tmp/chrome-extract/opt/google/chrome/. /opt/google/chrome/ && \
     ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome && \
     chmod 4755 /opt/google/chrome/chrome-sandbox && \
-    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=/opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=env DISPLAY=:0 /opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
@@ -549,7 +570,7 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
 # script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
 # absolu évite complètement le calcul de dossier.
-RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
+RUN CEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
@@ -563,7 +584,7 @@ RUN CEMU_URL=$(curl -sX GET "https://api.github.com/repos/cemu-project/Cemu/rele
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
-RUN PCSX2_URL=$(curl -sX GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
+RUN PCSX2_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux-appimage-x64-Qt\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${PCSX2_URL}" ] || { echo "FATAL: PCSX2_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pcsx2.AppImage "${PCSX2_URL}" && \
@@ -576,7 +597,7 @@ RUN PCSX2_URL=$(curl -sX GET "https://api.github.com/repos/PCSX2/pcsx2/releases/
       > /usr/share/applications/pcsx2.desktop && \
     rm -f /tmp/pcsx2.AppImage
 
-RUN RPCS3_URL=$(curl -sX GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
+RUN RPCS3_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*_linux64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${RPCS3_URL}" ] || { echo "FATAL: RPCS3_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/rpcs3.AppImage "${RPCS3_URL}" && \
@@ -590,7 +611,7 @@ RUN RPCS3_URL=$(curl -sX GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
 
-RUN DUCKSTATION_URL=$(curl -sX GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
+RUN DUCKSTATION_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*DuckStation-x64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${DUCKSTATION_URL}" ] || { echo "FATAL: DUCKSTATION_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/duckstation.AppImage "${DUCKSTATION_URL}" && \
@@ -603,7 +624,7 @@ RUN DUCKSTATION_URL=$(curl -sX GET "https://api.github.com/repos/stenzek/ducksta
       > /usr/share/applications/duckstation.desktop && \
     rm -f /tmp/duckstation.AppImage
 
-RUN XEMU_URL=$(curl -sX GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
+RUN XEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v dbg | cut -d'"' -f4 | head -1) && \
     [ -n "${XEMU_URL}" ] || { echo "FATAL: XEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xemu.AppImage "${XEMU_URL}" && \
@@ -616,7 +637,7 @@ RUN XEMU_URL=$(curl -sX GET "https://api.github.com/repos/xemu-project/xemu/rele
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
-RUN AZAHAR_URL=$(curl -sX GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
+RUN AZAHAR_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*wayland\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
@@ -630,7 +651,7 @@ RUN AZAHAR_URL=$(curl -sX GET "https://api.github.com/repos/azahar-emu/azahar/re
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
 
-RUN XENIA_URL=$(curl -sX GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
+RUN XENIA_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${XENIA_URL}" ] || { echo "FATAL: XENIA_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xenia.AppImage "${XENIA_URL}" && \
@@ -644,7 +665,7 @@ RUN XENIA_URL=$(curl -sX GET "https://api.github.com/repos/has207/xenia-edge/rel
     rm -f /tmp/xenia.AppImage
 
 # melonDS (Nintendo DS) — zip, pas d'AppImage.
-RUN MELONDS_VERSION=$(curl -sX GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
+RUN MELONDS_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${MELONDS_VERSION}" ] || { echo "FATAL: MELONDS_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/melon.zip \
@@ -658,7 +679,7 @@ RUN MELONDS_VERSION=$(curl -sX GET "https://api.github.com/repos/melonDS-emu/mel
     rm -f /tmp/melon.zip
 
 # DOSBox Staging — tarball officiel, pas d'AppImage.
-RUN DSTAGING_VERSION=$(curl -sX GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
+RUN DSTAGING_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${DSTAGING_VERSION}" ] || { echo "FATAL: DSTAGING_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/dosbox.tar.xz \
@@ -671,7 +692,7 @@ RUN DSTAGING_VERSION=$(curl -sX GET "https://api.github.com/repos/dosbox-staging
 
 # GZDoom + Freedoom (WAD libre, pas besoin du WAD original Doom) — .deb officiel,
 # même technique d'extraction manuelle que Chrome ci-dessus.
-RUN GZDOOM_URL=$(curl -sX GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
+RUN GZDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*_amd64\.deb"' | cut -d'"' -f4) && \
     [ -n "${GZDOOM_URL}" ] || { echo "FATAL: GZDOOM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/gzdoom.deb "${GZDOOM_URL}" && \
@@ -681,7 +702,7 @@ RUN GZDOOM_URL=$(curl -sX GET "https://api.github.com/repos/ZDoom/gzdoom/release
     cp -a /tmp/gzdoom-extract/usr/. /usr/ && \
     chmod +x /usr/games/gzdoom /opt/gzdoom/gzdoom && \
     ln -sf /usr/games/gzdoom /usr/local/bin/gzdoom && \
-    FREEDOOM_URL=$(curl -sX GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
+    FREEDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*freedoom-[^"]*\.zip"' | cut -d'"' -f4) && \
     curl -fSL --retry 3 -o /tmp/freedoom.zip "${FREEDOOM_URL}" && \
     mkdir -p /usr/local/share/doom && \
@@ -689,9 +710,9 @@ RUN GZDOOM_URL=$(curl -sX GET "https://api.github.com/repos/ZDoom/gzdoom/release
     rm -rf /tmp/gzdoom.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/gzdoom-extract /tmp/freedoom.zip
 
 # ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
-RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+RUN SHADPS4_TAG=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
-    SHADPS4_URL=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+    SHADPS4_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
     [ -n "${SHADPS4_URL}" ] || { echo "FATAL: SHADPS4_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/shadps4.zip "${SHADPS4_URL}" && \
@@ -715,7 +736,7 @@ RUN SHADPS4_TAG=$(curl -sX GET "https://api.github.com/repos/shadps4-emu/shadps4
 # à tenir à jour (juste rebuild l'image) qu'un script curl+extraction ad hoc.
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
-RUN FLIPS_URL=$(curl -sX GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
+RUN FLIPS_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
     [ -n "${FLIPS_URL}" ] || { echo "FATAL: FLIPS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/flips.zip "${FLIPS_URL}" && \
@@ -754,7 +775,7 @@ RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
 # encore dans l'équation à l'époque).
 RUN pip install --break-system-packages --no-cache-dir websockify
 
-RUN NOVNC_URL=$(curl -sX GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
+RUN NOVNC_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
     mkdir -p /usr/share/webapps/novnc && \
     curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
@@ -798,14 +819,18 @@ RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tm
     cp /tmp/gdu/src/*.rules /etc/udev/rules.d/ && \
     rm -rf /tmp/gdu
 
-# ── 3b. Règle udev anti-double-saisie clavier/souris (30/08) — evdev-bridge
-# ne fait pas d'EVIOCGRAB exclusif sur les périphériques uinput virtuels de
-# Sunshine, donc libinput (labwc) les lit EN PARALLÈLE via son propre
-# hotplug udev en temps réel (qui fonctionne, contrairement à
-# l'énumération initiale basée sur la base persistée cassée — voir point 6
-# de l'historique) : chaque touche/clic est donc traité deux fois. Cette
-# règle fait ignorer ces devices précis à libinput, laissant evdev-bridge
-# seul consommateur — testé nécessaire en direct (double saisie confirmée).
+# ── 3b. Règle udev anti-double-saisie clavier/souris (30/08) — sans elle,
+# libinput (labwc) lit les périphériques uinput virtuels de Sunshine EN
+# PARALLÈLE d'evdev-bridge via son propre hotplug udev temps réel (qui
+# fonctionne, contrairement à l'énumération initiale basée sur la base
+# persistée cassée — voir point 6 de l'historique) : chaque touche/clic
+# était traité deux fois, confirmé en direct. NOTE (audit B2, 31/08) :
+# depuis le 30/08 evdev-bridge fait AUSSI un EVIOCGRAB exclusif de son côté
+# (bridge.c, non fiable à 100% seul car le tag udev ne survit pas à un
+# redémarrage de labwc) — les deux protections coexistent volontairement,
+# ceinture et bretelles : cette règle couvre le cas où le grab échoue, le
+# grab couvre le cas où labwc redémarre et ré-énumère sans repasser par
+# le hotplug.
 RUN printf 'ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="*passthrough*", ENV{LIBINPUT_IGNORE_DEVICE}="1"\n' \
       > /etc/udev/rules.d/99-sunshine-passthrough-no-libinput.rules
 
@@ -860,8 +885,8 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
 # Unraid FUSE/shfs, le stockage écrivable du conteneur est sur le pool Docker
 # direct (typiquement le pool cache Unraid). Cache non persistant entre
 # recréations du conteneur, contre un accès disque nettement plus rapide.
-RUN mkdir -p /var/cache/arcadebox/dxvk /var/cache/arcadebox/nv-shader && \
-    chmod -R 1777 /var/cache/arcadebox
+RUN mkdir -p /var/cache/steambox/dxvk /var/cache/steambox/nv-shader && \
+    chmod -R 1777 /var/cache/steambox
 
 # GSK_RENDERER=cairo (fix GTK4 de l'ère X11) retiré : la cause identifiée
 # était le SHM X11 refusé par un client non-root (arcade) face à un Xorg
@@ -884,14 +909,19 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     LANGUAGE=fr_FR:fr \
     LC_ALL=fr_FR.UTF-8 \
     DOOMWADDIR=/usr/local/share/doom \
-    DXVK_STATE_CACHE_PATH=/var/cache/arcadebox/dxvk \
-    __GL_SHADER_DISK_CACHE_PATH=/var/cache/arcadebox/nv-shader \
+    DXVK_STATE_CACHE_PATH=/var/cache/steambox/dxvk \
+    __GL_SHADER_DISK_CACHE_PATH=/var/cache/steambox/nv-shader \
     __GL_SHADER_DISK_CACHE_SIZE=1073741824 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
 
 VOLUME /config
+# EXPOSE purement documentaire (audit B4, 31/08) : le conteneur tourne en
+# network_mode: host, cette directive n'a donc aucun effet — gardée comme
+# inventaire des ports réellement utilisés : 6080 noVNC, 47984/47989/47990
+# Sunshine (HTTPS/HTTP/Web UI), 47998-48000/udp flux vidéo/audio/contrôle,
+# 48010 RTSP.
 EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]
