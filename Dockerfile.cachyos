@@ -270,35 +270,32 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 # comportement de l'ancien install manuel retiré plus haut : pas de FUSE
 # requis au runtime, et des raccourcis/scripts existants pointent sur ce
 # chemin /opt/eden précis.
-# decky-loader (31/08, demande utilisateur) — chargeur de plugins Steam Deck
-# (SteamDeckHomebrew/decky-loader), packagé AUR sous forme source (pas de
-# variante -bin) : build un frontend React/TS via pnpm + un wheel Python via
-# poetry. Deux dépendances du PKGBUILD (python-aiohttp-jinja2, python-aiohttp-
-# cors) sont elles-mêmes AUR-only — makepkg -si seul (pas d'AUR helper avec
-# résolution récursive ici) ne les installerait jamais automatiquement,
-# buildées à la main juste avant dans build-aur.sh. Runtime deps du PKGBUILD
-# (python-aiohttp/-watchdog/-certifi/-packaging/-multidict/-setproctitle,
-# python-jinja) ajoutées aux paquets normaux ci-dessous ; nodejs/npm/pnpm/
-# python-poetry/-build/-installer sont des makedepends pures (frontend JS +
-# empaquetage wheel), supprimées après coup comme meson/ninja.
-# python-setuptools ET python-wheel gardés malgré tout : setuptools parce
-# que trop de code Python existant importe pkg_resources au runtime, pas
-# seulement à l'installation ; wheel parce que c'est une dépendance DURE de
-# python-pip et python-setuptools déjà présents dans l'image de base —
-# tenter de le retirer casse la transaction pacman entière (confirmé en
-# échec de build le 31/08 : "removing python-wheel breaks dependency...").
-# Le PKGBUILD upstream installe un service systemd
-# (decky-loader@.service, tourne en root) — inerte sous s6 (PID 1 = s6-
-# svscan, pas systemd, même piège que logind déjà documenté sur ce projet) :
-# équivalent réécrit à la main en service s6, voir root-cachyos/etc/s6-
-# overlay/s6-rc.d/svc-decky-loader.
+# decky-loader (31/08, demande utilisateur) — chargeur de plugins Steam
+# Deck (SteamDeckHomebrew/decky-loader). PAS installé via AUR (revu le
+# 01/09) : le paquet AUR construit un wheel Python (via poetry) lancé comme
+# module normal (/usr/bin/decky-loader) — un modèle de déploiement
+# INCOMPATIBLE avec le mécanisme d'auto-update propre à decky, qui suppose
+# toujours un binaire autonome nommé littéralement "PluginLoader" vivant
+# dans son propre dossier de travail (voir updater.py:
+# download_decky_binary — remove()/shutil.move() sur ce nom précis) :
+# confirmé en direct, l'AUR laissait l'auto-update de decky totalement
+# bloquée quel que soit le contournement systemd. Le vrai binaire officiel
+# (release GitHub SteamDeckHomebrew/decky-loader, asset "PluginLoader",
+# PyInstaller autonome) est téléchargé ici et copié au runtime par
+# svc-decky-loader — voir ce fichier pour le détail du mécanisme d'update
+# et le shim systemctl qui l'accompagne (root-cachyos/usr/local/bin/
+# systemctl). Seules les dépendances RUNTIME des PLUGINS restent utiles ici
+# (les plugins tiers comme CSS Loader tournent en process Python séparé,
+# via l'interpréteur système, pas le binaire PyInstaller autonome de decky
+# lui-même) : python-aiohttp-jinja2/-cors sont AUR-only, buildées dans
+# build-aur.sh ; le reste (python-aiohttp/-watchdog/-certifi/-packaging/
+# -multidict/-setproctitle/-jinja) vient des dépôts officiels.
 RUN pacman -S --noconfirm --needed \
       meson ninja libva ffnvcodec-headers \
       bzip2 gtk3 hicolor-icon-theme libgcc \
       python python-aiohttp python-watchdog python-certifi python-packaging \
       python-multidict python-setproctitle python-jinja \
-      nodejs npm pnpm python-poetry \
-      python-build python-installer python-setuptools python-wheel && \
+      python-setuptools python-wheel && \
     useradd -m -s /bin/bash aur-builder && \
     echo 'aur-builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aur-builder
 
@@ -355,11 +352,6 @@ cd /tmp
 git clone --depth 1 https://aur.archlinux.org/python-aiohttp-cors.git
 cd python-aiohttp-cors
 makepkg -si --noconfirm --needed
-
-cd /tmp
-git clone --depth 1 https://aur.archlinux.org/decky-loader.git
-cd decky-loader
-makepkg -si --noconfirm --needed
 BUILD_AUR_EOF
 
 RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
@@ -368,10 +360,32 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py 
     rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
     userdel -r aur-builder && \
     rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin \
-           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/decky-loader && \
-    pacman -Rns --noconfirm meson ninja nodejs npm pnpm python-poetry \
-      python-build python-installer && \
+           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors && \
+    pacman -Rns --noconfirm meson ninja && \
     pacman -Scc --noconfirm
+
+# decky-loader — binaire officiel PyInstaller (voir commentaire plus haut),
+# pas de build. Placé sous /opt (dans l'image, PAS sous /home/arcade — ce
+# chemin est recouvert par le volume /config au runtime) : svc-decky-loader
+# le copie vers ${DECKY_VAR_DATA}/PluginLoader au premier démarrage
+# seulement (idempotent), pour ne jamais écraser une version que
+# l'auto-update de decky aurait déjà installée sur le volume persistant.
+RUN mkdir -p /opt/decky-loader && \
+    curl -fsSL -o /opt/decky-loader/PluginLoader \
+      "https://github.com/SteamDeckHomebrew/decky-loader/releases/latest/download/PluginLoader" && \
+    chmod +x /opt/decky-loader/PluginLoader
+
+# systemctl (shim) — decky-loader appelle "systemctl restart/stop/start/
+# is-active plugin_loader" + "daemon-reload" pour s'auto-redémarrer après
+# une mise à jour (updater.py: service_restart/service_stop/service_start/
+# service_active) — ce conteneur n'a pas de vrai systemd (PID 1 = s6-
+# svscan). Shim en shell qui traduit ces appels précis vers s6-svc sur
+# svc-decky-loader ; /usr/local/bin passe avant /usr/sbin (où vit le vrai
+# systemctl, utilisé par systemd-udevd/NetworkManager ailleurs dans cette
+# image — jamais touché, seul le nom de service "plugin_loader" est
+# intercepté ici, tout le reste retombe sur le vrai binaire).
+COPY root-cachyos/usr/local/bin/systemctl /usr/local/bin/systemctl
+RUN chmod +x /usr/local/bin/systemctl
 
 # DISPLAY=:0 sur Ludusavi et Dolphin (audit menu XFCE, 31/08) — même bug que
 # Chrome/Pegasus/Xenia : la session labwc unset DISPLAY globalement, ces deux

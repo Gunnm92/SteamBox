@@ -1,0 +1,66 @@
+#!/bin/bash
+# Shim systemctl pour decky-loader (01/09) — ce conteneur n'a pas de vrai
+# systemd (PID 1 = s6-svscan), mais decky-loader appelle "systemctl
+# restart/stop/start/is-active plugin_loader" et "systemctl daemon-reload"
+# pour s'auto-redémarrer après une mise à jour (decky_loader/localplatform/
+# localplatformlinux.py: service_restart/service_stop/service_start/
+# service_active). Sans ce shim, ces appels échouent ("System has not been
+# booted with systemd as init system"), confirmé en direct — l'update se
+# télécharge et remplace le binaire (PluginLoader.new -> PluginLoader) mais
+# ne redémarre jamais, laissant l'ancienne version tourner indéfiniment
+# sans aucune erreur visible côté interface (le code appelant ignore la
+# valeur de retour de ces fonctions dans plusieurs cas).
+#
+# Ne traduit QUE le service "plugin_loader" vers s6-svc sur svc-decky-loader
+# — tout le reste (autre nom de service, sous-commande non gérée) retombe
+# sur le vrai binaire (/usr/sbin/systemctl, toujours utilisé ailleurs dans
+# cette image par systemd-udevd/NetworkManager, jamais touché par ce shim).
+set -uo pipefail
+
+REAL_SYSTEMCTL="/usr/sbin/systemctl"
+SERVICE_DIR="/etc/s6-overlay/s6-rc.d/svc-decky-loader"
+
+find_s6_servicedir() {
+    local prefix
+    prefix=$(find /run -maxdepth 1 -iname "s6-rc:*" 2>/dev/null | head -1)
+    [ -n "${prefix}" ] && echo "${prefix}/servicedirs/svc-decky-loader"
+}
+
+case "${1:-}" in
+    daemon-reload)
+        exit 0
+        ;;
+    restart|stop|start)
+        action="$1"
+        # "--no-block" peut être passé en 3e position (voir service_restart) —
+        # ignoré ici, s6-svc ne bloque déjà jamais sur ce type d'action.
+        service="${2:-}"
+        if [ "${service}" = "plugin_loader" ]; then
+            servicedir=$(find_s6_servicedir)
+            if [ -z "${servicedir}" ] || [ ! -d "${servicedir}" ]; then
+                echo "systemctl (shim): service dir svc-decky-loader introuvable" >&2
+                exit 1
+            fi
+            case "${action}" in
+                restart) exec /command/s6-svc -r "${servicedir}" ;;
+                stop)    exec /command/s6-svc -d "${servicedir}" ;;
+                start)   exec /command/s6-svc -u "${servicedir}" ;;
+            esac
+        fi
+        ;;
+    is-active)
+        service="${2:-}"
+        if [ "${service}" = "plugin_loader" ]; then
+            if pgrep -f "decky-loader/PluginLoader" >/dev/null 2>&1; then
+                exit 0
+            else
+                exit 3 # convention systemctl : inactive
+            fi
+        fi
+        ;;
+esac
+
+# Tout ce qui n'est pas explicitement géré ci-dessus retombe sur le vrai
+# systemctl (absent/non fonctionnel sans systemd, mais on ne veut pas
+# masquer un usage futur légitime derrière ce shim).
+exec "${REAL_SYSTEMCTL}" "$@"

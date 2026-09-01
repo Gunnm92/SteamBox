@@ -1,9 +1,12 @@
 #!/command/with-contenv bash
-# decky-loader (31/08, demande utilisateur) — équivalent écrit à la main du
-# service systemd que fournit le paquet AUR (decky-loader@.service, inerte
-# sous s6 : PID 1 = s6-svscan, pas systemd, même piège que logind déjà
-# documenté sur ce projet). Reprend exactement les deux étapes du
-# decky-loader-helper systemd d'origine (voir PKGBUILD AUR) :
+# decky-loader (31/08, demande utilisateur ; revu 01/09 — binaire officiel
+# au lieu du paquet AUR) — équivalent écrit à la main du service systemd
+# que fournit le projet upstream (decky-loader@.service, inerte sous s6 :
+# PID 1 = s6-svscan, pas systemd, même piège que logind déjà documenté sur
+# ce projet ; voir aussi le shim /usr/local/bin/systemctl pour la partie
+# auto-update). Reprend les deux étapes du decky-loader-helper systemd
+# d'origine (voir PKGBUILD AUR, conservé comme référence même si le paquet
+# lui-même n'est plus utilisé) :
 #   1. crée ~/.local/var/opt/decky-loader/plugins, appartenant à arcade
 #   2. active le debug distant CEF de Steam via le fichier flag que Steam
 #      lit à SON démarrage (.cef-enable-remote-debugging) — decky s'y
@@ -20,6 +23,39 @@ DECKY_VAR_DATA="${DECKY_HOME}/.local/var/opt/decky-loader"
 
 install -d -o arcade -g arcade "${DECKY_VAR_DATA}/plugins"
 
+# Binaire officiel PyInstaller (01/09) — remplace le paquet AUR
+# (/usr/bin/decky-loader, un wheel Python installé comme module normal),
+# incompatible avec le mécanisme d'auto-update propre de decky : son
+# updater (updater.py: download_decky_binary) attend TOUJOURS un binaire
+# autonome nommé littéralement "PluginLoader" dans son propre dossier de
+# travail — remove()/shutil.move() sur ce nom précis. Confirmé en direct :
+# avec le paquet AUR, une mise à jour lancée depuis l'interface decky se
+# téléchargeait sans jamais rien remplacer côté binaire réellement exécuté.
+# Semé depuis /opt/decky-loader/PluginLoader (dans l'image) SEULEMENT si
+# absent ici — sur le volume persistant /config, où decky-loader lui-même
+# gère désormais les mises à jour (téléchargement + remplacement direct de
+# ce fichier), jamais écrasé par un redémarrage de conteneur.
+DECKY_BINARY="${DECKY_VAR_DATA}/PluginLoader"
+if [ ! -f "${DECKY_BINARY}" ]; then
+    install -o arcade -g arcade -m 0755 /opt/decky-loader/PluginLoader "${DECKY_BINARY}"
+fi
+
+# ${DECKY_VAR_DATA}/themes (31/08, plugin CSS Loader) — PermissionError
+# confirmé en direct sur create_dir() dans SDH-CssLoader/css_utils.py.
+# decky-loader fixe lui-même DECKY_HOME=${DECKY_VAR_DATA} pour les plugins
+# (pas le ~/homebrew par défaut du code des plugins, qui ne s'applique que
+# si la variable n'est pas fixée) — confirmé en direct via le message
+# d'erreur : le chemin visé est bien .../decky-loader/themes. Les plugins
+# tournent en arcade (decky drop les privilèges pour chacun, PID confirmé
+# en direct), mais ${DECKY_VAR_DATA} lui-même reste root:root (decky, qui
+# tourne en root, ne pré-crée/chown en arcade que data/logs/settings —
+# les sous-dossiers qu'IL connaît, pas "themes", un concept propre à ce
+# plugin). Un plugin arcade ne peut donc pas y créer un nouveau
+# sous-dossier. Pré-créé ici comme "plugins" ci-dessus, déjà possédé par
+# arcade, pour que le "if not os.path.exists" côté plugin ne se déclenche
+# jamais dans le mauvais contexte de privilège.
+install -d -o arcade -g arcade "${DECKY_VAR_DATA}/themes"
+
 STEAM_DEBUGGING_FILE="${DECKY_HOME}/.steam/steam/.cef-enable-remote-debugging"
 if [ ! -f "${STEAM_DEBUGGING_FILE}" ]; then
     install -d -o arcade -g arcade "$(dirname "${STEAM_DEBUGGING_FILE}")"
@@ -35,4 +71,4 @@ exec env \
     PRIVILEGED_PATH="${DECKY_VAR_DATA}" \
     LOG_LEVEL=INFO \
     HOME="${DECKY_HOME}" \
-    /usr/bin/decky-loader
+    "${DECKY_BINARY}"
