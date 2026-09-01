@@ -429,7 +429,23 @@ RUN update-mime-database /usr/share/mime
 # retiré depuis — un wrapper le réapplique quel que soit le point d'entrée
 # (dock, menu applications, app Sunshine), /usr/local/bin passant avant
 # /usr/bin dans le PATH.
-RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire "$@"\n' > /usr/local/bin/steam && \
+#
+# -steamos3 -steampal -steamdeck (31/08, decky-loader) : sans détecter un
+# vrai Steam Deck, Steam lance steamwebhelper avec --disable-quick-menu —
+# désactivant tout le Quick Access Menu (QAM), l'endroit exact où
+# decky-loader affiche son icône. La variable d'env SteamDeck=1 (essayée en
+# premier) est INSUFFISANTE — confirmé en direct : --disable-quick-menu
+# reste présent même avec cette variable fixée avant le lancement, elle ne
+# sert qu'à l'API jeu IsSteamRunningOnSteamDeck(), pas à la décision interne
+# du client sur ses propres flags d'UI. Le vrai mécanisme est un trio de
+# flags CLI, trouvé dans le script officiel ChimeraOS/gamescope-session-steam
+# (dont ce projet reprend déjà steamos-session-select.sh) :
+# CLIENTCMD="steam -gamepadui -steamos3 -steampal -steamdeck". Testé en
+# direct dans un terminal avec les trois flags ensemble : QAM + decky
+# visibles, session stable — une suspicion initiale que -steamos3 cassait
+# gamescope/labwc (erreurs vues au même moment dans les logs) n'a pas
+# résisté à un nouveau test ciblé, très probablement du bruit sans lien.
+RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
 
 # ── 1a3d. xfdesktop-settings forcé sur Xwayland (30/08) — sous labwc/
