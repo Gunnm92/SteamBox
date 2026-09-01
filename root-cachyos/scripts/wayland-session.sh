@@ -27,6 +27,20 @@ runuser -u arcade -- env \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 
+# cd HOME explicite (01/09) : sans ca, ce script (et donc tout ce qui en
+# herite le CWD -- xfce4-panel, xfdesktop, et transitivement toute appli
+# lancee depuis le menu XFCE, ex Heroic) demarre avec pour repertoire de
+# travail le dossier de service s6 de svc-labwc lui-meme (s6-supervise
+# fait un chdir dedans avant d exec ./run) -- un chemin ephemere dont le
+# suffixe aleatoire change a chaque redemarrage du conteneur. Confirme en
+# direct : les raccourcis Steam crees par la fonction "Ajouter a Steam" de
+# Heroic captent ce CWD comme StartDir, y compris des references a
+# "svc-kde" (ancien nom de ce meme service avant le renommage vers labwc).
+# Sans impact fonctionnel connu (Heroic lance ses jeux par appName/runner,
+# pas par chemin relatif), mais pas de raison de laisser trainer un chemin
+# casse par design des le prochain boot.
+cd "${HOME}"
+
 # labwc ne lit PAS XKB_DEFAULT_LAYOUT depuis lenvironnement du process qui
 # le lance : il a son propre mécanisme, un fichier
 # ~/.config/labwc/environment quil charge lui-même au démarrage (doc
