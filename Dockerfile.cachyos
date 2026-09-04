@@ -459,7 +459,18 @@ RUN update-mime-database /usr/share/mime
 # visibles, session stable — une suspicion initiale que -steamos3 cassait
 # gamescope/labwc (erreurs vues au même moment dans les logs) n'a pas
 # résisté à un nouveau test ciblé, très probablement du bruit sans lien.
-RUN printf '#!/bin/sh\nexec /usr/bin/steam -pipewire -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
+# SDL_JOYSTICK_HIDAPI_PS5_RUMBLE (04/09, demande utilisateur — vibration
+# DualSense/Moonlight aléatoire) — active les "extended input reports" du
+# driver HIDAPI PS5 de SDL, nécessaires pour un rumble fiable ; sans ce
+# hint, SDL peut silencieusement retomber sur son driver sysjoystick
+# générique (boutons/axes seulement, pas de force feedback), documenté
+# comme cause connue de rumble PS5 aléatoire (SDL_HINT_JOYSTICK_HIDAPI_
+# PS5_RUMBLE, wiki.libsdl.org). Mitigation seulement : la cause racine
+# réelle (Sunshine régénère un nouvel identifiant HID pour sa manette
+# virtuelle à CHAQUE session Moonlight, donc Steam recrée un profil vierge
+# à chaque fois) est un bug amont non résolu de Sunshine, sans correctif
+# connu côté udev/config — voir LizardByte/Sunshine#3404.
+RUN printf '#!/bin/sh\nexec env SDL_JOYSTICK_HIDAPI_PS5_RUMBLE=1 /usr/bin/steam -pipewire -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
 
 # ── 1a3d. xfdesktop-settings forcé sur Xwayland (30/08) — sous labwc/
