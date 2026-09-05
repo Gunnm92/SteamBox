@@ -40,8 +40,6 @@ static struct zwlr_virtual_pointer_v1 *vpointer;
 static struct zwp_virtual_keyboard_v1 *vkeyboard;
 static struct wl_output *output;
 
-static int screen_w = 1920;
-static int screen_h = 1200;
 static volatile int running = 1;
 
 /* debug_enabled (audit F1, 05/09) : la ligne "SEND KEY" loggait
@@ -77,7 +75,12 @@ static int find_device(const char *name_prefix, char *out_path, size_t path_len)
     while ((ent = readdir(dir)) != NULL) {
         if (strncmp(ent->d_name, "event", 5) != 0) continue;
 
-        char path[256];
+        /* 300, pas 256 (audit warnings, 05/09) : gcc -Wformat-truncation
+         * signale à raison que "/dev/input/" (11 octets) + un d_name au
+         * maximum théorique NAME_MAX (255 octets, POSIX) dépasserait 256 —
+         * jamais atteint en pratique ici (noms réels : "event0", "js0"...),
+         * mais autant lever la marge plutôt que garder un avertissement. */
+        char path[300];
         snprintf(path, sizeof(path), "/dev/input/%s", ent->d_name);
 
         int fd = open(path, O_RDONLY | O_NONBLOCK);
