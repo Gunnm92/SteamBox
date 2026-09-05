@@ -60,6 +60,18 @@ fi
 # doit passer par une nouvelle étape de migration là-bas, pas seulement ici.
 
 if [ ! -f "${CONF_DIR}/apps.json" ]; then
+    # "Desktop" avait jusque-là un "cmd"/"detached" absent (05/09) — Sunshine
+    # capture alors juste la sortie du labwc headless (wayland-1) telle
+    # quelle. Or ce compositeur ne lance jamais rien lui-même (voir
+    # svc-labwc-headless/run) : contrairement au bureau visible (wayland-0,
+    # session XFCE complète démarrée par wayland-session.sh), rien n'y
+    # affichait le moindre panneau/bureau — "Desktop" sous Moonlight donnait
+    # un écran vide. sunshine-desktop-xfce.sh lance le même panneau/bureau
+    # XFCE que la session visible, mais directement sur wayland-1 (pas de
+    # second labwc à démarrer, svc-labwc-headless le fournit déjà) ; il est
+    # idempotent (garde par PID file) pour supporter une reconnexion sans
+    # empiler un second xfdesktop/xfce4-panel.
+    #
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
     # très tôt dans ce projet — l'ancien Big Picture (CEF) capturait en écran
     # noir via Steam Link/Remote Play, l'interface gamepadui (façon Steam
@@ -99,6 +111,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
   "env": {},
   "apps": [
     { "name": "Desktop", "image-path": "desktop.png",
+      "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
@@ -119,7 +132,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=3
+CURRENT_VERSION=4
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -171,6 +184,25 @@ if [ "${INSTALLED_VERSION}" -lt 3 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v3 : résolution gamescope pilotée par le client (sauvegarde .bak-migration-v3)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 4 ]; then
+    # v3 -> v4 (06/09) : l'entrée "Desktop" n'avait ni "cmd" ni "detached" —
+    # Sunshine capturait alors le labwc headless (wayland-1) tel quel, qui
+    # ne lance jamais lui-même de panneau/bureau (voir svc-labwc-headless/
+    # run) : écran vide sous Moonlight. Ajoute sunshine-desktop-xfce.sh en
+    # "detached" pour y lancer la même session XFCE que le bureau visible.
+    # Ne touche QUE l'entrée "Desktop" sans détaché existant — jamais une
+    # commande personnalisée par l'utilisateur.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        if jq -e '.apps[] | select(.name == "Desktop") | select(has("detached") | not)' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v4"
+            jq '{env, apps: [.apps[] | if .name == "Desktop" and (has("detached") | not) then . + {"detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"]} else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v4 : XFCE ajouté à l'entrée Desktop (sauvegarde .bak-migration-v4)"
         fi
     fi
 fi
