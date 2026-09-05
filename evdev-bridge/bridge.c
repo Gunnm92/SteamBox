@@ -51,9 +51,13 @@ static volatile int running = 1;
 static int debug_enabled = 0;
 
 /* Device paths */
-static char kbd_path[256];
-static char rel_mouse_path[256];
-static char abs_mouse_path[256];
+/* 300, pas 256 (audit warnings, 05/09) : doit rester égal à la taille du
+ * buffer intermédiaire "path" de find_device() ci-dessous — sinon
+ * gcc -Wformat-truncation se plaint à raison du second snprintf (celui qui
+ * recopie path vers ces buffers-ci) même une fois le premier corrigé. */
+static char kbd_path[300];
+static char rel_mouse_path[300];
+static char abs_mouse_path[300];
 
 static int kbd_fd = -1;
 static int rel_mouse_fd = -1;
