@@ -62,13 +62,24 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 
 ```
 --runtime=nvidia --ipc=host --shm-size=2g
---cap-add=SYS_NICE --cap-add=SYS_ADMIN
+--cap-add=SYS_NICE --cap-add=SYS_ADMIN --cap-add=NET_ADMIN
 --group-add=71
 --device-cgroup-rule='c 13:* rmw'
 --device-cgroup-rule='c 226:* rmw'
 --device-cgroup-rule='c 242:* rmw'
 --security-opt apparmor=unconfined --security-opt seccomp=unconfined
 ```
+
+**NET_ADMIN (audit live, 05/09)** — sans elle, udevd (pourtant root) ne peut
+pas rediffuser un uevent vers les écouteurs libudev après traitement d'une
+règle (ce groupe de multicast netlink est gardé par capacité côté noyau,
+indépendamment de l'UID). Confirmé en direct pendant une vraie session :
+boucle continue et rapide de "Failed to broadcast event to libudev
+listeners: Operation not permitted" pour chaque device de la manette
+virtuelle tant qu'un client Moonlight reste connecté — consomme des cycles
+CPU en continu sans jamais aboutir. N'affecte pas la création des devices
+elle-même (mknod/permissions, déjà traitée par udevd avant cette étape),
+mais mérite d'être ajoutée à la prochaine recréation du conteneur.
 
 Justification des trois règles cgroup — **les trois sont requises** :
 
