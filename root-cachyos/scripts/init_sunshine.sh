@@ -72,6 +72,20 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # idempotent (garde par PID file) pour supporter une reconnexion sans
     # empiler un second xfdesktop/xfce4-panel.
     #
+    # "Pegasus" ajouté (06/09) : jusque-là uniquement accessible depuis le
+    # bureau visible (raccourci XFCE, VNC) — pas moyen de tester/lancer les
+    # jeux arcade (wsquashfs-launcher, MAME/RetroArch, voir init_pegasus.sh)
+    # sous Moonlight. pegasus-fe est un build x11-static (pas de plugin
+    # Wayland) : le raccourci XFCE le force déjà en DISPLAY=:0/QT_QPA_
+    # PLATFORM=xcb (voir Dockerfile.cachyos) — remplacer :0 par :1 suffit à
+    # le rediriger vers le labwc headless (Xwayland lazy-démarré au premier
+    # client, même mécanisme que Steam Big Picture) au lieu du bureau
+    # visible. Tout jeu lancé DEPUIS ce Pegasus hérite du même DISPLAY=:1,
+    # donc s'affiche aussi sous Moonlight sans configuration supplémentaire.
+    # Pas de dbus-run-session ici (contrairement à sunshine-desktop-xfce.sh) :
+    # pegasus-fe n'est pas un composant XFCE, aucun conflit de bus de
+    # session de ce type confirmé en direct.
+    #
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
     # très tôt dans ce projet — l'ancien Big Picture (CEF) capturait en écran
     # noir via Steam Link/Remote Play, l'interface gamepadui (façon Steam
@@ -116,6 +130,8 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
+    { "name": "Pegasus", "detached": ["env DISPLAY=:1 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -132,7 +148,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=4
+CURRENT_VERSION=5
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -203,6 +219,23 @@ if [ "${INSTALLED_VERSION}" -lt 4 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v4 : XFCE ajouté à l'entrée Desktop (sauvegarde .bak-migration-v4)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 5 ]; then
+    # v4 -> v5 (06/09) : ajoute l'entrée "Pegasus" (jeux arcade testables
+    # sous Moonlight, plus seulement via le bureau visible/VNC — voir
+    # commentaire au-dessus de la génération initiale d'apps.json). N'ajoute
+    # QUE si aucune entrée "Pegasus" n'existe déjà (jamais de doublon si
+    # l'utilisateur en a créé une manuellement).
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        if ! jq -e '.apps[] | select(.name == "Pegasus")' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v5"
+            jq '.apps += [{"name": "Pegasus", "detached": ["env DISPLAY=:1 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe"], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}]' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v5 : entrée Pegasus ajoutée à apps.json (sauvegarde .bak-migration-v5)"
         fi
     fi
 fi
