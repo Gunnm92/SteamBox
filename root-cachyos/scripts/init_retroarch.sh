@@ -34,4 +34,11 @@ set_cfg "pause_nonactive" "false"
 # défaut de RetroArch (~/.config/retroarch/system, toujours vide ici).
 set_cfg "system_directory" "/userdata/bios"
 
-chown -R arcade:arcade "$(dirname "${CFG}")" 2>/dev/null || true
+# Garde de propriétaire (audit F4, 05/09, même motif qu'init_system.sh) :
+# ce chown -R tournait inconditionnellement à CHAQUE boot sur un dossier
+# qui contient thumbnails et shaders RetroArch, potentiellement volumineux
+# et sur FUSE (/config) — coûteux pour rien une fois déjà correct.
+CFG_DIR="$(dirname "${CFG}")"
+TARGET_OWNER="${PUID:-1000}:${PGID:-1000}"
+CURRENT_OWNER=$(stat -c '%u:%g' "${CFG_DIR}" 2>/dev/null || echo "")
+[ "${CURRENT_OWNER}" = "${TARGET_OWNER}" ] || chown -R "${TARGET_OWNER}" "${CFG_DIR}" 2>/dev/null || true

@@ -1,0 +1,20 @@
+#!/command/with-contenv bash
+# Bus D-Bus de SESSION (utilisateur arcade) — extrait de wayland-session.sh
+# en un vrai service s6 (audit M2, 05/09). Avant ce correctif, ce bus était
+# lancé en arrière-plan (dbus-daemon --fork) au milieu du script de session
+# de svc-labwc, jamais supervisé : s'il mourait, rien ne le relançait, et
+# PipeWire/WirePlumber/Proton (pressure-vessel en a besoin) en dépendaient
+# sans qu'aucune dépendance s6 explicite ne le documente.
+#
+# Distinct de svc-dbus-system (bus SYSTÈME, requis par NetworkManager) —
+# celui-ci est propre à la session arcade, au même chemin standard
+# $XDG_RUNTIME_DIR/bus que l'ancien code inline.
+#
+# --nofork (pas --fork comme l'ancien code inline) : un service s6 longrun
+# doit rester au premier plan pour être supervisé/relancé — même pattern
+# que svc-dbus-system/run (dbus-daemon --system --nofork).
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+rm -f "${XDG_RUNTIME_DIR}/bus"
+
+exec runuser -u arcade -- \
+    dbus-daemon --session --nofork --address="unix:path=${XDG_RUNTIME_DIR}/bus"

@@ -1,0 +1,11 @@
+#!/command/with-contenv bash
+# pipewire-pulse (compatibilité PulseAudio — c'est CE process que Sunshine
+# capture pour l'audio du stream, "sink-sunshine-stereo") — extrait de
+# wayland-session.sh en un vrai service s6 (audit M2, 05/09), même motif
+# que svc-pipewire/run et svc-wireplumber/run.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+exec runuser -u arcade -- \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus" \
+    pipewire-pulse

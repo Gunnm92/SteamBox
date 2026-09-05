@@ -28,6 +28,21 @@ while [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ "${TIMEOUT}" -gt 0 ]; do
     TIMEOUT=$((TIMEOUT - 1))
 done
 
+# Échec franc si wayland-1 n'existe toujours pas (audit M1, 05/09, même
+# pattern que svc-labwc-headless depuis l'audit C1 du 31/08) : avant ce
+# correctif, Sunshine démarrait quand même après le timeout — s6 le
+# déclarait "started" aussitôt (aucune notification-fd sur aucun service
+# de ce projet), et Sunshine restait "up" en apparence tout en échouant
+# silencieusement CHAQUE tentative de capture jusqu'à un redémarrage
+# manuel du service, si le labwc headless tardait plus de 15s (seatd lent,
+# crash-loop). exit 1 + s6 qui relance ce service jusqu'à ce que le socket
+# existe réellement : plus jamais de démarrage "réussi" sans cible de
+# capture valide.
+if [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ]; then
+    echo "[sunshine] wayland-1 absent après 15s — refus de démarrer, s6 va relancer."
+    exit 1
+fi
+
 # DISPLAY=:1 (30/08, audit "Steam Big Picture" cassé) : labwc démarre son
 # Xwayland interne PARESSEUSEMENT, seulement quand un premier client en a
 # besoin (confirmé en direct : rien ne l'annonce à l'avance, pas de

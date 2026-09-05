@@ -41,6 +41,19 @@ mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 # casse par design des le prochain boot.
 cd "${HOME}"
 
+# trap nettoyage (audit M2, 05/09) : labwc, xfsettingsd, xfdesktop,
+# xfce4-panel, nm-applet et lagent polkit sont tous lances en arriere-plan
+# plus bas dans ce script -- si s6 relance ce service (crash de labwc,
+# redemarrage manuel), ces processus orphelins survivaient jusquici,
+# confirme en direct (second panneau/xfdesktop apres un restart). Double
+# guillemets et $ echappe ici, PAS de simple guillemet -- tout ce bloc
+# tourne dans un bash -c entre apostrophes simples (ligne 27), un seul
+# guillemet simple ici casserait la chaine exactement comme une apostrophe
+# francaise (meme piege deja documente plus bas pour rc.xml). Lechappement
+# de $ retarde bien levaluation de jobs -p au moment reel de la sortie du
+# script, pas a la lecture de cette ligne.
+trap "kill \$(jobs -p) 2>/dev/null" EXIT
+
 # labwc ne lit PAS XKB_DEFAULT_LAYOUT depuis lenvironnement du process qui
 # le lance : il a son propre mécanisme, un fichier
 # ~/.config/labwc/environment quil charge lui-même au démarrage (doc
@@ -96,13 +109,19 @@ cat > "${HOME}/.config/labwc/rc.xml" <<EOF
 </labwc_config>
 EOF
 
-# Bus D-Bus de session réel, au chemin standard $XDG_RUNTIME_DIR/bus —
-# indépendant du compositeur (identique aux sessions précédentes de ce
-# projet). Nécessaire pour wireplumber (audio) et pressure-vessel/Proton
-# (jeux Heroic).
-if [ ! -S "${XDG_RUNTIME_DIR}/bus" ]; then
-    dbus-daemon --session --fork --address="unix:path=${XDG_RUNTIME_DIR}/bus"
-fi
+# Bus D-Bus de session (audit M2, 05/09) : desormais un vrai service s6
+# supervise (svc-dbus-session), dont svc-labwc depend explicitement (voir
+# dependencies.d) -- ce script attend juste que le socket existe, il ne le
+# cree plus lui-meme. Remplace lancien "dbus-daemon --session --fork" ici,
+# jamais supervise individuellement -- si ce process mourait seul (labwc
+# restant vivant), rien ne le relancait, cassant wireplumber et
+# pressure-vessel/Proton (jeux Heroic) en silence jusquau prochain
+# redemarrage complet de la session.
+TIMEOUT=30
+while [ ! -S "${XDG_RUNTIME_DIR}/bus" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
 # Thème sombre par défaut pour GTK3/4 — Mc-OS-CTLina-XFCE-Dark (macOS
@@ -130,14 +149,15 @@ xdg-mime default wine.desktop application/x-ms-dos-executable application/x-msi 
 # arcade : sans risque de le nettoyer inconditionnellement à chaque boot.
 rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null || true
 
-# PipeWire — audio (PulseAudio via pipewire-pulse) + capture vidéo Sunshine
-# (confirmé fonctionnel via KMS contre kwin_wayland le 29/08, labwc étant
-# lui aussi un backend DRM direct).
-pgrep -x pipewire >/dev/null || pipewire &
-sleep 1
-pgrep -x wireplumber >/dev/null || wireplumber &
-pgrep -x pipewire-pulse >/dev/null || pipewire-pulse &
-sleep 1
+# PipeWire/WirePlumber/pipewire-pulse (audit M2, 05/09) : ne sont plus
+# lances ici -- de vrais services s6 individuellement supervises desormais
+# (svc-pipewire, svc-wireplumber, svc-pipewire-pulse), independants de ce
+# script/compositeur puisque Sunshine capture laudio quel que soit le
+# labwc (visible ou headless) reellement actif. Avant ce correctif, un seul
+# `pgrep` gardait chaque process dun doublon au RELANCEMENT de CE script,
+# mais aucune supervision individuelle : la mort isolee de pipewire
+# (labwc restant vivant) faisait perdre a Sunshine son sink audio
+# (sink-sunshine-stereo) sans que rien ne le relance.
 
 # unset WAYLAND_DISPLAY avant de lancer labwc : cette variable est fixée
 # globalement dans le Dockerfile (ENV WAYLAND_DISPLAY=wayland-0, utile pour

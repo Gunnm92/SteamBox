@@ -79,8 +79,15 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # SDL_VIDEODRIVER vaut désormais "wayland,x11", donc --backend sdl
     # devrait nester nativement en Wayland, mais ça n'a jamais été revérifié
     # en direct dans ce nouveau contexte — à confirmer avant de faire
-    # confiance à cette entrée. Résolution/refresh alignés sur le bureau
-    # (2560x1440@120, voir Sunshine "Streaming bitrate"/xrandr).
+    # confiance à cette entrée.
+    #
+    # Appelle scripts/steam-gamescope-launch.sh au lieu d'inliner gamescope
+    # ici (audit M7, 05/09) : ce script lit désormais SUNSHINE_CLIENT_WIDTH/
+    # HEIGHT/FPS (exportées par Sunshine dans l'environnement de "detached",
+    # même mécanisme que prep-cmd) pour rendre à la résolution/fréquence
+    # RÉELLEMENT négociée par le client, au lieu d'un 2560x1440@120 figé qui
+    # chargeait GPU/NVENC pour des pixels ensuite jetés au rescale côté
+    # client sur toute connexion à une résolution différente.
     # prep-cmd set-resolution.sh/reset-resolution.sh (30/08) : ajuste la
     # sortie du labwc headless (wayland-1, cible de Sunshine depuis le pivot
     # post-audit HDR/gamescope) à la résolution réelle du client Moonlight
@@ -95,7 +102,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "Mode SteamOS (Gamescope)", "detached": ["gamescope --backend sdl -W 2560 -H 1440 -r 120 -f -e -C 0 -- steam -gamepadui"], "image-path": "steam.png",
+    { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -112,7 +119,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=2
+CURRENT_VERSION=3
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -146,6 +153,32 @@ MIGRATE_EOF
     fi
 fi
 
+if [ "${INSTALLED_VERSION}" -lt 3 ]; then
+    # v2 -> v3 (audit M7, 05/09) : la commande "detached" de "Mode SteamOS
+    # (Gamescope)" inlinait gamescope avec une résolution 2560x1440@120
+    # figée en dur — remplacée par un appel à steam-gamescope-launch.sh, qui
+    # lit désormais SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS pour rendre à la
+    # résolution réellement négociée par le client Moonlight (au lieu de
+    # toujours rendre en 1440p120 puis laisser Sunshine rescaler). Ne
+    # remplace QUE cette commande précise, jamais une entrée personnalisée
+    # par l'utilisateur avec un autre contenu.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_CMD='gamescope --backend sdl -W 2560 -H 1440 -r 120 -f -e -C 0 -- steam -gamepadui'
+        if jq -e --arg old "${OLD_CMD}" '.apps[] | select(.detached[0]? == $old)' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v3"
+            jq --arg old "${OLD_CMD}" --arg new "/usr/local/bin/scripts/steam-gamescope-launch.sh" \
+                '{env, apps: [.apps[] | if .detached[0]? == $old then .detached = [$new] else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v3 : résolution gamescope pilotée par le client (sauvegarde .bak-migration-v3)"
+        fi
+    fi
+fi
+
 echo "${CURRENT_VERSION}" > "${VERSION_FILE}"
 
-chown -R "${PUID:-1000}:${PGID:-1000}" "${CONF_DIR}"
+# Garde de propriétaire (audit F4, 05/09, même motif qu'init_system.sh) :
+# évite un chown -R inconditionnel à chaque boot une fois déjà correct.
+TARGET_OWNER="${PUID:-1000}:${PGID:-1000}"
+CURRENT_OWNER=$(stat -c '%u:%g' "${CONF_DIR}" 2>/dev/null || echo "")
+[ "${CURRENT_OWNER}" = "${TARGET_OWNER}" ] || chown -R "${TARGET_OWNER}" "${CONF_DIR}"

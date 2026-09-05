@@ -1,0 +1,17 @@
+#!/command/with-contenv bash
+# PipeWire (cœur audio + capture vidéo Sunshine via KMS/wlr-screencopy) —
+# extrait de wayland-session.sh en un vrai service s6 (audit M2, 05/09).
+# Avant ce correctif, lancé en arrière-plan (pipewire &) au milieu du
+# script de session de svc-labwc, gardé seulement par un `pgrep` avant
+# relance manuelle du script — jamais supervisé individuellement : si ce
+# process mourait seul (labwc restant vivant), Sunshine perdait son sink
+# audio (sink-sunshine-stereo) sans que rien ne le relance. Découplé du
+# bureau visible : Sunshine (svc-sunshine) capture l'audio indépendamment
+# de quel labwc (visible ou headless) tourne, donc ce service ne dépend que
+# du bus de session, pas d'un compositeur particulier.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+exec runuser -u arcade -- \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus" \
+    pipewire

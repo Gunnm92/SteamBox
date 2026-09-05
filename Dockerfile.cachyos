@@ -129,17 +129,46 @@
 #    plus (toujours WLR_RENDERER par défaut/GLES2) — le seul gain réel est
 #    l'isolation bureau/streaming, pas le HDR, qui reste hors de portée.
 
-FROM cachyos/cachyos-v3:latest
+# Épinglé par digest (audit H2, 05/09), pas "latest" : un rebuild déclenché
+# pour une seule ligne (ex: une règle udev) pouvait jusqu'ici faire monter
+# silencieusement toute la base — Mesa, wlroots/labwc, Xwayland — sans
+# qu'aucun commit ne le documente. Digest résolu le 05/09 (dernier build
+# réussi et testé en production) ; pour bumper délibérément la base,
+# relancer `docker pull cachyos/cachyos-v3:latest` et copier le nouveau
+# digest ici, dans un commit dédié ("bump: base cachyos-v3").
+FROM cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
 
-# GITHUB_TOKEN (audit M1, 31/08) : le build fait ~18 appels à l'API GitHub
+# github_token (audit C1, 05/09) : le build fait ~18 appels à l'API GitHub
 # (releases "latest" des émulateurs) — non authentifié, la limite est de
 # 60 requêtes/heure/IP : deux builds dans l'heure suffisent à faire échouer
-# le suivant en "FATAL: URL vide". Le Makefile passait déjà ce --build-arg
-# sans que le Dockerfile ne le consomme nulle part. Optionnel : sans token,
-# comportement inchangé (l'expansion ${GITHUB_TOKEN:+...} n'ajoute le header
-# Authorization que si la variable est non vide). ARG, pas ENV : jamais
-# persisté dans l'image finale.
-ARG GITHUB_TOKEN
+# le suivant en "FATAL: URL vide". Passé désormais comme SECRET BuildKit
+# (--secret id=github_token,env=GITHUB_TOKEN côté Makefile), lu via
+# --mount=type=secret,id=github_token sur chaque RUN qui en a besoin, PAS
+# comme ARG : un ARG consommé par un RUN reste visible en clair dans
+# l'historique de l'image (`docker history`/`buildx imagetools inspect`)
+# pour toujours, alors qu'un secret n'est monté que le temps du RUN et
+# n'apparaît jamais dans aucune couche. Confirmé en direct le 05/09 :
+# l'ancien ARG GITHUB_TOKEN était bien lisible en clair sur 52 des 74
+# couches de l'image déjà poussée sur le registry — token révoqué et
+# rebuild fait après ce correctif. Optionnel dans tous les cas : sans
+# secret fourni au build, `cat /run/secrets/... 2>/dev/null || true`
+# laisse GITHUB_TOKEN vide et ${GITHUB_TOKEN:+...} n'ajoute simplement pas
+# le header Authorization.
+
+# Épinglage des émulateurs/outils (audit H2, 05/09) : chacun des 16 appels
+# à l'API GitHub "releases/latest" plus bas dispose désormais d'un ARG
+# "<OUTIL>_TAG" (ex: CEMU_TAG, RPCS3_TAG, FLIPS_TAG...) — vide par défaut,
+# comportement inchangé (résout toujours "latest" dynamiquement). Passer
+# `--build-arg CEMU_TAG=v2.0-83` (ou via make : `make push CEMU_TAG=...`,
+# à ajouter au Makefile si besoin d'un usage fréquent) fige cet outil sur
+# un tag précis au lieu de suivre la dernière release à chaque build —
+# utile pour bumper délibérément un seul outil sans que les 79 autres RUN
+# ne bougent avec lui, ou pour reproduire une image passée. Non couvert :
+# ShadPS4 (liste `/releases` complète, pas `/releases/latest`, pour
+# capter des prereleases — mécanisme différent) et decky-loader (télécharge
+# toujours le dernier binaire officiel une fois, PUIS se met à jour
+# lui-même via son propre mécanisme, voir svc-decky-loader/run — un tag
+# figé irait à l'encontre de ce design).
 
 # BUILD_DATE : deuxième --build-arg passé par le Makefile jusqu'ici jamais
 # consommé — exposé en label OCI standard, utile pour dater une image
@@ -514,7 +543,10 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # lancé depuis le menu XFCE Pegasus échoue immédiatement ("could not connect
 # to display", confirmé en direct). Même pattern que "Steam (Bureau)"
 # ci-dessous ; labwc démarre son Xwayland interne à la demande sur :0.
-RUN PEGASUS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
+ARG PEGASUS_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    PEGASUS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/${PEGASUS_TAG:+tags/}${PEGASUS_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
     [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
@@ -606,7 +638,10 @@ RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main
 
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
-RUN SRM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
+ARG SRM_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    SRM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/${SRM_TAG:+tags/}${SRM_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
     [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
@@ -634,7 +669,10 @@ RUN curl -fSL -o /tmp/lindbergh.app \
     rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
-RUN SUPERMODEL_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
+ARG SUPERMODEL_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    SUPERMODEL_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/${SUPERMODEL_TAG:+tags/}${SUPERMODEL_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*\.tar[^"]*"' | cut -d'"' -f4 | head -1) && \
     if [ -n "${SUPERMODEL_URL}" ]; then \
       curl -o /tmp/supermodel.tar.gz -L "${SUPERMODEL_URL}" && \
@@ -710,7 +748,10 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
 # script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
 # absolu évite complètement le calcul de dossier.
-RUN CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
+ARG CEMU_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/${CEMU_TAG:+tags/}${CEMU_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
@@ -724,7 +765,10 @@ RUN CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
-RUN PCSX2_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
+ARG PCSX2_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    PCSX2_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/${PCSX2_TAG:+tags/}${PCSX2_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*linux-appimage-x64-Qt\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${PCSX2_URL}" ] || { echo "FATAL: PCSX2_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pcsx2.AppImage "${PCSX2_URL}" && \
@@ -737,7 +781,10 @@ RUN PCSX2_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
       > /usr/share/applications/pcsx2.desktop && \
     rm -f /tmp/pcsx2.AppImage
 
-RUN RPCS3_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
+ARG RPCS3_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    RPCS3_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/${RPCS3_TAG:+tags/}${RPCS3_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*_linux64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${RPCS3_URL}" ] || { echo "FATAL: RPCS3_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/rpcs3.AppImage "${RPCS3_URL}" && \
@@ -751,7 +798,10 @@ RUN RPCS3_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
 
-RUN DUCKSTATION_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
+ARG DUCKSTATION_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    DUCKSTATION_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/${DUCKSTATION_TAG:+tags/}${DUCKSTATION_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*DuckStation-x64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${DUCKSTATION_URL}" ] || { echo "FATAL: DUCKSTATION_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/duckstation.AppImage "${DUCKSTATION_URL}" && \
@@ -764,7 +814,10 @@ RUN DUCKSTATION_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHU
       > /usr/share/applications/duckstation.desktop && \
     rm -f /tmp/duckstation.AppImage
 
-RUN XEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
+ARG XEMU_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    XEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/${XEMU_TAG:+tags/}${XEMU_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v dbg | cut -d'"' -f4 | head -1) && \
     [ -n "${XEMU_URL}" ] || { echo "FATAL: XEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xemu.AppImage "${XEMU_URL}" && \
@@ -777,7 +830,10 @@ RUN XEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
-RUN AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
+ARG AZAHAR_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/${AZAHAR_TAG:+tags/}${AZAHAR_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*wayland\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
@@ -791,7 +847,10 @@ RUN AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOK
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
 
-RUN XENIA_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
+ARG XENIA_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    XENIA_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/${XENIA_TAG:+tags/}${XENIA_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${XENIA_URL}" ] || { echo "FATAL: XENIA_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xenia.AppImage "${XENIA_URL}" && \
@@ -805,7 +864,10 @@ RUN XENIA_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
     rm -f /tmp/xenia.AppImage
 
 # melonDS (Nintendo DS) — zip, pas d'AppImage.
-RUN MELONDS_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
+ARG MELONDS_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    MELONDS_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/${MELONDS_TAG:+tags/}${MELONDS_TAG:-latest}" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${MELONDS_VERSION}" ] || { echo "FATAL: MELONDS_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/melon.zip \
@@ -819,7 +881,10 @@ RUN MELONDS_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHU
     rm -f /tmp/melon.zip
 
 # DOSBox Staging — tarball officiel, pas d'AppImage.
-RUN DSTAGING_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
+ARG DSTAGING_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    DSTAGING_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/${DSTAGING_TAG:+tags/}${DSTAGING_TAG:-latest}" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${DSTAGING_VERSION}" ] || { echo "FATAL: DSTAGING_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/dosbox.tar.xz \
@@ -832,7 +897,11 @@ RUN DSTAGING_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITH
 
 # GZDoom + Freedoom (WAD libre, pas besoin du WAD original Doom) — .deb officiel,
 # même technique d'extraction manuelle que Chrome ci-dessus.
-RUN GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
+ARG GZDOOM_TAG=""
+ARG FREEDOOM_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/${GZDOOM_TAG:+tags/}${GZDOOM_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*_amd64\.deb"' | cut -d'"' -f4) && \
     [ -n "${GZDOOM_URL}" ] || { echo "FATAL: GZDOOM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/gzdoom.deb "${GZDOOM_URL}" && \
@@ -842,7 +911,7 @@ RUN GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOK
     cp -a /tmp/gzdoom-extract/usr/. /usr/ && \
     chmod +x /usr/games/gzdoom /opt/gzdoom/gzdoom && \
     ln -sf /usr/games/gzdoom /usr/local/bin/gzdoom && \
-    FREEDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
+    FREEDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/${FREEDOOM_TAG:+tags/}${FREEDOOM_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*freedoom-[^"]*\.zip"' | cut -d'"' -f4) && \
     curl -fSL --retry 3 -o /tmp/freedoom.zip "${FREEDOOM_URL}" && \
     mkdir -p /usr/local/share/doom && \
@@ -850,7 +919,9 @@ RUN GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOK
     rm -rf /tmp/gzdoom.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/gzdoom-extract /tmp/freedoom.zip
 
 # ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
-RUN SHADPS4_TAG=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    SHADPS4_TAG=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
     SHADPS4_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
@@ -876,7 +947,10 @@ RUN SHADPS4_TAG=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TO
 # à tenir à jour (juste rebuild l'image) qu'un script curl+extraction ad hoc.
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
-RUN FLIPS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
+ARG FLIPS_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    FLIPS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/${FLIPS_TAG:+tags/}${FLIPS_TAG:-latest}" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
     [ -n "${FLIPS_URL}" ] || { echo "FATAL: FLIPS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/flips.zip "${FLIPS_URL}" && \
@@ -915,7 +989,10 @@ RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
 # encore dans l'équation à l'époque).
 RUN pip install --break-system-packages --no-cache-dir websockify
 
-RUN NOVNC_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
+ARG NOVNC_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    NOVNC_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/${NOVNC_TAG:+tags/}${NOVNC_TAG:-latest}" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
     mkdir -p /usr/share/webapps/novnc && \
     curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
@@ -993,8 +1070,30 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 # attente d'un consentement qu'il n'y a personne pour valider en headless —
 # le serveur web/streaming de Sunshine ne démarre jamais (aucun port
 # 47984-47990 en écoute), symptôme : "impossible de se connecter à Sunshine".
-RUN setcap 'cap_sys_nice+p cap_sys_admin+p' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
+#
+# +ep, pas +p seul (audit M8, 05/09) : une capacité de fichier "permitted"
+# (+p) seule n'est PAS automatiquement utilisable — un programme doit la
+# hisser lui-même du set permitted vers le set effectif (prctl/cap_set_proc)
+# avant de pouvoir réellement s'en servir. Sunshine le fait pour
+# CAP_SYS_ADMIN (l'accès KMS ci-dessus fonctionne bien), mais PAS pour
+# CAP_SYS_NICE — confirmé en direct (build prerelease 2026.902.143621,
+# 04/09) : "setpriority failed for nice -15/-10: Permission denied" à
+# répétition alors que le binaire portait déjà cap_sys_nice+p. +ep la rend
+# effective dès l'exec, sans que Sunshine ait quoi que ce soit à faire —
+# threads d'encodage/audio correctement priorisés sous charge CPU.
+RUN setcap 'cap_sys_nice,cap_sys_admin+ep' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
     echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
+
+# PipeWire — même classe de correctif (audit M8, 05/09) : sans CAP_SYS_NICE
+# effective, PipeWire ne peut obtenir de priorité temps réel (SCHED_FIFO)
+# pour ses threads audio qu'en passant par rtkit (D-Bus), absent de ce
+# conteneur (pas de polkit/rtkit-daemon supervisé) — il tourne alors en
+# ordonnancement normal, exposé aux craquements audio sous charge (jeu
+# gourmand, compilation de shaders). cap_add: SYS_NICE existe déjà côté
+# docker-compose ; il ne manquait que la capacité de fichier sur le binaire
+# réellement exécuté, comme pour Sunshine ci-dessus.
+RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)" 2>/dev/null || \
+    echo "WARN: setcap pipewire impossible ici, à refaire si le binaire change au runtime"
 
 # Rafraîchit la base des .desktop (/usr/share/applications) — au cas où le
 # menu XFCE (garcon) ne les reprendrait pas correctement sans ça, non
@@ -1028,14 +1127,36 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
 RUN mkdir -p /var/cache/steambox/dxvk /var/cache/steambox/nv-shader && \
     chmod -R 1777 /var/cache/steambox
 
+# Inventaire de paquets (audit H2, 05/09) : rien n'étant épinglé dans ce
+# Dockerfile hormis s6-overlay et désormais la base (voir FROM plus haut),
+# c'est le seul moyen fiable de savoir ce qu'une image donnée contient
+# réellement une fois construite. `diff` entre deux `docker run --rm <tag>
+# cat /etc/steambox-packages.txt` rend visible tout ce qui a changé entre
+# deux builds — Mesa, wlroots, Sunshine, émulateurs AUR/pacman compris.
+RUN pacman -Q > /etc/steambox-packages.txt
+
 # GSK_RENDERER=cairo (fix GTK4 de l'ère X11) retiré : la cause identifiée
 # était le SHM X11 refusé par un client non-root (arcade) face à un Xorg
 # root — plus de root/Xorg du tout dans cette session Wayland (labwc tourne
 # entièrement en arcade via seatd, voir wayland-session.sh). À remettre si
 # un bug de rendu GTK4 identique resurgit ici, non revérifié en direct sous
 # Wayland.
-ENV XDG_RUNTIME_DIR=/run/user/1000 \
-    WAYLAND_DISPLAY=wayland-0 \
+#
+# XDG_RUNTIME_DIR retirée d'ici (audit F2, 05/09) : cette ENV globale valait
+# "/run/user/1000", qui ne correspond JAMAIS à l'UID réel d'arcade en
+# production (99 côté Unraid/PUID, voir docker-compose.cachyos.yml) —
+# fausse pour tout ce qui l'hériterait sans la recalculer. Au moins trois
+# services de ce dépôt (svc-wayvnc, svc-evdev-bridge, svc-sunshine)
+# documentent déjà le bug exact que cette valeur causait et la
+# recalculent eux-mêmes via $(id -u arcade). init-system/run exporte
+# désormais la VRAIE valeur dans /run/s6/container_environment/ (lu par
+# with-contenv, l'en-tête de tous les scripts s6-rc.d de ce projet), avec
+# le bon PUID dès le premier service qui en a besoin.
+# LC_ALL absent volontairement (audit F5, 05/09) : primait auparavant sur
+# TOUTE variable LC_*, empêchant de passer un jeu/outil précis en anglais
+# sans le retirer globalement — LANG+LANGUAGE ci-dessous suffisent pour
+# une interface FR par défaut, sans ce verrou.
+ENV WAYLAND_DISPLAY=wayland-0 \
     SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
     QT_QPA_PLATFORM=wayland \
@@ -1047,7 +1168,6 @@ ENV XDG_RUNTIME_DIR=/run/user/1000 \
     NVD_BACKEND=direct \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
-    LC_ALL=fr_FR.UTF-8 \
     DOOMWADDIR=/usr/local/share/doom \
     DXVK_STATE_CACHE_PATH=/var/cache/steambox/dxvk \
     __GL_SHADER_DISK_CACHE_PATH=/var/cache/steambox/nv-shader \

@@ -44,6 +44,14 @@ static int screen_w = 1920;
 static int screen_h = 1200;
 static volatile int running = 1;
 
+/* debug_enabled (audit F1, 05/09) : la ligne "SEND KEY" loggait
+ * inconditionnellement CHAQUE frappe, captée par s6 puis le log driver
+ * Docker — coût réel sur une session longue, pour une info utile
+ * seulement en dépannage actif. Les lignes DEBOUNCE restent
+ * inconditionnelles : rares (uniquement sur un doublon détecté) et
+ * précieuses pour diagnostiquer un filtre trop agressif. */
+static int debug_enabled = 0;
+
 /* Device paths */
 static char kbd_path[256];
 static char rel_mouse_path[256];
@@ -260,23 +268,15 @@ static void handle_mouse_event(struct input_event *ev) {
             zwlr_virtual_pointer_v1_motion(vpointer, t,
                 0, wl_fixed_from_int(ev->value));
             break;
-        case REL_WHEEL:
-            /* Discrete wheel event — send directly */
-            zwlr_virtual_pointer_v1_axis_source(vpointer,
-                WL_POINTER_AXIS_SOURCE_WHEEL);
-            zwlr_virtual_pointer_v1_axis(vpointer, t,
-                WL_POINTER_AXIS_VERTICAL_SCROLL,
-                wl_fixed_from_int(-ev->value * 15));
-            zwlr_virtual_pointer_v1_frame(vpointer);
-            break;
-        case REL_HWHEEL:
-            zwlr_virtual_pointer_v1_axis_source(vpointer,
-                WL_POINTER_AXIS_SOURCE_WHEEL);
-            zwlr_virtual_pointer_v1_axis(vpointer, t,
-                WL_POINTER_AXIS_HORIZONTAL_SCROLL,
-                wl_fixed_from_int(ev->value * 15));
-            zwlr_virtual_pointer_v1_frame(vpointer);
-            break;
+        /* REL_WHEEL/REL_HWHEEL intentionnellement ignorés ici (audit M5,
+         * 05/09) : la souris virtuelle de Sunshine (inputtino ET
+         * libvirtualhid, vérifié dans les deux sources) émet TOUJOURS les
+         * deux paires — le discret (REL_WHEEL) ET le haute résolution
+         * (REL_WHEEL_HI_RES) — pour le même cran physique. Traiter les deux
+         * séparément (comme avant ce correctif) envoyait deux défilements
+         * pour un seul cran côté labwc, confirmé en direct dans les menus
+         * Steam/RetroArch. Un seul chemin (HI_RES ci-dessous) est conservé.
+         */
 #ifndef REL_WHEEL_HI_RES
 #define REL_WHEEL_HI_RES 11
 #endif
@@ -364,7 +364,20 @@ static void handle_mouse_event(struct input_event *ev) {
 
 /* Process absolute mouse events */
 static void handle_abs_mouse_event(struct input_event *ev) {
-    static int32_t ax = -1, ay = -1;
+    /* ax/ay conservent la DERNIÈRE position connue en permanence (audit M6,
+     * 05/09) — plus jamais remis à -1 après envoi. Le noyau evdev ne
+     * réémet un code EV_ABS que si sa valeur a changé depuis le dernier
+     * rapport (règle standard du sous-système input) : un mouvement purement
+     * horizontal n'apporte donc QUE ABS_X dans ce SYN_REPORT, jamais ABS_Y.
+     * Avec l'ancien code (ax/ay remis à -1 après chaque envoi), ay restait
+     * à -1 et la condition "ax >= 0 && ay >= 0" bloquait l'envoi du
+     * mouvement tant que l'axe Y ne changeait pas aussi — un geste
+     * horizontal seul (tactile, stylet, bureau distant en souris absolue)
+     * était donc perdu. `dirty` est mis à jour indépendamment sur chaque
+     * axe et déclenche l'envoi dès que L'UN des deux a changé, tout en
+     * envoyant toujours la position complète (dernière connue) des deux. */
+    static int32_t ax = 0, ay = 0;
+    static int dirty = 0;
     uint32_t t = get_time_ms();
 
     switch (ev->type) {
@@ -372,9 +385,11 @@ static void handle_abs_mouse_event(struct input_event *ev) {
         switch (ev->code) {
         case ABS_X:
             ax = ev->value;
+            dirty = 1;
             break;
         case ABS_Y:
             ay = ev->value;
+            dirty = 1;
             break;
         }
         break;
@@ -396,12 +411,11 @@ static void handle_abs_mouse_event(struct input_event *ev) {
 
     case EV_SYN:
         if (ev->code == SYN_REPORT) {
-            if (ax >= 0 && ay >= 0) {
+            if (dirty) {
                 /* Sunshine absolute range is 0-65535, map to screen */
                 zwlr_virtual_pointer_v1_motion_absolute(vpointer, t,
                     (uint32_t)ax, (uint32_t)ay, 65535, 65535);
-                ax = -1;
-                ay = -1;
+                dirty = 0;
             }
             zwlr_virtual_pointer_v1_frame(vpointer);
         }
@@ -476,7 +490,9 @@ static void handle_keyboard_event(struct input_event *ev) {
             key_last_press_time[ev->code] = t;
         }
 
-        fprintf(stderr, "[bridge] SEND KEY: code=%u value=%d t=%u\n", ev->code, ev->value, t);
+        if (debug_enabled) {
+            fprintf(stderr, "[bridge] SEND KEY: code=%u value=%d t=%u\n", ev->code, ev->value, t);
+        }
 
         /* Send the key event */
         zwp_virtual_keyboard_v1_key(vkeyboard, t, ev->code,
@@ -508,6 +524,8 @@ int main(int argc, char *argv[]) {
     signal(SIGINT, sighandler);
     signal(SIGTERM, sighandler);
     signal(SIGPIPE, SIG_IGN); /* Don't die on broken pipe, handle gracefully */
+
+    debug_enabled = getenv("BRIDGE_DEBUG") != NULL;
 
     fprintf(stderr, "[bridge] evdev-bridge v3: native Wayland input injection\n");
 

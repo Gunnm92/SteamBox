@@ -18,6 +18,15 @@ while [ ! -S "${SOCKET_PATH}" ] && [ "${TIMEOUT}" -gt 0 ]; do
     TIMEOUT=$((TIMEOUT - 1))
 done
 
+# Échec franc si le socket n'existe toujours pas (audit M1, 05/09, même
+# pattern que svc-sunshine/svc-labwc-headless) : sans ça wayvnc démarrait
+# quand même après le timeout et échouait à se connecter en silence,
+# laissant le VNC mort jusqu'à un redémarrage manuel du service.
+if [ ! -S "${SOCKET_PATH}" ]; then
+    echo "[wayvnc] wayland-0 absent après 15s — refus de démarrer, s6 va relancer."
+    exit 1
+fi
+
 mkdir -p /config/logs
 # -k fr-mac (30/08) : wayvnc a son propre chemin d'input, indépendant
 # d'evdev-bridge/Sunshine — sans ce flag il utilise un clavier par défaut

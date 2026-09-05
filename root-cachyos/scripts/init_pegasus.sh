@@ -351,4 +351,8 @@ EOF
 chmod +x /usr/local/bin/pegasus-update
 
 # ── Permissions ───────────────────────────────────────────────────────────────
-chown -R arcade:arcade "${PEGASUS_CFG}" 2>/dev/null || true
+# Garde de propriétaire (audit F4, 05/09, même motif qu'init_system.sh) :
+# évite un chown -R inconditionnel à chaque boot une fois déjà correct.
+TARGET_OWNER="${PUID:-1000}:${PGID:-1000}"
+CURRENT_OWNER=$(stat -c '%u:%g' "${PEGASUS_CFG}" 2>/dev/null || echo "")
+[ "${CURRENT_OWNER}" = "${TARGET_OWNER}" ] || chown -R "${TARGET_OWNER}" "${PEGASUS_CFG}" 2>/dev/null || true

@@ -7,5 +7,10 @@ userdata/
 *.swp
 *.swo
 
+# Bibliothèque Heroic personnelle (audit F3, 05/09) — titres/chemins/
+# identifiants sideload propres à l'utilisateur, rien dans l'image ne la
+# lit, aucune raison qu'elle soit versionnée dans un dépôt public.
+Heroic Launcher/library.json
+
 # Clone de référence du dépôt source de l'image de base (pas un composant du projet)
 docker-webstation/

@@ -10,8 +10,16 @@ BUILDX       = $(DOCKER) buildx build \
                  --provenance=false --sbom=false
 
 BUILD_ARGS   = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
+# GITHUB_TOKEN passé en secret BuildKit (audit C1, 05/09), plus en
+# --build-arg : un build-arg consommé par un RUN reste lisible en clair
+# dans l'historique de l'image pour toujours (confirmé en direct, token
+# révoqué suite à cet incident) — un secret n'est monté que le temps du
+# RUN qui le demande explicitement (--mount=type=secret,id=github_token
+# côté Dockerfile) et n'apparaît jamais dans aucune couche. env=GITHUB_TOKEN
+# lit la valeur depuis la variable d'environnement du process make, jamais
+# depuis un fichier sur disque.
 ifdef GITHUB_TOKEN
-BUILD_ARGS  += --build-arg GITHUB_TOKEN="$(GITHUB_TOKEN)"
+BUILD_ARGS  += --secret id=github_token,env=GITHUB_TOKEN
 endif
 
 .PHONY: build push run stop logs clean help

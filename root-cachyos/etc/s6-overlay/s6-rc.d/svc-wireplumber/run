@@ -1,0 +1,13 @@
+#!/command/with-contenv bash
+# WirePlumber (politique de session PipeWire — routage des devices/sinks) —
+# extrait de wayland-session.sh en un vrai service s6 (audit M2, 05/09),
+# même motif que svc-pipewire/run : plus supervisé individuellement, une
+# mort isolée de WirePlumber (PipeWire restant vivant) est maintenant
+# relancée automatiquement par s6 au lieu de rester silencieuse jusqu'au
+# prochain redémarrage complet de la session.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+
+exec runuser -u arcade -- \
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus" \
+    wireplumber

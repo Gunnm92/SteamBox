@@ -23,7 +23,35 @@ set -e
 # ("Mode SteamOS (Gamescope)", audit 29/08) — sous X11 à l'époque ; sous
 # Wayland (SDL_VIDEODRIVER=wayland,x11 désormais), --backend sdl passe par
 # le driver SDL wayland, confirmé fonctionner en direct le 29/08 (gamescope
-# tourne réellement, pas juste lancé). Résolution/refresh alignés sur
-# scripts/init_sunshine.sh (2560x1440@120). -e : intégration Steam-gamescope
+# tourne réellement, pas juste lancé). -e : intégration Steam-gamescope
 # (statistiques de perf, contrôle de la résolution depuis Steam).
-exec gamescope --backend sdl -W 2560 -H 1440 -r 120 -f -e -C 0 -- /usr/local/bin/steam -gamepadui
+#
+# Résolution/fréquence pilotées par le client (audit M7, 05/09) : ce script
+# sert deux appelants — le raccourci "Steam" du bureau XFCE local (aucune
+# variable SUNSHINE_CLIENT_* définie, replis 2560x1440@120 ci-dessous
+# inchangés) ET l'entrée apps.json "Mode SteamOS (Gamescope)" lancée par
+# Sunshine (qui exporte SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS dans l'environnement
+# de la commande "detached", même mécanisme que prep-cmd — voir
+# set-resolution.sh). Avant ce correctif, gamescope rendait TOUJOURS en
+# 2560x1440@120 même pour un client négociant du 1080p60, chargeant GPU et
+# NVENC pour des pixels ensuite jetés au rescale.
+#
+# IMPORTANT — pourquoi un script et pas la commande inline dans apps.json :
+# Sunshine exécute "detached" via boost::process::child(cmd, ...), qui
+# tokenise la chaîne lui-même (découpage simple par espaces/guillemets) —
+# CE N'EST PAS un /bin/sh -c (confirmé dans platf::run_command,
+# src/platform/linux/misc.cpp). Une syntaxe ${VAR:-defaut} placée
+# directement dans la commande JSON n'est donc JAMAIS développée, elle
+# arriverait littéralement en argument à gamescope. Seul un vrai script
+# shell, invoqué comme exécutable, bénéficie de l'expansion bash.
+#
+# --force-grab-cursor --immediate-flips (05/09) : ajoutés ici après avoir
+# été trouvés dans l'entrée live du 31/08 (modifiés depuis l'UI web
+# Sunshine, jamais reportés dans ce dépôt jusqu'ici) — capture le curseur
+# dans la fenêtre gamescope (évite qu'un mouvement de souris streamé sorte
+# de la zone de jeu) et réduit la latence de présentation.
+WIDTH="${SUNSHINE_CLIENT_WIDTH:-2560}"
+HEIGHT="${SUNSHINE_CLIENT_HEIGHT:-1440}"
+FPS="${SUNSHINE_CLIENT_FPS:-120}"
+
+exec gamescope --force-grab-cursor --backend sdl -W "${WIDTH}" -H "${HEIGHT}" -r "${FPS}" -f -e -C 0 --immediate-flips -- /usr/local/bin/steam -gamepadui

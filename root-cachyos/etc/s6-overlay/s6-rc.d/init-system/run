@@ -47,6 +47,16 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
 chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
 
+# Exportée pour tous les services longrun via with-contenv (audit F2,
+# 05/09) — remplace l'ancienne ENV Dockerfile globale XDG_RUNTIME_DIR=
+# /run/user/1000, fausse dès que PUID != 1000 (le cas en production,
+# PUID=99). Plusieurs services de ce dépôt recalculaient déjà eux-mêmes
+# $(id -u arcade) pour contourner cette valeur héritée incorrecte —
+# laissés tels quels (inoffensifs), mais tout futur script bénéficie
+# maintenant directement de la bonne valeur sans avoir à le savoir.
+mkdir -p /run/s6/container_environment
+printf '%s' "${XDG_RUNTIME_DIR}" > /run/s6/container_environment/XDG_RUNTIME_DIR
+
 # Permissions génériques input/GPU — device_cgroup_rules côté docker-compose
 # gère déjà l'accès cgroup, ceci couvre la permission Unix classique.
 #
@@ -100,9 +110,22 @@ if getent group 71 >/dev/null 2>&1; then
     fi
 fi
 
-for script in init_system init_audio init_sunshine init_pegasus; do
+# || echo (audit H1, 05/09) : ce oneshot tourne sous set -e et TOUS les
+# services longrun (labwc, sunshine, wayvnc...) en dépendent — avant ce
+# correctif, une seule exception dans un de ces scripts (ex: apps.json
+# édité à la main invalide pour jq, gamelist.xml malformé) tuait tout le
+# conteneur d'un coup, sans rapport avec la gravité réelle du problème.
+# Aucun de ces quatre scripts n'est un prérequis dur du bureau/streaming.
+#
+# init_retroarch ajouté à la boucle (même audit) : présent sur disque
+# (root-cachyos/scripts/init_retroarch.sh) depuis l'origine mais jamais
+# invoqué nulle part dans le dépôt — ses correctifs documentés
+# ("confirmés en direct sur la prod" : video_vsync=false pour le freeze
+# GLX, pause_nonactive=false, system_directory vers /userdata/bios)
+# n'avaient donc jamais réellement pris effet.
+for script in init_system init_audio init_sunshine init_pegasus init_retroarch; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
-        "/usr/local/bin/scripts/${script}.sh"
+        "/usr/local/bin/scripts/${script}.sh" || echo "[init-system] ${script}.sh a échoué (code $?) — on continue"
     fi
 done
 

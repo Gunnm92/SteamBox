@@ -80,6 +80,16 @@ Justification des trois règles cgroup — **les trois sont requises** :
   les détecte — vécu le 31/08. Fonctionne de pair avec la règle udev
   `99-steambox-hidraw-fallback.rules` de l'image (mknod explicite du nœud).
 
+## Réglages spécifiques au déploiement (`sunshine.conf`)
+
+Ces clés vivent sur `/config` (persistant), **pas** dans le dépôt/l'image —
+elles dépendent du réseau/matériel de CE déploiement, pas du projet SteamBox
+en général. `init_sunshine.sh` ne les pose jamais automatiquement.
+
+| Clé | Valeur | Rôle |
+|---|---|---|
+| `packetsize` | `1346` | Limite la taille des paquets vidéo/audio pour éviter la fragmentation sur liaison VPN à faible MTU (option native Sunshine, section Network). Ajoutée le 04/09 suite à un écran noir Moonlight en se connectant via un VPN OpenVPN — calcul détaillé dans la doc officielle Sunshine (`packetsize`), ~1346 pour un tunnel OpenVPN layer-2 IPv4 classique. **À adapter/retirer si le réseau/VPN change** ; n'a aucun effet néfaste en LAN direct mais reste une valeur figée pour un cas précis, pas un défaut universel. |
+
 ## Points d'attention
 
 - **Politique de redémarrage** : le conteneur inspecté est en `restart: no` —
