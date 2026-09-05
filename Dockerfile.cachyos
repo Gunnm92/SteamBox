@@ -441,6 +441,23 @@ RUN mkdir -p /etc/NetworkManager && \
     printf '[main]\nplugins=keyfile\n\n[keyfile]\nunmanaged-devices=*\n' \
       > /etc/NetworkManager/NetworkManager.conf
 
+# UPower désactivé côté activation D-Bus (audit live, 05/09) — steamwebhelper
+# (CEF, lancé par Sunshine à chaque connexion Moonlight via "steam -gamepadui")
+# interroge org.freedesktop.UPower en continu pendant toute la durée d'une
+# session (API standard Chromium de statut batterie/alimentation). Ce
+# conteneur n'a pas de polkit fonctionnel (pas de logind sous s6, même cause
+# que le NetworkManager.conf ci-dessus) : upowerd meurt donc immédiatement
+# ("failed to get polkit authority", SIGABRT) à chaque activation, et D-Bus
+# le relance aussitôt à la requête suivante de Steam — confirmé en DIRECT
+# pendant une vraie session : ~1700 crashs en 25 minutes, environ un par
+# seconde en continu tout le temps que Steam tourne. Supprimer le fichier
+# d'activation fait échouer la requête D-Bus proprement et immédiatement
+# (ServiceUnknown) au lieu de forker un process voué à crasher — Chromium
+# gère nativement l'absence d'UPower (comportement standard hors Linux
+# desktop), aucun impact observé sur Steam. Rien dans ce conteneur headless
+# n'a de vraie batterie à surveiller de toute façon.
+RUN rm -f /usr/share/dbus-1/system-services/org.freedesktop.UPower.service
+
 # ── 1a2. Locale française — absente du glibc CachyOS (build allégé, seuls les
 # locales en_* sont incluses ; fr_FR/*.fr manquent totalement). Le fichier de
 # définition est un format texte stable côté glibc upstream — recréé depuis
