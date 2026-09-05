@@ -514,7 +514,7 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # lancé depuis le menu XFCE Pegasus échoue immédiatement ("could not connect
 # to display", confirmé en direct). Même pattern que "Steam (Bureau)"
 # ci-dessous ; labwc démarre son Xwayland interne à la demande sur :0.
-RUN PEGASUS_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
+RUN PEGASUS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
     [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
@@ -606,7 +606,7 @@ RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main
 
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
-RUN SRM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
+RUN SRM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
     [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
@@ -634,7 +634,7 @@ RUN curl -fSL -o /tmp/lindbergh.app \
     rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
-RUN SUPERMODEL_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
+RUN SUPERMODEL_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*\.tar[^"]*"' | cut -d'"' -f4 | head -1) && \
     if [ -n "${SUPERMODEL_URL}" ]; then \
       curl -o /tmp/supermodel.tar.gz -L "${SUPERMODEL_URL}" && \
@@ -710,7 +710,7 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
 # script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
 # absolu évite complètement le calcul de dossier.
-RUN CEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
+RUN CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
@@ -724,7 +724,7 @@ RUN CEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
-RUN PCSX2_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
+RUN PCSX2_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux-appimage-x64-Qt\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${PCSX2_URL}" ] || { echo "FATAL: PCSX2_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/pcsx2.AppImage "${PCSX2_URL}" && \
@@ -737,7 +737,7 @@ RUN PCSX2_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN
       > /usr/share/applications/pcsx2.desktop && \
     rm -f /tmp/pcsx2.AppImage
 
-RUN RPCS3_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
+RUN RPCS3_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*_linux64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${RPCS3_URL}" ] || { echo "FATAL: RPCS3_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/rpcs3.AppImage "${RPCS3_URL}" && \
@@ -751,7 +751,7 @@ RUN RPCS3_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
 
-RUN DUCKSTATION_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
+RUN DUCKSTATION_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*DuckStation-x64\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${DUCKSTATION_URL}" ] || { echo "FATAL: DUCKSTATION_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/duckstation.AppImage "${DUCKSTATION_URL}" && \
@@ -764,7 +764,7 @@ RUN DUCKSTATION_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB
       > /usr/share/applications/duckstation.desktop && \
     rm -f /tmp/duckstation.AppImage
 
-RUN XEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
+RUN XEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v dbg | cut -d'"' -f4 | head -1) && \
     [ -n "${XEMU_URL}" ] || { echo "FATAL: XEMU_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xemu.AppImage "${XEMU_URL}" && \
@@ -777,7 +777,7 @@ RUN XEMU_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
-RUN AZAHAR_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
+RUN AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*wayland\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
@@ -791,7 +791,7 @@ RUN AZAHAR_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
 
-RUN XENIA_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
+RUN XENIA_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${XENIA_URL}" ] || { echo "FATAL: XENIA_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/xenia.AppImage "${XENIA_URL}" && \
@@ -805,7 +805,7 @@ RUN XENIA_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN
     rm -f /tmp/xenia.AppImage
 
 # melonDS (Nintendo DS) — zip, pas d'AppImage.
-RUN MELONDS_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
+RUN MELONDS_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/latest" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${MELONDS_VERSION}" ] || { echo "FATAL: MELONDS_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/melon.zip \
@@ -819,7 +819,7 @@ RUN MELONDS_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB
     rm -f /tmp/melon.zip
 
 # DOSBox Staging — tarball officiel, pas d'AppImage.
-RUN DSTAGING_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
+RUN DSTAGING_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/dosbox-staging/dosbox-staging/releases/latest" \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${DSTAGING_VERSION}" ] || { echo "FATAL: DSTAGING_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/dosbox.tar.xz \
@@ -832,7 +832,7 @@ RUN DSTAGING_VERSION=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHU
 
 # GZDoom + Freedoom (WAD libre, pas besoin du WAD original Doom) — .deb officiel,
 # même technique d'extraction manuelle que Chrome ci-dessus.
-RUN GZDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
+RUN GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*_amd64\.deb"' | cut -d'"' -f4) && \
     [ -n "${GZDOOM_URL}" ] || { echo "FATAL: GZDOOM_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/gzdoom.deb "${GZDOOM_URL}" && \
@@ -842,7 +842,7 @@ RUN GZDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
     cp -a /tmp/gzdoom-extract/usr/. /usr/ && \
     chmod +x /usr/games/gzdoom /opt/gzdoom/gzdoom && \
     ln -sf /usr/games/gzdoom /usr/local/bin/gzdoom && \
-    FREEDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
+    FREEDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*freedoom-[^"]*\.zip"' | cut -d'"' -f4) && \
     curl -fSL --retry 3 -o /tmp/freedoom.zip "${FREEDOOM_URL}" && \
     mkdir -p /usr/local/share/doom && \
@@ -850,9 +850,9 @@ RUN GZDOOM_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKE
     rm -rf /tmp/gzdoom.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/gzdoom-extract /tmp/freedoom.zip
 
 # ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
-RUN SHADPS4_TAG=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+RUN SHADPS4_TAG=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
-    SHADPS4_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+    SHADPS4_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
     [ -n "${SHADPS4_URL}" ] || { echo "FATAL: SHADPS4_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/shadps4.zip "${SHADPS4_URL}" && \
@@ -876,7 +876,7 @@ RUN SHADPS4_TAG=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOK
 # à tenir à jour (juste rebuild l'image) qu'un script curl+extraction ad hoc.
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
-RUN FLIPS_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
+RUN FLIPS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/latest" \
       | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
     [ -n "${FLIPS_URL}" ] || { echo "FATAL: FLIPS_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/flips.zip "${FLIPS_URL}" && \
@@ -915,7 +915,7 @@ RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
 # encore dans l'équation à l'époque).
 RUN pip install --break-system-packages --no-cache-dir websockify
 
-RUN NOVNC_URL=$(curl -s ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
+RUN NOVNC_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/latest" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
     mkdir -p /usr/share/webapps/novnc && \
     curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
