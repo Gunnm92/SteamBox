@@ -7,41 +7,58 @@
 # certains cas), donc lancer Steam sur le compositeur headless (wayland-1)
 # d'une manière compatible avec le flux vidéo propre à Steam Link.
 #
+# ÉTAT CONNU (07/09) : la connexion Steam Link, l'audio et le protocole de
+# stream fonctionnent (bitrate adaptatif, pas de perte de frames anormale —
+# confirmé en direct dans les logs Steam), mais le JEU s'affiche en écran
+# noir côté client Steam Link (l'overlay Steam, lui, s'affiche
+# correctement). Deux approches essayées, même résultat final :
+#   - Cette version (portail XDG + PipeWire, voir ci-dessous) : ScreenCast
+#     s'enregistre bien après les deux correctifs listés plus bas, mais le
+#     buffer GPU (dmabuf) du contenu 3D du jeu ne s'importe pas — limitation
+#     documentée de xdg-desktop-portal-wlr avec le pilote propriétaire
+#     NVIDIA (projet peu maintenu, surtout testé contre Mesa/AMD/Intel).
+#   - Alternative essayée : lancer Steam DANS gamescope (comme "Mode
+#     SteamOS", qui a sa propre capture native pour Remote Play/Steam Link,
+#     sans passer par le portail) — MÊME résultat, écran noir, confirmé en
+#     direct par l'utilisateur. Sunshine/Moonlight, qui capture wayland-1
+#     directement via wlr-screencopy (jamais via un chemin PipeWire tiers),
+#     fonctionne bien lui, y compris avec gamescope ("Mode SteamOS" marche
+#     normalement via Moonlight, confirmé). Le point commun des deux échecs
+#     pointe vers quelque chose de plus profond que le portail seul : le
+#     backend headless de labwc + NVIDIA semble incapable de fournir des
+#     pixels exploitables à quiconque capture autrement que Sunshine
+#     lui-même. Piste non explorée faute de temps : forcer un vrai backend
+#     DRM plutôt que headless pour gamescope, ou inspecter les logs
+#     Vulkan/EGL au moment précis de la capture PipeWire.
+#
+# Décision utilisateur (07/09) : laissé de côté pour l'instant (Moonlight
+# répond au besoin de jeu ; Steam Link reste ouvert pour naviguer la
+# bibliothèque/discuter, juste pas pour streamer un jeu). Ce script garde
+# la version la plus stable des deux essais (celle-ci ne plante jamais,
+# contrairement à la variante gamescope qui a produit une erreur Vulkan
+# "vkCreateComputePipelines failed"/NVVM lors des tests en CLI — non
+# reproduite via une vraie connexion Sunshine, cause non élucidée).
+#
 # Steam Link est un flux SÉPARÉ de Sunshine/Moonlight, propre à Steam : il
 # passe par xdg-desktop-portal + PipeWire (ScreenCast), jamais par
-# wlr-screencopy (ce que Sunshine utilise). Symptôme confirmé en direct :
-# la connexion Steam Link elle-même passait, mais lancer un JEU affichait
-# l'erreur Steam demandant l'option -pipewire — déjà appliquée en réalité
-# (wrapper /usr/local/bin/steam) ; le vrai souci est que le xdg-desktop-
-# portal déjà vivant sur le bus D-Bus de session PARTAGÉ (avec wayland-0,
-# le bureau visible) a démarré avec WAYLAND_DISPLAY=wayland-0 (lancé par
-# wayland-session.sh, premier arrivé) — Steam sur wayland-1 se retrouvait à
-# parler à un portail lié au MAUVAIS bureau. Pire : xdg-desktop-portal-wlr
-# (seul backend à implémenter vraiment ScreenCast sous labwc/wlroots —
-# org.freedesktop.impl.portal.desktop.wlr, voir /usr/share/xdg-desktop-
-# portal/portals/wlr.portal) plantait même à l'activation D-Bus (exit 1
-# immédiat) faute de WAYLAND_DISPLAY dans l'environnement d'activation du
-# bus partagé — seul xdg-desktop-portal-gtk tournait, qui ne fait pas de
-# vraie capture (d'où l'échec au lancement du jeu malgré une connexion
-# Steam Link apparemment fonctionnelle).
-#
-# Isoler Steam sur son propre bus D-Bus privé (même mécanisme que
-# sunshine-desktop-xfce.sh pour XFCE) avec WAYLAND_DISPLAY=wayland-1
-# explicite règle ça — MAIS pas suffisant à lui seul (confirmé en direct,
-# deuxième round de debug 07/09) : quand xdg-desktop-portal est activé
-# automatiquement par D-Bus (Steam se contente d'appeler une méthode sur
-# org.freedesktop.portal.Desktop, jamais de le lancer lui-même), il hérite
-# de l'environnement du DÉMON D-Bus (celui que dbus-run-session vient de
-# forker), pas de celui de Steam — XDG_CURRENT_DESKTOP doit donc être
-# exporté ICI, avant dbus-run-session, sinon xdg-desktop-portal ne trouve
-# aucun fichier de config portail (/etc/xdg-desktop-portal/xfce-portals.conf,
-# voir Dockerfile.cachyos) et n'enregistre jamais l'interface ScreenCast du
-# tout — confirmé par les logs Steam ("L'interface org.freedesktop.portal.
-# ScreenCast n'existe pas") et par une introspection D-Bus directe. Testé en
-# lançant xdg-desktop-portal à la main avec ces mêmes variables : "XDP:
-# Using wlr.portal for org.freedesktop.impl.portal.ScreenCast (default
-# config)" — la combinaison WAYLAND_DISPLAY + XDG_CURRENT_DESKTOP + le
-# fichier de config est bien les trois pièces nécessaires ensemble.
+# wlr-screencopy (ce que Sunshine utilise directement). Deux correctifs
+# nécessaires ensemble pour que ScreenCast s'enregistre correctement
+# (testés en direct, confirmés par introspection D-Bus ET logs Steam sans
+# erreur de portail) :
+#   1. Isoler Steam sur son propre bus D-Bus (WAYLAND_DISPLAY=wayland-1),
+#      sinon xdg-desktop-portal reste lié à wayland-0 (lancé en premier par
+#      wayland-session.sh sur le bus partagé) — Steam parle alors à un
+#      portail lié au mauvais bureau, ou pire, xdg-desktop-portal-wlr
+#      plante à l'activation D-Bus faute de WAYLAND_DISPLAY dans
+#      l'environnement d'activation du bus partagé.
+#   2. XDG_CURRENT_DESKTOP=XFCE exporté explicitement avant
+#      dbus-run-session — quand xdg-desktop-portal est activé par D-Bus
+#      (Steam appelle une méthode, ne le lance jamais lui-même), il hérite
+#      de l'environnement du démon D-Bus tout juste forké, pas forcément de
+#      celui de Steam. Sans cette variable, xdg-desktop-portal ne trouve
+#      aucun fichier de config portail
+#      (/etc/xdg-desktop-portal/xfce-portals.conf, voir Dockerfile.cachyos)
+#      et n'enregistre jamais l'interface ScreenCast du tout.
 set -uo pipefail
 
 export WAYLAND_DISPLAY=wayland-1
