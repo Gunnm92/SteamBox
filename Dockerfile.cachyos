@@ -681,7 +681,7 @@ RUN curl -fSL -o /tmp/lindbergh.app \
     { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction lindbergh.app échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/lindbergh && rm -f squashfs-root || mv squashfs-root /opt/lindbergh; } && \
     ln -sf /opt/lindbergh/AppRun /usr/local/bin/lindbergh && \
-    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nIcon=/opt/lindbergh/.DirIcon\nCategories=Game;Emulator;\nTerminal=false\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nIcon=/opt/lindbergh/.DirIcon\nCategories=Game;\nTerminal=false\n' \
       > /usr/share/applications/lindbergh.desktop && \
     rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
 
@@ -778,7 +778,7 @@ RUN --mount=type=secret,id=github_token \
     mv squashfs-root /opt/cemu && \
     printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
     chmod +x /usr/local/bin/cemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=env DISPLAY=:0 /usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=env DISPLAY=:0 /usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/cemu.desktop && \
     rm -f /tmp/cemu.AppImage
 
@@ -794,7 +794,7 @@ RUN --mount=type=secret,id=github_token \
     [ -d squashfs-root ] || { echo "FATAL: extraction pcsx2.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/pcsx2 && \
     ln -sf /opt/pcsx2/AppRun /usr/local/bin/pcsx2 && \
-    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nIcon=/opt/pcsx2/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nIcon=/opt/pcsx2/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/pcsx2.desktop && \
     rm -f /tmp/pcsx2.AppImage
 
@@ -811,7 +811,7 @@ RUN --mount=type=secret,id=github_token \
     { [ -L squashfs-root ] && mv AppDir /opt/rpcs3 || mv squashfs-root /opt/rpcs3; } && \
     printf '#!/bin/sh\nexec /opt/rpcs3/AppRun "$@"\n' > /usr/local/bin/rpcs3 && \
     chmod +x /usr/local/bin/rpcs3 && \
-    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nIcon=/opt/rpcs3/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nIcon=/opt/rpcs3/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/rpcs3.desktop && \
     rm -f /tmp/rpcs3.AppImage
 
@@ -827,7 +827,7 @@ RUN --mount=type=secret,id=github_token \
     [ -d squashfs-root ] || { echo "FATAL: extraction duckstation.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/duckstation && \
     ln -sf /opt/duckstation/AppRun /usr/local/bin/duckstation-qt && \
-    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nIcon=/opt/duckstation/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nIcon=/opt/duckstation/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/duckstation.desktop && \
     rm -f /tmp/duckstation.AppImage
 
@@ -843,7 +843,7 @@ RUN --mount=type=secret,id=github_token \
     [ -d squashfs-root ] || { echo "FATAL: extraction xemu.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xemu && \
     ln -sf /opt/xemu/AppRun /usr/local/bin/xemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nIcon=/opt/xemu/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nIcon=/opt/xemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
@@ -860,7 +860,7 @@ RUN --mount=type=secret,id=github_token \
     mv squashfs-root /opt/azahar && \
     printf '#!/bin/sh\nexec /opt/azahar/AppRun "$@"\n' > /usr/local/bin/azahar && \
     chmod +x /usr/local/bin/azahar && \
-    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nIcon=/opt/azahar/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nIcon=/opt/azahar/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/azahar.desktop && \
     rm -f /tmp/azahar.AppImage
 
@@ -876,7 +876,7 @@ RUN --mount=type=secret,id=github_token \
     [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xenia && \
     ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
-    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=env DISPLAY=:0 /usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=env DISPLAY=:0 /usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/xenia.desktop && \
     rm -f /tmp/xenia.AppImage
 
@@ -893,7 +893,7 @@ RUN --mount=type=secret,id=github_token \
     ln -sf /opt/melonds/melonDS /usr/local/bin/melonDS && \
     curl -fSL --retry 3 -o /opt/melonds/melon.png \
       "https://raw.githubusercontent.com/melonDS-emu/melonDS/master/res/melon512.png" && \
-    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=/opt/melonds/melon.png\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=/opt/melonds/melon.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/melonds.desktop && \
     rm -f /tmp/melon.zip
 
@@ -908,7 +908,7 @@ RUN --mount=type=secret,id=github_token \
       "https://github.com/dosbox-staging/dosbox-staging/releases/download/${DSTAGING_VERSION}/dosbox-staging-linux-x86_64-${DSTAGING_VERSION}.tar.xz" && \
     mkdir -p /opt/dosbox && tar -xf /tmp/dosbox.tar.xz -C /opt/dosbox --strip-components=1 && \
     ln -sf /opt/dosbox/dosbox /usr/local/bin/dosbox && \
-    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=/opt/dosbox/icons/hicolor/256x256/apps/org.dosbox-staging.dosbox-staging.png\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=/opt/dosbox/icons/hicolor/256x256/apps/org.dosbox-staging.dosbox-staging.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/dosbox.desktop && \
     rm -f /tmp/dosbox.tar.xz
 
@@ -952,7 +952,7 @@ RUN --mount=type=secret,id=github_token \
     mv squashfs-root /opt/shadps4 && \
     printf '#!/bin/sh\nexec /opt/shadps4/AppRun "$@"\n' > /usr/local/bin/shadps4 && \
     chmod +x /usr/local/bin/shadps4 && \
-    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nIcon=/opt/shadps4/.DirIcon\nTerminal=false\nCategories=Game;Emulator;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nIcon=/opt/shadps4/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/shadps4.desktop && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 
@@ -1111,6 +1111,23 @@ RUN setcap 'cap_sys_nice,cap_sys_admin+ep' "$(readlink -f /usr/bin/sunshine)" 2>
 # réellement exécuté, comme pour Sunshine ci-dessus.
 RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)" 2>/dev/null || \
     echo "WARN: setcap pipewire impossible ici, à refaire si le binaire change au runtime"
+
+# Catégorie "Emulator" (audit menu XFCE, 07/09) : xfce-applications.menu
+# définit le menu "Système" comme <Or><Category>Emulator</Category>
+# <Category>System</Category></Or> — tout .desktop taggé Game;Emulator;
+# apparaît donc EN PLUS dans "Système", à côté de Thunar/xfce4-terminal,
+# alors qu'il est déjà dans "Jeux" via Game seul (confirmé en direct,
+# capture d'écran utilisateur). Nos .desktop générés par ce Dockerfile ont
+# déjà été corrigés (Categories=Game; seul, voir plus haut) — ceux-ci
+# viennent de paquets pacman/AUR upstream (dolphin-emu, retroarch,
+# eden-nightly-bin) et gardent leur catégorie d'origine tant qu'on ne la
+# patch pas ici, même motif que le sed DISPLAY=:0 sur dolphin-emu.desktop
+# plus haut (fichier upstream gardé intact à part ce qu'on doit changer).
+RUN for f in /usr/share/applications/dolphin-emu.desktop \
+             /usr/share/applications/com.libretro.RetroArch.desktop \
+             /usr/share/applications/eden-nightly.desktop; do \
+        [ -f "$f" ] && sed -i 's/^Categories=Game;Emulator;/Categories=Game;/' "$f" || true; \
+    done
 
 # Rafraîchit la base des .desktop (/usr/share/applications) — au cas où le
 # menu XFCE (garcon) ne les reprendrait pas correctement sans ça, non
