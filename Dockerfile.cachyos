@@ -482,6 +482,26 @@ RUN glib-compile-schemas /usr/share/glib-2.0/schemas/
 # menu applications nwg-drawer) plante instantanément dessus.
 RUN update-mime-database /usr/share/mime
 
+# ── 1a3c'. Config xdg-desktop-portal — sans elle, ScreenCast (Steam Link,
+# PipeWire) n'est JAMAIS enregistré, même avec xdg-desktop-portal-wlr
+# installé et un WAYLAND_DISPLAY correct (confirmé en direct 07/09, voir
+# scripts/steam-link-launch.sh pour l'historique complet du diagnostic).
+# xdg-desktop-portal choisit son backend par interface selon un fichier
+# nommé d'après $XDG_CURRENT_DESKTOP (ex: xfce-portals.conf pour "XFCE",
+# la valeur que ce projet utilise partout — voir wayland-session.sh) ; le
+# paquet xdg-desktop-portal-wlr ne fournit que wlr-portals.conf (nom "wlr",
+# jamais chargé puisque XDG_CURRENT_DESKTOP ne vaut jamais littéralement
+# "wlr" ici). Sans fichier correspondant, AUCUN backend n'est choisi pour
+# ScreenCast/Screenshot — ni gtk (qui ne les implémente pas) ni wlr (jamais
+# sélectionné) — l'interface disparaît purement et simplement de l'objet
+# org.freedesktop.portal.Desktop, confirmé par une introspection D-Bus
+# directe et par le log Steam ("L'interface org.freedesktop.portal.
+# ScreenCast n'existe pas"). Testé en direct avec ce fichier + XDG_CURRENT_
+# DESKTOP=XFCE exporté avant le lancement du portail : "XDP: Using
+# wlr.portal for org.freedesktop.impl.portal.ScreenCast (default config)".
+RUN mkdir -p /etc/xdg-desktop-portal && \
+    printf '[preferred]\ndefault=wlr\n' > /etc/xdg-desktop-portal/xfce-portals.conf
+
 # ── 1a3c. steam toujours avec -pipewire — Remote Play/Steam Link a besoin de
 # ce flag pour la capture vidéo (sinon : "Unable to capture video:
 # k_ECaptureFailedReasonPipewireRequired" après ~1 min de stream, confirmé

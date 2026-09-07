@@ -27,14 +27,27 @@
 #
 # Isoler Steam sur son propre bus D-Bus privé (même mécanisme que
 # sunshine-desktop-xfce.sh pour XFCE) avec WAYLAND_DISPLAY=wayland-1
-# explicite règle les deux : xdg-desktop-portal ET -wlr démarrent frais sur
-# CE bus, liés au bon compositeur — testé en direct, org.freedesktop.impl.
-# portal.desktop.wlr s'active et reste vivant sans erreur dans ce contexte.
+# explicite règle ça — MAIS pas suffisant à lui seul (confirmé en direct,
+# deuxième round de debug 07/09) : quand xdg-desktop-portal est activé
+# automatiquement par D-Bus (Steam se contente d'appeler une méthode sur
+# org.freedesktop.portal.Desktop, jamais de le lancer lui-même), il hérite
+# de l'environnement du DÉMON D-Bus (celui que dbus-run-session vient de
+# forker), pas de celui de Steam — XDG_CURRENT_DESKTOP doit donc être
+# exporté ICI, avant dbus-run-session, sinon xdg-desktop-portal ne trouve
+# aucun fichier de config portail (/etc/xdg-desktop-portal/xfce-portals.conf,
+# voir Dockerfile.cachyos) et n'enregistre jamais l'interface ScreenCast du
+# tout — confirmé par les logs Steam ("L'interface org.freedesktop.portal.
+# ScreenCast n'existe pas") et par une introspection D-Bus directe. Testé en
+# lançant xdg-desktop-portal à la main avec ces mêmes variables : "XDP:
+# Using wlr.portal for org.freedesktop.impl.portal.ScreenCast (default
+# config)" — la combinaison WAYLAND_DISPLAY + XDG_CURRENT_DESKTOP + le
+# fichier de config est bien les trois pièces nécessaires ensemble.
 set -uo pipefail
 
 export WAYLAND_DISPLAY=wayland-1
 export DISPLAY=:1
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_CURRENT_DESKTOP=XFCE
 
 PIDFILE="${XDG_RUNTIME_DIR}/steam-link-launch.pid"
 
