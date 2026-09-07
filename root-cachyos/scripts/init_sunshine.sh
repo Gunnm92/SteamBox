@@ -107,17 +107,6 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # en direct dans ce nouveau contexte — à confirmer avant de faire
     # confiance à cette entrée.
     #
-    # "Steam Big Picture" via steam-bigpicture-launch.sh, pas "steam
-    # -gamepadui" inline (07/09) : Steam Link se connectait mais montrait un
-    # écran noir — Steam sur wayland-1 parlait à un xdg-desktop-portal lié à
-    # wayland-0 (bus D-Bus partagé avec le bureau visible, portail démarré
-    # par wayland-session.sh, premier arrivé), et le seul backend capable de
-    # vraie capture d'écran sous labwc (xdg-desktop-portal-wlr) plantait à
-    # l'activation D-Bus faute de WAYLAND_DISPLAY dans cet environnement
-    # partagé. Le script isole Steam sur son propre bus D-Bus privé (même
-    # mécanisme que sunshine-desktop-xfce.sh), où portail et backend wlr
-    # démarrent frais avec WAYLAND_DISPLAY=wayland-1 — confirmé en direct.
-    #
     # Appelle scripts/steam-gamescope-launch.sh au lieu d'inliner gamescope
     # ici (audit M7, 05/09) : ce script lit désormais SUNSHINE_CLIENT_WIDTH/
     # HEIGHT/FPS (exportées par Sunshine dans l'environnement de "detached",
@@ -138,7 +127,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     { "name": "Desktop", "image-path": "desktop.png",
       "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "Steam Big Picture", "detached": ["/usr/local/bin/scripts/steam-bigpicture-launch.sh"], "image-path": "steam.png",
+    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
@@ -159,7 +148,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=6
+CURRENT_VERSION=5
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -247,26 +236,6 @@ if [ "${INSTALLED_VERSION}" -lt 5 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v5 : entrée Pegasus ajoutée à apps.json (sauvegarde .bak-migration-v5)"
-        fi
-    fi
-fi
-
-if [ "${INSTALLED_VERSION}" -lt 6 ]; then
-    # v5 -> v6 (07/09) : "Steam Big Picture" inlinait "steam -gamepadui" —
-    # Steam Link se connectait mais montrait un écran noir (xdg-desktop-
-    # portal lié au mauvais bureau, voir commentaire au-dessus de la
-    # génération initiale d'apps.json). Remplacé par steam-bigpicture-
-    # launch.sh, qui isole Steam sur son propre bus D-Bus. Ne remplace QUE
-    # cette commande précise, jamais une entrée personnalisée.
-    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
-        OLD_CMD='steam -gamepadui'
-        if jq -e --arg old "${OLD_CMD}" '.apps[] | select(.detached[0]? == $old)' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
-            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v6"
-            jq --arg old "${OLD_CMD}" --arg new "/usr/local/bin/scripts/steam-bigpicture-launch.sh" \
-                '{env, apps: [.apps[] | if .detached[0]? == $old then .detached = [$new] else . end]}' \
-                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
-                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
-                && echo "[init_sunshine] migration v6 : Steam Big Picture isolé sur son propre bus D-Bus (sauvegarde .bak-migration-v6)"
         fi
     fi
 fi

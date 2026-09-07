@@ -591,6 +591,18 @@ RUN printf '[Desktop Entry]\nType=Application\nName=Steam\nExec=/usr/local/bin/s
 RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env DISPLAY=:0 QT_QPA_PLATFORM=xcb /usr/local/bin/steam\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-desktop.desktop
 
+# "Steam (Steam Link)" — raccourci séparé de l'entrée Sunshine "Steam Big
+# Picture" (apps.json, volontairement laissée telle quelle : elle marche
+# déjà pour Moonlight). Demande utilisateur (07/09) : pouvoir aussi utiliser
+# Steam Link (meilleur support manette dans certains cas) — lance Steam sur
+# wayland-1 via steam-link-launch.sh, qui l'isole sur son propre bus D-Bus
+# pour que xdg-desktop-portal-wlr (ScreenCast PipeWire, requis par Steam
+# Link pour streamer un jeu) se lie au bon compositeur au lieu du bureau
+# visible — voir le script pour le détail du bug (écran noir/-pipewire
+# requis) et sa confirmation en direct.
+RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Steam Link)\nExec=/usr/local/bin/scripts/steam-link-launch.sh\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/steam-link.desktop
+
 # "Retour au bureau" — ferme gamescope (et Steam avec) pour retrouver XFCE/
 # labwc en dessous, sans dépendre du menu Quitter de Steam.
 RUN printf '[Desktop Entry]\nType=Application\nName=Retour au bureau\nExec=/usr/local/bin/scripts/exit-to-desktop.sh\nIcon=go-home\nTerminal=false\nCategories=System;\n' \
