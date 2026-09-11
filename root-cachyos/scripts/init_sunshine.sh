@@ -128,7 +128,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
       "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
-      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
     { "name": "Pegasus", "detached": ["env DISPLAY=:1 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe"],
@@ -148,7 +148,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=5
+CURRENT_VERSION=6
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -236,6 +236,33 @@ if [ "${INSTALLED_VERSION}" -lt 5 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v5 : entrée Pegasus ajoutée à apps.json (sauvegarde .bak-migration-v5)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 6 ]; then
+    # v5 -> v6 (10/09, GPU consommé après la fin du stream) : l'entrée
+    # "Steam Big Picture" ne tuait jamais Steam à la déconnexion (undo =
+    # reset-resolution.sh seul) -- Steam est "detached", Sunshine ne gère
+    # pas son cycle de vie par design. Confirmé en direct : après la fin
+    # d'une session Moonlight, le GPU restait autour de 30% d'utilisation
+    # (labwc headless continuant à composer l'UI animée de gamepadui pour
+    # personne). stop-steam-bigpicture.sh fait le même reset de résolution
+    # PUIS tue Steam (pkill -x, cf. exit-to-desktop.sh). Ne remplace QUE
+    # l'undo exact d'origine -- jamais une valeur personnalisée par
+    # l'utilisateur.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_UNDO="/usr/local/bin/scripts/reset-resolution.sh"
+        NEW_UNDO="/usr/local/bin/scripts/stop-steam-bigpicture.sh"
+        if jq -e --arg old "${OLD_UNDO}" \
+            '.apps[] | select(.name == "Steam Big Picture") | select(.["prep-cmd"][0].undo? == $old)' \
+            "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v6"
+            jq --arg old "${OLD_UNDO}" --arg new "${NEW_UNDO}" \
+                '{env, apps: [.apps[] | if .name == "Steam Big Picture" and .["prep-cmd"][0].undo? == $old then .["prep-cmd"][0].undo = $new else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v6 : Steam tué à la déconnexion pour l'entrée Steam Big Picture (sauvegarde .bak-migration-v6)"
         fi
     fi
 fi
