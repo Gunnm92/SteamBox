@@ -1,7 +1,8 @@
 #!/bin/bash
 # SteamBox — Génération automatique des métadonnées Pegasus Frontend.
-# Crée un metadata.pegasus.txt dans chaque dossier système de /userdata/roms/
-# et met à jour game_dirs.txt pour que Pegasus scanne les bons répertoires.
+# Crée un metadata.pegasus.txt dans chaque dossier système de
+# /home/arcade/games/Batocera/roms/ et met à jour game_dirs.txt pour que
+# Pegasus scanne les bons répertoires.
 #
 # Portage du script custom-cont-init.d/20-pegasus.sh + 25-pegasus-gamelist.sh
 # de l'ancienne image webstation (linuxserver) — ce mécanisme n'existe plus
@@ -14,10 +15,27 @@
 # le volume /config persistant). Pour forcer une régénération : pegasus-update
 set -e
 
-ROMS_DIR="/userdata/roms"
+# Plus sous /userdata (15/09, reliquat d'un montage séparé et redondant —
+# voir la même note dans init_retroarch.sh) : /home/arcade est un symlink
+# vers /config, et /config/games est déjà le montage du parent
+# /mnt/user/Game, qui contient Batocera/ — mêmes fichiers, un seul montage.
+ROMS_DIR="/home/arcade/games/Batocera/roms"
 PEGASUS_CFG="/config/.config/pegasus-frontend"
 CORES="/usr/lib/libretro"
 RA="retroarch -L"
+
+# Thèmes (16/09) : Pegasus ne propose AUCUN réglage de type "dossier de
+# thèmes" dans sa config — il scanne toujours en dur "<config_dir>/themes/"
+# (voir Themes.cpp::theme_directories() en amont, aucune clé settings.txt
+# équivalente). Un symlink vers le dossier partagé Batocera est donc la
+# seule façon de lui faire connaître ces thèmes sans les dupliquer sur
+# /config. -sfn (pas juste -sf) : remplace un éventuel symlink existant
+# sans jamais suivre/écraser un vrai dossier "themes" déjà présent (cas
+# d'un ancien lien cassé ou d'une install manuelle).
+THEMES_DIR="/home/arcade/games/Batocera/themes"
+if [ -d "${THEMES_DIR}" ]; then
+    ln -sfn "${THEMES_DIR}" "${PEGASUS_CFG}/themes"
+fi
 # Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
 # d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
 # root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre

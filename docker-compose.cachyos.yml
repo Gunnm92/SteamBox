@@ -25,8 +25,14 @@ services:
       # chemins Steam/Sunshine différents). Ne jamais pointer vers
       # /mnt/user/appdata/arcadebox.
       - /mnt/user/appdata/steambox:/config
-      - /mnt/user/Game/Batocera:/userdata   # ROMs, BIOS, saves — layout Batocera partagé
-      - /mnt/user/Game:/config/games        # bibliothèque de jeux complète (Steam, Epic, wsquashfs)
+      # /mnt/user/Game/Batocera:/userdata supprimé (15/09, reliquat d'un
+      # ancien montage séparé) : /home/arcade est un symlink vers /config
+      # (voir Dockerfile, création user arcade), donc le montage ci-dessous
+      # expose déjà /mnt/user/Game/Batocera à l'identique sous
+      # /home/arcade/games/Batocera — un seul montage au lieu de deux pour
+      # les mêmes fichiers. ROMs/BIOS/saves : voir init_retroarch.sh et
+      # init_pegasus.sh.
+      - /mnt/user/Game:/config/games        # bibliothèque de jeux complète (Steam, Epic, wsquashfs, Batocera)
       - /mnt/user/Download:/config/Downloads
       # Bind du RÉPERTOIRE /dev/input entier (pas device par device) : les
       # périphériques uinput que Sunshine crée à chaque connexion Moonlight

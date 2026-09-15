@@ -197,20 +197,18 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # lignes "repo/paquet" explicites peuvent être simplifiées en noms de paquet
 # nus sans risque (pacman retombera sur cachyos-v3 par défaut, prioritaire).
 #
-# retroarch-assets-ozone (15/09, menu Ozone dégradé — icônes en carrés
-# noirs, "œ" affiché "?") : le paquet "retroarch" seul ne fournit AUCUN
-# asset (icônes/polices), confirmé en direct (`pacman -Ql retroarch` ne
-# remonte rien sous assets) — repli sur la police bitmap intégrée de
-# RetroArch (ASCII seul, d'où le "?" à la place du "œ" de "Cœur"/"Cœurs")
-# faute de la police TTF Unicode du thème. Installe exactement dans
-# /usr/share/retroarch/assets/ozone, le chemin déjà attendu par
-# assets_directory (retroarch.cfg) — tire aussi retroarch-assets-xmb en
-# dépendance (non utilisé par menu_driver="ozone", mais imposé par le
-# paquet, 6 Mo au total). Essayé d'abord en clone git sparse-checkout du
-# dépôt upstream (fonctionnellement OK) avant de découvrir que pacman
-# empaquette déjà exactement ça, en plus petit — gardé pour rester
-# homogène avec le reste de cette liste plutôt que de mélanger les deux
-# approches.
+# Groupe pacman "libretro" (15/09) — remplace la liste de ~20 cœurs
+# choisis à la main : ne couvrait qu'une fraction des cœurs disponibles en
+# dépôt officiel (le groupe en contient ~30, plus les paquets
+# retroarch/retroarch-assets-{ozone,xmb,glui}/libretro-shaders-slang/
+# libretro-overlays), confirmé en direct après un "menu RetroArch
+# incomplet, il manque plein de cœurs" — l'utilisateur ne les téléchargeait
+# pas lui-même via pacman puisque le Core Downloader intégré de RetroArch
+# est désactivé par défaut sur ce paquet (menu_show_core_updater=false,
+# repris tel quel côté init_retroarch.sh pour pointer vers un dossier
+# cœurs écrivable en plus du dossier système). Règle ce même "menu Ozone
+# dégradé" documenté au commit précédent (retroarch-assets-ozone inclus
+# dans le groupe).
 RUN pacman -Syyu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
@@ -236,14 +234,7 @@ RUN pacman -Syyu --noconfirm && \
       dbus polkit networkmanager \
       xdg-desktop-portal \
       gamescope \
-      retroarch retroarch-assets-ozone \
-      libretro-nestopia libretro-bsnes libretro-genesis-plus-gx \
-      libretro-mgba libretro-gambatte libretro-desmume \
-      libretro-mupen64plus-next libretro-beetle-psx-hw libretro-ppsspp \
-      libretro-flycast libretro-yabause libretro-dolphin \
-      libretro-mame libretro-beetle-pce-fast libretro-beetle-pce \
-      libretro-fbneo-git libretro-picodrive libretro-beetle-supergrafx \
-      libretro-snes9x libretro-melonds libretro-scummvm \
+      libretro \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \

@@ -42,8 +42,7 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 | Hôte | Conteneur | Rôle |
 |---|---|---|
 | `/mnt/user/appdata/steambox/` | `/config` | Home persistant d'`arcade` (configs, Steam, Sunshine). **Jamais** `/mnt/user/appdata/arcadebox` (structure incompatible) |
-| `/mnt/user/Game/Batocera/` | `/userdata` | ROMs, BIOS, saves — layout Batocera |
-| `/mnt/user/Game` | `/config/games` | Bibliothèque de jeux complète — **ne jamais `chown -R`** (centaines de milliers de fichiers, voir init_system.sh) |
+| `/mnt/user/Game` | `/config/games` | Bibliothèque de jeux complète, dont `Batocera/` (ROMs, BIOS, saves — accessible aussi via `/home/arcade/games/Batocera`, `/home/arcade` étant un symlink vers `/config`) — **ne jamais `chown -R`** (centaines de milliers de fichiers, voir init_system.sh) |
 | `/mnt/user/Download/` | `/config/Downloads` | |
 | `/dev/input/` | `/dev/input/` | Bind du **répertoire** entier : les périphériques uinput créés par Sunshine à chaque connexion apparaissent dynamiquement |
 
