@@ -23,19 +23,6 @@ ROMS_DIR="/home/arcade/games/Batocera/roms"
 PEGASUS_CFG="/config/.config/pegasus-frontend"
 CORES="/usr/lib/libretro"
 RA="retroarch -L"
-
-# Thèmes (16/09) : Pegasus ne propose AUCUN réglage de type "dossier de
-# thèmes" dans sa config — il scanne toujours en dur "<config_dir>/themes/"
-# (voir Themes.cpp::theme_directories() en amont, aucune clé settings.txt
-# équivalente). Un symlink vers le dossier partagé Batocera est donc la
-# seule façon de lui faire connaître ces thèmes sans les dupliquer sur
-# /config. -sfn (pas juste -sf) : remplace un éventuel symlink existant
-# sans jamais suivre/écraser un vrai dossier "themes" déjà présent (cas
-# d'un ancien lien cassé ou d'une install manuelle).
-THEMES_DIR="/home/arcade/games/Batocera/themes"
-if [ -d "${THEMES_DIR}" ]; then
-    ln -sfn "${THEMES_DIR}" "${PEGASUS_CFG}/themes"
-fi
 # Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
 # d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
 # root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre
