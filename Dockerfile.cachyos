@@ -196,6 +196,21 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # Si cette panne CachyOS est résolue au moment d'un futur rebuild, ces 4
 # lignes "repo/paquet" explicites peuvent être simplifiées en noms de paquet
 # nus sans risque (pacman retombera sur cachyos-v3 par défaut, prioritaire).
+#
+# retroarch-assets-ozone (15/09, menu Ozone dégradé — icônes en carrés
+# noirs, "œ" affiché "?") : le paquet "retroarch" seul ne fournit AUCUN
+# asset (icônes/polices), confirmé en direct (`pacman -Ql retroarch` ne
+# remonte rien sous assets) — repli sur la police bitmap intégrée de
+# RetroArch (ASCII seul, d'où le "?" à la place du "œ" de "Cœur"/"Cœurs")
+# faute de la police TTF Unicode du thème. Installe exactement dans
+# /usr/share/retroarch/assets/ozone, le chemin déjà attendu par
+# assets_directory (retroarch.cfg) — tire aussi retroarch-assets-xmb en
+# dépendance (non utilisé par menu_driver="ozone", mais imposé par le
+# paquet, 6 Mo au total). Essayé d'abord en clone git sparse-checkout du
+# dépôt upstream (fonctionnellement OK) avant de découvrir que pacman
+# empaquette déjà exactement ça, en plus petit — gardé pour rester
+# homogène avec le reste de cette liste plutôt que de mélanger les deux
+# approches.
 RUN pacman -Syyu --noconfirm && \
     pacman -S --noconfirm --needed \
       sudo vim openssh curl wget tar xz git jq unzip \
@@ -221,7 +236,7 @@ RUN pacman -Syyu --noconfirm && \
       dbus polkit networkmanager \
       xdg-desktop-portal \
       gamescope \
-      retroarch \
+      retroarch retroarch-assets-ozone \
       libretro-nestopia libretro-bsnes libretro-genesis-plus-gx \
       libretro-mgba libretro-gambatte libretro-desmume \
       libretro-mupen64plus-next libretro-beetle-psx-hw libretro-ppsspp \
@@ -880,10 +895,15 @@ RUN --mount=type=secret,id=github_token \
     rm -f /tmp/xemu.AppImage
 
 ARG AZAHAR_TAG=""
+# Regex "wayland.AppImage" cassé (11/09, build à jour) : la release
+# azahar-emu/azahar 2126.1.1 ne publie plus qu'un seul AppImage desktop
+# nommé "azahar.AppImage" (plus de variante wayland/x11 séparées) —
+# confirmé en direct sur l'API GitHub, aucun rate-limit en cause (49/60
+# restants au moment de l'échec).
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
     AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/${AZAHAR_TAG:+tags/}${AZAHAR_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*wayland\.AppImage"' | cut -d'"' -f4) && \
+      | grep -oE '"browser_download_url": *"[^"]*/azahar\.AppImage"' | cut -d'"' -f4) && \
     [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
     chmod +x /tmp/azahar.AppImage && cd /tmp && \
