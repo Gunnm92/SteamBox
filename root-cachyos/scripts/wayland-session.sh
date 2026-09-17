@@ -80,7 +80,7 @@ EOF
 # par défaut), et rendait le bureau injouable au clavier/souris physiques
 # -- une fenêtre passait au premier plan au moindre survol de la souris,
 # sans clic. Le focus clavier (followMouse seul) suffit au fix Sunshine
-# ci-dessus, la mise au premier plan n'y est pour rien.
+# ci-dessus, la mise au premier plan ny est pour rien.
 # NOTE apostrophes bannies dans TOUT ce bloc :
 # tout ce script tourne dans un bash -c entre apostrophes simples (ligne
 # 27) — une seule apostrophe francaise dans un commentaire casse la chaine
