@@ -436,6 +436,19 @@ RUN sed -i 's|^Exec=ludusavi|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 ludus
     sed -i 's|^Exec=dolphin-emu|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 dolphin-emu|' \
       /usr/share/applications/dolphin-emu.desktop
 
+# DISPLAY=:0 sur Winetricks (18/09, "lance ses popups d'avertissement puis
+# se ferme") : même bug que ci-dessus, mais différent dans le détail —
+# winetricks affiche bien ses avertissements via zenity (w_warn ignore
+# DISPLAY, indépendant), MAIS son VRAI menu (liste des verbes à cocher)
+# vérifie explicitement DISPLAY (pas WAYLAND_DISPLAY) avant de décider
+# d'afficher l'interface graphique — confirmé en direct : "DISPLAY not
+# set, not defaulting to gui" dans sa sortie, puis affichage de l'aide en
+# ligne de commande à la place (invisible, Terminal=false) et sortie
+# immédiate juste après les deux popups. .desktop upstream (paquet
+# winetricks), même motif de patch minimal que Ludusavi/Dolphin ci-dessus.
+RUN sed -i 's|^Exec=winetricks|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 winetricks|' \
+      /usr/share/applications/winetricks.desktop
+
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
 # connectivité réelle est bonne (observé : ses propres tests de connectivité
