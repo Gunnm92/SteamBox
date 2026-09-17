@@ -60,6 +60,14 @@ done
 set_cfg "libretro_directory" "${CORES_DIR}"
 set_cfg "menu_show_core_updater" "true"
 
+# Base de données ("Scan Directory"/Manual Scan ne créait aucune liste,
+# 18/09) : content_database_path par défaut (~/.config/retroarch/database/
+# rdb) reste vide tant que personne n'a lancé "Online Updater > Update
+# Databases" à la main — confirmé en direct. Pointée à la place vers le
+# dossier système peuplé au build (voir Dockerfile), données statiques de
+# référence, pas de raison d'en avoir une copie par-utilisateur.
+set_cfg "content_database_path" "/usr/share/retroarch/database/rdb"
+
 # Garde de propriétaire (audit F4, 05/09, même motif qu'init_system.sh) :
 # ce chown -R tournait inconditionnellement à CHAQUE boot sur un dossier
 # qui contient thumbnails et shaders RetroArch, potentiellement volumineux

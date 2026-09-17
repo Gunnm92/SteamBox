@@ -803,23 +803,6 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
 # script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
 # absolu évite complètement le calcul de dossier.
-ARG CEMU_TAG=""
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/${CEMU_TAG:+tags/}${CEMU_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
-    chmod +x /tmp/cemu.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./cemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/cemu && \
-    printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
-    chmod +x /usr/local/bin/cemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=env DISPLAY=:0 /usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/cemu.desktop && \
-    rm -f /tmp/cemu.AppImage
-
 ARG PCSX2_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -885,27 +868,103 @@ RUN --mount=type=secret,id=github_token \
       > /usr/share/applications/xemu.desktop && \
     rm -f /tmp/xemu.AppImage
 
-ARG AZAHAR_TAG=""
-# Regex "wayland.AppImage" cassé (11/09, build à jour) : la release
-# azahar-emu/azahar 2126.1.1 ne publie plus qu'un seul AppImage desktop
-# nommé "azahar.AppImage" (plus de variante wayland/x11 séparées) —
-# confirmé en direct sur l'API GitHub, aucun rate-limit en cause (49/60
-# restants au moment de l'échec).
+# Base de données RetroArch (18/09, "Scan Directory"/Manual Scan ne créait
+# aucune liste) : content_database_path pointe par défaut sur
+# ~/.config/retroarch/database/rdb, un dossier VIDE tant que personne n'a
+# lancé "Online Updater > Update Databases" à la main dans RetroArch —
+# confirmé en direct (0 fichier .rdb) et aucun paquet pacman ne fournit ces
+# .rdb (pas de "libretro-database" dans les dépôts Arch/CachyOS). Avec
+# scan_without_core_match=false (défaut), un scan sans base ne matche
+# aucun jeu à aucun cœur et ne crée donc aucune entrée de liste — pas un
+# bug du scan lui-même, juste une base absente. Téléchargée ici depuis le
+# buildbot officiel (même origine que le Core/Asset Downloader intégré,
+# juste fait au build plutôt qu'à la main une fois le conteneur démarré)
+# et installée dans un chemin système (pas ~/.config, qui reste la donnée
+# utilisateur) — init_retroarch.sh pointe content_database_path dessus.
+RUN mkdir -p /usr/share/retroarch/database/rdb && \
+    curl -fsSL --retry 3 -o /tmp/database-rdb.zip \
+      "http://buildbot.libretro.com/assets/frontend/database-rdb.zip" && \
+    unzip -q /tmp/database-rdb.zip -d /usr/share/retroarch/database/rdb && \
+    rm -f /tmp/database-rdb.zip
+
+# PPSSPP standalone (18/09) — en plus du core libretro-ppsspp (groupe
+# "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
+# a son propre frontend avec plus d'options de compatibilité par jeu,
+# utile pour les .iso/.cso qui posent problème sous le core seul.
+ARG PPSSPP_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    AZAHAR_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/azahar-emu/azahar/releases/${AZAHAR_TAG:+tags/}${AZAHAR_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*/azahar\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${AZAHAR_URL}" ] || { echo "FATAL: AZAHAR_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/azahar.AppImage "${AZAHAR_URL}" && \
-    chmod +x /tmp/azahar.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./azahar.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction azahar.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/azahar && \
-    printf '#!/bin/sh\nexec /opt/azahar/AppRun "$@"\n' > /usr/local/bin/azahar && \
-    chmod +x /usr/local/bin/azahar && \
-    printf '[Desktop Entry]\nType=Application\nName=Azahar\nExec=/usr/local/bin/azahar\nIcon=/opt/azahar/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/azahar.desktop && \
-    rm -f /tmp/azahar.AppImage
+    PPSSPP_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/hrydgard/ppsspp/releases/${PPSSPP_TAG:+tags/}${PPSSPP_TAG:-latest}" \
+      | grep -oE '"browser_download_url": *"[^"]*anylinux-x86_64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${PPSSPP_URL}" ] || { echo "FATAL: PPSSPP_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/ppsspp.AppImage "${PPSSPP_URL}" && \
+    chmod +x /tmp/ppsspp.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./ppsspp.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction ppsspp.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/ppsspp && \
+    ln -sf /opt/ppsspp/AppRun /usr/local/bin/ppsspp && \
+    printf '[Desktop Entry]\nType=Application\nName=PPSSPP\nExec=env DISPLAY=:0 /usr/local/bin/ppsspp\nIcon=/opt/ppsspp/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/ppsspp.desktop && \
+    rm -f /tmp/ppsspp.AppImage
+
+# Flycast standalone (18/09) — même logique que PPSSPP ci-dessus : en plus
+# du core libretro-flycast (groupe "libretro"), la version standalone
+# (flyinghead/flycast) a son propre frontend avec le support Naomi/
+# Atomiswave/AtomisWave complet et le netplay, pas juste le cœur Dreamcast.
+ARG FLYCAST_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    FLYCAST_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/flyinghead/flycast/releases/${FLYCAST_TAG:+tags/}${FLYCAST_TAG:-latest}" \
+      | grep -oE '"browser_download_url": *"[^"]*x86_64-[0-9.]+\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${FLYCAST_URL}" ] || { echo "FATAL: FLYCAST_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/flycast.AppImage "${FLYCAST_URL}" && \
+    chmod +x /tmp/flycast.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root; ./flycast.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    [ -d squashfs-root ] || { echo "FATAL: extraction flycast.AppImage échouée"; exit 1; } && \
+    mv squashfs-root /opt/flycast && \
+    ln -sf /opt/flycast/AppRun /usr/local/bin/flycast && \
+    printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=env DISPLAY=:0 /usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/flycast.desktop && \
+    rm -f /tmp/flycast.AppImage
+
+# TeknoParrotUI (18/09) — build .NET 8 natif Linux (teknogods/TeknoParrotUI,
+# release "TeknoParrotUI-net8"), PAS la release GitHub "latest" de ce dépôt :
+# confirmé en direct que /releases/latest renvoie encore l'ancienne release
+# 2019 Windows-only (TeknoParrotUi.zip) — le mainteneur n'a jamais remarqué
+# la release net8 comme "latest" côté GitHub. Tag figé en dur plutôt que
+# de suivre "latest" pour cette raison précise.
+# ~60 jeux de la collection wsquashfs (namcoes3, rawthrills, konamipc,
+# arcadepc, segaalls/er/nu/re/rw, adrenaline, unis, nesicax2) utilisent déjà
+# TeknoParrotUi.exe comme CMD dans leur autorun.cmd, lancé sous Wine jusqu'ici.
+# Ce build natif remplace uniquement la coquille TeknoParrotUi.exe/launcher —
+# OpenParrot (la bibliothèque de hooks par jeu : anti-dongle JVS, entrées
+# clavier) n'a pas été mise à jour depuis 2019 et reste Windows-only
+# (confirmé sur teknogods/OpenParrot, aucune release Linux) : le jeu lui-même
+# tourne donc probablement toujours sous Wine derrière ce launcher natif,
+# pipehelper.exe (présent dans le zip) restant un binaire Windows pour le
+# pont IPC avec le process du jeu. Pas encore basculé les autorun.cmd des
+# 60 jeux dessus (à valider un par un, cf. audit KOF XIV Arcade/NESiCA_Unlocker
+# — ces procédures de lancement sont fragiles et spécifiques par jeu) :
+# seul l'outil est installé ici, l'intégration par jeu est un chantier séparé.
+# Règle udev "uaccess" fournie dans le zip (setup/) volontairement PAS
+# installée : mécanisme systemd-logind absent de ce conteneur, sans effet
+# ici — l'accès /dev/input passe déjà par le groupe "input" (arcade y est
+# déjà, voir plus bas useradd) et le bind mount complet /dev/input du
+# docker-compose, mécanisme différent mais qui couvre déjà ce besoin.
+ARG TEKNOPARROT_TAG="TeknoParrotUI-net8"
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    TEKNOPARROT_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/teknogods/TeknoParrotUI/releases/tags/${TEKNOPARROT_TAG}" \
+      | grep -oE '"browser_download_url": *"[^"]*linux-x64\.zip"' | cut -d'"' -f4) && \
+    [ -n "${TEKNOPARROT_URL}" ] || { echo "FATAL: TEKNOPARROT_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/teknoparrot.zip "${TEKNOPARROT_URL}" && \
+    mkdir -p /opt/teknoparrot && \
+    unzip -q /tmp/teknoparrot.zip -d /opt/teknoparrot && \
+    chmod +x /opt/teknoparrot/TeknoParrotUi /opt/teknoparrot/ParrotPatcher && \
+    ln -sf /opt/teknoparrot/TeknoParrotUi /usr/local/bin/teknoparrot && \
+    printf '[Desktop Entry]\nType=Application\nName=TeknoParrotUI\nExec=env DISPLAY=:0 /usr/local/bin/teknoparrot\nIcon=/opt/teknoparrot/Icons/TeknoVegas.png\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/teknoparrot.desktop && \
+    rm -f /tmp/teknoparrot.zip
 
 ARG XENIA_TAG=""
 RUN --mount=type=secret,id=github_token \
@@ -954,29 +1013,6 @@ RUN --mount=type=secret,id=github_token \
     printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=/opt/dosbox/icons/hicolor/256x256/apps/org.dosbox-staging.dosbox-staging.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/dosbox.desktop && \
     rm -f /tmp/dosbox.tar.xz
-
-# GZDoom + Freedoom (WAD libre, pas besoin du WAD original Doom) — .deb officiel,
-# même technique d'extraction manuelle que Chrome ci-dessus.
-ARG GZDOOM_TAG=""
-ARG FREEDOOM_TAG=""
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    GZDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/ZDoom/gzdoom/releases/${GZDOOM_TAG:+tags/}${GZDOOM_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*_amd64\.deb"' | cut -d'"' -f4) && \
-    [ -n "${GZDOOM_URL}" ] || { echo "FATAL: GZDOOM_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/gzdoom.deb "${GZDOOM_URL}" && \
-    cd /tmp && ar x gzdoom.deb && mkdir -p /tmp/gzdoom-extract && \
-    tar -xf data.tar.* -C /tmp/gzdoom-extract && \
-    cp -a /tmp/gzdoom-extract/opt/. /opt/ && \
-    cp -a /tmp/gzdoom-extract/usr/. /usr/ && \
-    chmod +x /usr/games/gzdoom /opt/gzdoom/gzdoom && \
-    ln -sf /usr/games/gzdoom /usr/local/bin/gzdoom && \
-    FREEDOOM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/freedoom/freedoom/releases/${FREEDOOM_TAG:+tags/}${FREEDOOM_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*freedoom-[^"]*\.zip"' | cut -d'"' -f4) && \
-    curl -fSL --retry 3 -o /tmp/freedoom.zip "${FREEDOOM_URL}" && \
-    mkdir -p /usr/local/share/doom && \
-    unzip -qj /tmp/freedoom.zip '*/freedoom1.wad' -d /usr/local/share/doom && \
-    rm -rf /tmp/gzdoom.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/gzdoom-extract /tmp/freedoom.zip
 
 # ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
 RUN --mount=type=secret,id=github_token \

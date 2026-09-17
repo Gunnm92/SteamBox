@@ -75,7 +75,13 @@ EOF
 # refocalisant sur la fenêtre sous le curseur à CHAQUE changement de
 # fenêtre (pas seulement au mouvement de souris) — le curseur virtuel étant
 # piloté en continu par evdev-bridge, le focus doit rester juste sans
-# action de lutilisateur. NOTE apostrophes bannies dans TOUT ce bloc :
+# action de lutilisateur. raiseOnFocus=yes retiré (17/09) : aucune
+# justification propre au moment de son ajout (juste accolé à followMouse
+# par défaut), et rendait le bureau injouable au clavier/souris physiques
+# -- une fenêtre passait au premier plan au moindre survol de la souris,
+# sans clic. Le focus clavier (followMouse seul) suffit au fix Sunshine
+# ci-dessus, la mise au premier plan n'y est pour rien.
+# NOTE apostrophes bannies dans TOUT ce bloc :
 # tout ce script tourne dans un bash -c entre apostrophes simples (ligne
 # 27) — une seule apostrophe francaise dans un commentaire casse la chaine
 # en plein milieu et fait planter tout le reste du script au demarrage,
@@ -104,7 +110,6 @@ cat > "${HOME}/.config/labwc/rc.xml" <<EOF
   <focus>
     <followMouse>yes</followMouse>
     <followMouseRequiresMovement>no</followMouseRequiresMovement>
-    <raiseOnFocus>yes</raiseOnFocus>
   </focus>
 </labwc_config>
 EOF
