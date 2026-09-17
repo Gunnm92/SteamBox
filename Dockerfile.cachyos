@@ -891,6 +891,19 @@ RUN mkdir -p /usr/share/retroarch/database/rdb && \
 # "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
 # a son propre frontend avec plus d'options de compatibilité par jeu,
 # utile pour les .iso/.cso qui posent problème sous le core seul.
+# squashfs-root en lien symbolique vers ./AppDir (pas un vrai dossier,
+# confirmé en direct après un premier build où /opt/ppsspp se retrouvait
+# être un symlink cassé — mv déplace alors le lien, pas le contenu) :
+# même cas que Lindbergh/RPCS3 plus haut, même contournement -L/AppDir.
+# Script wrapper (printf) plutôt qu'un simple "ln -sf .../AppRun
+# /usr/local/bin/ppsspp" (confirmé en direct, PPSSPP ET Flycast juste en
+# dessous) : l'AppRun de ces deux-là résout son propre dossier via $0 SANS
+# passer par readlink -f, donc à travers un symlink $0 vaut le CHEMIN DU
+# LIEN (/usr/local/bin/ppsspp), pas sa cible réelle — l'AppRun cherche
+# alors ses fichiers sous /usr/local/bin/... et échoue ("No such file or
+# directory"). Un exec vers le chemin absolu de AppRun (pas un symlink)
+# donne directement le bon $0, contournement déjà utilisé plus haut pour
+# Cemu/Azahar/ShadPS4/Pegasus/SRM — juste pas appliqué uniformément ici.
 ARG PPSSPP_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -899,10 +912,11 @@ RUN --mount=type=secret,id=github_token \
     [ -n "${PPSSPP_URL}" ] || { echo "FATAL: PPSSPP_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/ppsspp.AppImage "${PPSSPP_URL}" && \
     chmod +x /tmp/ppsspp.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./ppsspp.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction ppsspp.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/ppsspp && \
-    ln -sf /opt/ppsspp/AppRun /usr/local/bin/ppsspp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./ppsspp.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction ppsspp.AppImage échouée"; exit 1; } && \
+    { [ -L squashfs-root ] && mv AppDir /opt/ppsspp && rm -f squashfs-root || mv squashfs-root /opt/ppsspp; } && \
+    printf '#!/bin/sh\nexec /opt/ppsspp/AppRun "$@"\n' > /usr/local/bin/ppsspp && \
+    chmod +x /usr/local/bin/ppsspp && \
     printf '[Desktop Entry]\nType=Application\nName=PPSSPP\nExec=env DISPLAY=:0 /usr/local/bin/ppsspp\nIcon=/opt/ppsspp/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/ppsspp.desktop && \
     rm -f /tmp/ppsspp.AppImage
@@ -922,7 +936,8 @@ RUN --mount=type=secret,id=github_token \
     for i in 1 2 3; do rm -rf squashfs-root; ./flycast.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     [ -d squashfs-root ] || { echo "FATAL: extraction flycast.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/flycast && \
-    ln -sf /opt/flycast/AppRun /usr/local/bin/flycast && \
+    printf '#!/bin/sh\nexec /opt/flycast/AppRun "$@"\n' > /usr/local/bin/flycast && \
+    chmod +x /usr/local/bin/flycast && \
     printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=env DISPLAY=:0 /usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/flycast.desktop && \
     rm -f /tmp/flycast.AppImage
