@@ -966,6 +966,15 @@ RUN --mount=type=secret,id=github_token \
 # ici — l'accès /dev/input passe déjà par le groupe "input" (arcade y est
 # déjà, voir plus bas useradd) et le bind mount complet /dev/input du
 # docker-compose, mécanisme différent mais qui couvre déjà ce besoin.
+# chmod -R a+rwX (18/09, confirmé en direct) : TeknoParrotUi écrit sa
+# config (ParrotData.xml, joystick) directement dans son propre dossier
+# dinstallation plutôt que dans un dossier XDG — hérité de son
+# fonctionnement portable sous Windows (à côté de lexe). Sans ça,
+# UnauthorizedAccessException au démarrage (root:root par défaut après
+# unzip). Le symlink TeknoParrotUi -> /usr/local/bin/teknoparrot lui-même
+# est sans risque contrairement à PPSSPP/Flycast plus haut : binaire .NET
+# natif, résout son propre dossier via AppContext.BaseDirectory (API
+# système), pas un script shell lisant $0 à la main.
 ARG TEKNOPARROT_TAG="TeknoParrotUI-net8"
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -976,6 +985,7 @@ RUN --mount=type=secret,id=github_token \
     mkdir -p /opt/teknoparrot && \
     unzip -q /tmp/teknoparrot.zip -d /opt/teknoparrot && \
     chmod +x /opt/teknoparrot/TeknoParrotUi /opt/teknoparrot/ParrotPatcher && \
+    chmod -R a+rwX /opt/teknoparrot && \
     ln -sf /opt/teknoparrot/TeknoParrotUi /usr/local/bin/teknoparrot && \
     printf '[Desktop Entry]\nType=Application\nName=TeknoParrotUI\nExec=env DISPLAY=:0 /usr/local/bin/teknoparrot\nIcon=/opt/teknoparrot/Icons/TeknoVegas.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/teknoparrot.desktop && \
