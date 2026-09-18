@@ -211,6 +211,24 @@ while [ ! -S "${WAYLAND_SOCKET}" ] && [ "${TIMEOUT}" -gt 0 ]; do
     TIMEOUT=$((TIMEOUT - 1))
 done
 
+# Exports explicites DISPLAY/WAYLAND_DISPLAY (18/09, "TeknoParrot/PPSSPP/
+# Flycast/Winetricks souvrent sur le VNC au lieu du stream Moonlight") :
+# symetrique a sunshine-desktop-xfce.sh (bureau headless wayland-1), qui
+# exporte deja WAYLAND_DISPLAY=wayland-1 et DISPLAY=:1 pour ses propres
+# apps AVANT de les lancer -- ce script-ci ne le faisait jamais cote
+# bureau visible : unset plus haut (ligne 203) avant labwc, puis jamais
+# reexporte ensuite. Plusieurs .desktop forcaient donc DISPLAY=:0 en dur
+# dans leur Exec= pour compenser -- mais ces memes .desktop sont aussi
+# utilises depuis lentree "Desktop" cote Moonlight (wayland-1), ou
+# DISPLAY=:0 en dur pointe alors sur le MAUVAIS Xwayland (bureau visible/
+# VNC au lieu du stream reellement regarde, confirme en direct). Export
+# ici une seule fois pour tout le bureau visible -- herite normalement
+# par xfsettingsd/xfdesktop/xfce4-panel/nm-applet juste en dessous et
+# tout ce quils lancent ensuite -- plutot que dupliquer wayland-0/:0 dans
+# chaque .desktop un par un.
+export WAYLAND_DISPLAY=wayland-0
+export DISPLAY=:0
+
 # Panneau/bureau XFCE par-dessus labwc — barre des tâches, menu
 # applications, gestionnaire de fichiers (Thunar) accessibles pour
 # ladministration. Steam reste linterface principale de la session,

@@ -422,32 +422,19 @@ RUN mkdir -p /opt/decky-loader && \
 COPY root-cachyos/usr/local/bin/systemctl /usr/local/bin/systemctl
 RUN chmod +x /usr/local/bin/systemctl
 
-# DISPLAY=:0 sur Ludusavi et Dolphin (audit menu XFCE, 31/08) — même bug que
-# Chrome/Pegasus/Xenia : la session labwc unset DISPLAY globalement, ces deux
-# apps en ont besoin pour s'initialiser (Ludusavi : "neither WAYLAND_DISPLAY
-# nor WAYLAND_SOCKET nor DISPLAY is set", winit ne fait pas de repli
-# implicite contrairement à un client Wayland natif ; Dolphin : plante
-# silencieusement, "Aborted" sans autre message, résolu avec DISPLAY+
-# WAYLAND_DISPLAY). Patché sur le .desktop déjà installé (paquet AUR/pacman,
-# pas généré par ce Dockerfile) plutôt que réécrit, pour garder le reste du
-# fichier upstream (icône, catégories, MimeType...) intact.
-RUN sed -i 's|^Exec=ludusavi|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 ludusavi|' \
-      /usr/share/applications/com.mtkennerly.ludusavi.desktop && \
-    sed -i 's|^Exec=dolphin-emu|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 dolphin-emu|' \
-      /usr/share/applications/dolphin-emu.desktop
-
-# DISPLAY=:0 sur Winetricks (18/09, "lance ses popups d'avertissement puis
-# se ferme") : même bug que ci-dessus, mais différent dans le détail —
-# winetricks affiche bien ses avertissements via zenity (w_warn ignore
-# DISPLAY, indépendant), MAIS son VRAI menu (liste des verbes à cocher)
-# vérifie explicitement DISPLAY (pas WAYLAND_DISPLAY) avant de décider
-# d'afficher l'interface graphique — confirmé en direct : "DISPLAY not
-# set, not defaulting to gui" dans sa sortie, puis affichage de l'aide en
-# ligne de commande à la place (invisible, Terminal=false) et sortie
-# immédiate juste après les deux popups. .desktop upstream (paquet
-# winetricks), même motif de patch minimal que Ludusavi/Dolphin ci-dessus.
-RUN sed -i 's|^Exec=winetricks|Exec=env DISPLAY=:0 WAYLAND_DISPLAY=wayland-0 winetricks|' \
-      /usr/share/applications/winetricks.desktop
+# DISPLAY sur Ludusavi, Dolphin et Winetricks (audit menu XFCE 31/08 puis
+# 18/09) : ces apps nécessitaient un sed sur leur .desktop upstream pour
+# forcer DISPLAY=:0 (Ludusavi : "neither WAYLAND_DISPLAY nor
+# WAYLAND_SOCKET nor DISPLAY is set" ; Dolphin : "Aborted" silencieux sans
+# DISPLAY+WAYLAND_DISPLAY ; Winetricks : "DISPLAY not set, not defaulting
+# to gui", son vrai menu se fermait sans jamais s'afficher). Un détour par
+# un script x11-wrap.sh choisissant :0 ou :1 selon le WAYLAND_DISPLAY
+# hérité a été essayé le même jour (18/09) puis abandonné : plus
+# nécessaire depuis que wayland-session.sh exporte DISPLAY/WAYLAND_DISPLAY
+# explicitement pour tout le bureau visible avant de lancer XFCE,
+# symétrique à sunshine-desktop-xfce.sh côté headless (voir
+# wayland-session.sh). Les .desktop upstream (paquets AUR/pacman) restent
+# donc intacts, sans aucun patch.
 
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
@@ -704,6 +691,12 @@ RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main
       -o /usr/local/bin/wsquashfs-launcher && \
     chmod +x /usr/local/bin/wsquashfs-launcher
 
+# DISPLAY=:0 en dur retiré de l'Exec= (18/09) : même bug que Ludusavi/
+# Dolphin/Winetricks/PPSSPP/Flycast/TeknoParrot/Xenia plus haut/plus bas —
+# jamais corrigé ici jusqu'à présent, repéré en relisant tous les .desktop
+# générés par ce Dockerfile pendant cet audit. DISPLAY est désormais
+# ambiant via wayland-session.sh (voir wayland-session.sh), donc
+# suppression pure et simple plutôt qu'un nouveau correctif ad hoc.
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
 ARG SRM_TAG=""
@@ -720,7 +713,7 @@ RUN --mount=type=secret,id=github_token \
     chmod -R a+rX /opt/steam-rom-manager && \
     printf '#!/bin/sh\nexport APPDIR=/opt/steam-rom-manager\nexec /opt/steam-rom-manager/AppRun "$@"\n' \
       > /usr/local/bin/steam-rom-manager && chmod +x /usr/local/bin/steam-rom-manager && \
-    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=env DISPLAY=:0 /usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-rom-manager.desktop && \
     rm -rf /tmp/srm.AppImage /tmp/squashfs-root
 
@@ -904,6 +897,10 @@ RUN mkdir -p /usr/share/retroarch/database/rdb && \
 # "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
 # a son propre frontend avec plus d'options de compatibilité par jeu,
 # utile pour les .iso/.cso qui posent problème sous le core seul.
+# Exec= en clair (18/09) : DISPLAY désormais ambiant via l'export de
+# wayland-session.sh (voir commentaire Ludusavi/Dolphin/Winetricks plus
+# haut) — le détour par x11-wrap.sh, essayé brièvement le même jour pour
+# choisir :0 ou :1 par app, est abandonné pour ce correctif à la source.
 # squashfs-root en lien symbolique vers ./AppDir (pas un vrai dossier,
 # confirmé en direct après un premier build où /opt/ppsspp se retrouvait
 # être un symlink cassé — mv déplace alors le lien, pas le contenu) :
@@ -930,7 +927,7 @@ RUN --mount=type=secret,id=github_token \
     { [ -L squashfs-root ] && mv AppDir /opt/ppsspp && rm -f squashfs-root || mv squashfs-root /opt/ppsspp; } && \
     printf '#!/bin/sh\nexec /opt/ppsspp/AppRun "$@"\n' > /usr/local/bin/ppsspp && \
     chmod +x /usr/local/bin/ppsspp && \
-    printf '[Desktop Entry]\nType=Application\nName=PPSSPP\nExec=env DISPLAY=:0 /usr/local/bin/ppsspp\nIcon=/opt/ppsspp/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=PPSSPP\nExec=/usr/local/bin/ppsspp\nIcon=/opt/ppsspp/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/ppsspp.desktop && \
     rm -f /tmp/ppsspp.AppImage
 
@@ -951,7 +948,7 @@ RUN --mount=type=secret,id=github_token \
     mv squashfs-root /opt/flycast && \
     printf '#!/bin/sh\nexec /opt/flycast/AppRun "$@"\n' > /usr/local/bin/flycast && \
     chmod +x /usr/local/bin/flycast && \
-    printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=env DISPLAY=:0 /usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=/usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/flycast.desktop && \
     rm -f /tmp/flycast.AppImage
 
@@ -1000,7 +997,7 @@ RUN --mount=type=secret,id=github_token \
     chmod +x /opt/teknoparrot/TeknoParrotUi /opt/teknoparrot/ParrotPatcher && \
     chmod -R a+rwX /opt/teknoparrot && \
     ln -sf /opt/teknoparrot/TeknoParrotUi /usr/local/bin/teknoparrot && \
-    printf '[Desktop Entry]\nType=Application\nName=TeknoParrotUI\nExec=env DISPLAY=:0 /usr/local/bin/teknoparrot\nIcon=/opt/teknoparrot/Icons/TeknoVegas.png\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=TeknoParrotUI\nExec=/usr/local/bin/teknoparrot\nIcon=/opt/teknoparrot/Icons/TeknoVegas.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/teknoparrot.desktop && \
     rm -f /tmp/teknoparrot.zip
 
@@ -1016,7 +1013,7 @@ RUN --mount=type=secret,id=github_token \
     [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
     mv squashfs-root /opt/xenia && \
     ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
-    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=env DISPLAY=:0 /usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/xenia.desktop && \
     rm -f /tmp/xenia.AppImage
 
@@ -1238,8 +1235,10 @@ RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)" 2>/dev/null || \
 # déjà été corrigés (Categories=Game; seul, voir plus haut) — ceux-ci
 # viennent de paquets pacman/AUR upstream (dolphin-emu, retroarch,
 # eden-nightly-bin) et gardent leur catégorie d'origine tant qu'on ne la
-# patch pas ici, même motif que le sed DISPLAY=:0 sur dolphin-emu.desktop
-# plus haut (fichier upstream gardé intact à part ce qu'on doit changer).
+# patch pas ici (fichier upstream gardé intact à part ce qu'on doit
+# changer) — même logique que pour DISPLAY sur dolphin-emu.desktop plus
+# haut, même si ce dernier ne nécessite plus aucun sed depuis que DISPLAY
+# est ambiant via wayland-session.sh.
 RUN for f in /usr/share/applications/dolphin-emu.desktop \
              /usr/share/applications/com.libretro.RetroArch.desktop \
              /usr/share/applications/eden-nightly.desktop; do \
