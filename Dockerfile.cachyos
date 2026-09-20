@@ -986,7 +986,18 @@ RUN --mount=type=secret,id=github_token \
 # variante aarch64 (Vita3K-aarch64.AppImage) qu'un simple "x86_64\.AppImage"
 # suffirait déjà à exclure, mais autant fixer le nom complet pour éviter
 # toute ambiguïté future si le nommage évolue. Même motif d'extraction/
-# wrapper que Cemu/PPSSPP ci-dessus.
+# wrapper que Cemu/PPSSPP ci-dessus, MAIS wrapper enrichi (20/09, "vita3k
+# est bien présent mais il ne se lance pas") : son AppRun.wrapped (généré
+# par linuxdeploy-plugin-qt, contrairement à Cemu où AppRun.wrapped EST
+# directement le binaire) est un script shell qui ne lance le vrai binaire
+# QUE si APPIMAGE est non vide — confirmé en direct : sans ça, le script
+# sort silencieusement (aucune erreur, aucun log, exactement le symptôme
+# "ne se lance pas") car APPIMAGE/APPDIR ne sont jamais positionnées ici
+# (on exécute l'AppDir extrait directement, pas l'AppImage via son vrai
+# runtime squashfs, seul contexte où ces variables existent normalement).
+# QT_QPA_PLATFORM=xcb nécessaire en plus (confirmé en direct) : Qt détecte
+# WAYLAND_DISPLAY et essaie le plugin Qt "wayland", absent de cet AppImage
+# (seul xcb est embarqué) — même motif que Pegasus/Steam plus haut.
 ARG VITA3K_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -998,7 +1009,7 @@ RUN --mount=type=secret,id=github_token \
     for i in 1 2 3; do rm -rf squashfs-root AppDir; ./vita3k.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
     { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction vita3k.AppImage échouée"; exit 1; } && \
     { [ -L squashfs-root ] && mv AppDir /opt/vita3k && rm -f squashfs-root || mv squashfs-root /opt/vita3k; } && \
-    printf '#!/bin/sh\nexec /opt/vita3k/AppRun "$@"\n' > /usr/local/bin/vita3k && \
+    printf '#!/bin/sh\nexport APPDIR=/opt/vita3k APPIMAGE=/opt/vita3k/AppRun QT_QPA_PLATFORM=xcb\nexec /opt/vita3k/AppRun "$@"\n' > /usr/local/bin/vita3k && \
     chmod +x /usr/local/bin/vita3k && \
     printf '[Desktop Entry]\nType=Application\nName=Vita3K\nExec=/usr/local/bin/vita3k\nIcon=/opt/vita3k/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/vita3k.desktop && \
