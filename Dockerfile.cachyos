@@ -245,6 +245,7 @@ RUN pacman -Syyu --noconfirm && \
       ttf-jetbrains-mono-nerd cantarell-fonts noto-fonts ttf-dejavu \
       libva-utils \
       qt6-multimedia \
+      gst-plugins-good gst-plugins-bad gst-libav \
       flatpak \
     && pacman -Scc --noconfirm
 
@@ -253,6 +254,22 @@ RUN pacman -Syyu --noconfirm && \
 # (contrairement à RPCS3/Azahar/ShadPS4 qui embarquent leur propre copie
 # dans leur AppDir) — "cannot open shared object file" confirmé en direct
 # sans ce paquet.
+#
+# gst-plugins-good/bad + gst-libav (20/09, "Pegasus n'arrive pas à lire les
+# vidéos de preview") : qt6-multimedia tire gstreamer/gst-plugins-base-libs/
+# gst-plugins-bad-libs en dépendance, mais ce sont uniquement des paquets
+# "-libs" (bibliothèques partagées pour compiler contre, aucun greffon
+# chargeable) — confirmé en direct via `gst-inspect-1.0`, aucun démultiplexeur
+# MP4/QuickTime disponible. Pegasus (pegasus-fe) lie directement
+# libgstreamer-1.0 pour ses vidéos de preview, pas seulement via
+# qt6-multimedia : reproduit en direct avec `gst-launch-1.0 ... decodebin`
+# sur une vraie vidéo scrapée (RetroBat/downloaded_media/.../*.mp4) —
+# "Élément manquant : Démultiplexeur Quicktime". Le décodage H.264 lui-même
+# fonctionnait déjà (accélération matérielle NVDEC/Vulkan présente), seul le
+# conteneur MP4 ne pouvait pas être ouvert. gst-plugins-good fournit qtdemux
+# (MP4/MOV) et la plupart des formats courants ; gst-plugins-bad et
+# gst-libav (décodeurs de secours via FFmpeg) ajoutés pour une couverture
+# large plutôt que corriger un format à la fois.
 #
 # flatpak (demandé 31/08) — xdg-desktop-portal(-gtk/-wlr) déjà installés
 # ci-dessus couvrent les besoins runtime des apps Flatpak (permissions,
