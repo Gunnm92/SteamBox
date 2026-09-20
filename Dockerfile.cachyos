@@ -803,7 +803,10 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # besoin d'un serveur X — Cemu via le hook linuxdeploy-plugin-gtk.sh sourcé
 # par son AppRun ("Unable to initialize GTK+"), SRM via son Electron/ozone
 # ("Missing X server or $DISPLAY", segfault ensuite) — même bug que Chrome/
-# Pegasus/Xenia, la session labwc unset DISPLAY globalement.
+# Pegasus/Xenia, la session labwc unset DISPLAY globalement. Plus besoin du
+# "env DISPLAY=:0" en dur depuis le 18/09 (DISPLAY ambiant via
+# wayland-session.sh, voir plus haut) : Cemu (ré-ajouté le 20/09) et Steam
+# ROM Manager n'en ont plus dans leur Exec=.
 #
 # Confirmé en direct dans le conteneur : PCSX2/DuckStation/Xemu n'ont pas ce
 # problème car leur AppRun est un lien direct vers le vrai binaire (aucun
@@ -951,6 +954,55 @@ RUN --mount=type=secret,id=github_token \
     printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=/usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/flycast.desktop && \
     rm -f /tmp/flycast.AppImage
+
+# Cemu (20/09, ré-ajouté) — seul émulateur Wii U du conteneur, retiré à tort
+# le 18/09 en même temps qu'Azahar/GZDoom (nettoyage qui n'aurait pas dû
+# l'inclure). Même motif d'extraction que PPSSPP plus haut (squashfs-root
+# peut être un lien symbolique vers ./AppDir selon l'AppImage) et même
+# wrapper (printf) plutôt que ln -sf, pour la même raison : AppRun résout
+# son dossier via $0 sans readlink -f.
+ARG CEMU_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/${CEMU_TAG:+tags/}${CEMU_TAG:-latest}" \
+      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
+    chmod +x /tmp/cemu.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./cemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
+    { [ -L squashfs-root ] && mv AppDir /opt/cemu && rm -f squashfs-root || mv squashfs-root /opt/cemu; } && \
+    printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
+    chmod +x /usr/local/bin/cemu && \
+    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/cemu.desktop && \
+    rm -f /tmp/cemu.AppImage
+
+# Vita3K (20/09) — seul émulateur PS Vita disponible sur Linux. Release
+# "continuous" (pas de tag versionné, builds CI en continu) plutôt que
+# "latest" au sens strict : c'est déjà ce que ${TAG:-latest} résout côté
+# API GitHub pour ce dépôt (la release marquée "latest" EST la continuous).
+# Regex ancré sur "Vita3K-x86_64.AppImage" : le dépôt publie aussi une
+# variante aarch64 (Vita3K-aarch64.AppImage) qu'un simple "x86_64\.AppImage"
+# suffirait déjà à exclure, mais autant fixer le nom complet pour éviter
+# toute ambiguïté future si le nommage évolue. Même motif d'extraction/
+# wrapper que Cemu/PPSSPP ci-dessus.
+ARG VITA3K_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    VITA3K_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Vita3K/Vita3K/releases/${VITA3K_TAG:+tags/}${VITA3K_TAG:-latest}" \
+      | grep -oE '"browser_download_url": *"[^"]*Vita3K-x86_64\.AppImage"' | cut -d'"' -f4) && \
+    [ -n "${VITA3K_URL}" ] || { echo "FATAL: VITA3K_URL vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/vita3k.AppImage "${VITA3K_URL}" && \
+    chmod +x /tmp/vita3k.AppImage && cd /tmp && \
+    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./vita3k.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
+    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction vita3k.AppImage échouée"; exit 1; } && \
+    { [ -L squashfs-root ] && mv AppDir /opt/vita3k && rm -f squashfs-root || mv squashfs-root /opt/vita3k; } && \
+    printf '#!/bin/sh\nexec /opt/vita3k/AppRun "$@"\n' > /usr/local/bin/vita3k && \
+    chmod +x /usr/local/bin/vita3k && \
+    printf '[Desktop Entry]\nType=Application\nName=Vita3K\nExec=/usr/local/bin/vita3k\nIcon=/opt/vita3k/.DirIcon\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/vita3k.desktop && \
+    rm -f /tmp/vita3k.AppImage
 
 # TeknoParrotUI (18/09) — build .NET 8 natif Linux (teknogods/TeknoParrotUI,
 # release "TeknoParrotUI-net8"), PAS la release GitHub "latest" de ce dépôt :
