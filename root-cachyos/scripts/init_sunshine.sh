@@ -79,19 +79,12 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # idempotent (garde par PID file) pour supporter une reconnexion sans
     # empiler un second xfdesktop/xfce4-panel.
     #
-    # "Pegasus" ajouté (06/09) : jusque-là uniquement accessible depuis le
-    # bureau visible (raccourci XFCE, VNC) — pas moyen de tester/lancer les
-    # jeux arcade (wsquashfs-launcher, MAME/RetroArch, voir init_pegasus.sh)
-    # sous Moonlight. pegasus-fe est un build x11-static (pas de plugin
-    # Wayland) : le raccourci XFCE le force déjà en DISPLAY=:0/QT_QPA_
-    # PLATFORM=xcb (voir Dockerfile.cachyos) — remplacer :0 par :1 suffit à
-    # le rediriger vers le labwc headless (Xwayland lazy-démarré au premier
-    # client, même mécanisme que Steam Big Picture) au lieu du bureau
-    # visible. Tout jeu lancé DEPUIS ce Pegasus hérite du même DISPLAY=:1,
-    # donc s'affiche aussi sous Moonlight sans configuration supplémentaire.
-    # Pas de dbus-run-session ici (contrairement à sunshine-desktop-xfce.sh) :
-    # pegasus-fe n'est pas un composant XFCE, aucun conflit de bus de
-    # session de ce type confirmé en direct.
+    # "EmulationStation" (24/09, remplace l'entrée "Pegasus" du 06/09) :
+    # frontend des jeux rétro/arcade (wsquashfs-launcher, MAME/RetroArch,
+    # voir init_emulationstation.sh) sous Moonlight. DISPLAY=:1 /
+    # WAYLAND_DISPLAY=wayland-1 : le labwc headless du stream, pas le bureau
+    # visible — tout jeu lancé depuis ES hérite du même affichage et
+    # s'affiche donc sous Moonlight sans configuration supplémentaire.
     #
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
     # très tôt dans ce projet — l'ancien Big Picture (CEF) capturait en écran
@@ -138,7 +131,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "Pegasus", "detached": ["env DISPLAY=:1 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe"],
+    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -155,7 +148,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=6
+CURRENT_VERSION=7
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -237,12 +230,12 @@ if [ "${INSTALLED_VERSION}" -lt 5 ]; then
     # QUE si aucune entrée "Pegasus" n'existe déjà (jamais de doublon si
     # l'utilisateur en a créé une manuellement).
     if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
-        if ! jq -e '.apps[] | select(.name == "Pegasus")' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+        if ! jq -e '.apps[] | select(.name == "Pegasus" or .name == "EmulationStation")' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
             cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v5"
-            jq '.apps += [{"name": "Pegasus", "detached": ["env DISPLAY=:1 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe"], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}]' \
+            jq '.apps += [{"name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}]' \
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
-                && echo "[init_sunshine] migration v5 : entrée Pegasus ajoutée à apps.json (sauvegarde .bak-migration-v5)"
+                && echo "[init_sunshine] migration v5 : entrée EmulationStation ajoutée à apps.json (sauvegarde .bak-migration-v5)"
         fi
     fi
 fi
@@ -271,6 +264,23 @@ if [ "${INSTALLED_VERSION}" -lt 6 ]; then
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v6 : Steam tué à la déconnexion pour l'entrée Steam Big Picture (sauvegarde .bak-migration-v6)"
         fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 7 ]; then
+    # v6 -> v7 (24/09, Pegasus remplacé par EmulationStation) : retire
+    # l'entrée "Pegasus" qui lance pegasus-fe (absent de l'image) et ajoute
+    # "EmulationStation" si elle manque. Une entrée "Pegasus" personnalisée
+    # (autre commande que pegasus-fe) est laissée telle quelle.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v7"
+        jq --arg cmd "env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation" \
+            '.apps |= (map(select(.name != "Pegasus" or ((.detached // []) | tostring | test("pegasus-fe") | not)))
+                       | if any(.[]; .name == "EmulationStation") then .
+                         else . + [{"name": "EmulationStation", "detached": [$cmd], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}] end)' \
+            "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+            && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+            && echo "[init_sunshine] migration v7 : Pegasus remplacé par EmulationStation (sauvegarde .bak-migration-v7)"
     fi
 fi
 

@@ -69,7 +69,7 @@ Chaque app applique la résolution du client à la connexion et revient à
   TeknoParrotUI (lanceur natif, jeux toujours sous Wine).
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
-- **Frontends** : Steam gamepadui (principal), Pegasus (lancé depuis Steam).
+- **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
 - **Bureau** : XFCE (panel, Thunar, terminal), thème Mc-OS-CTLina sombre,
   clavier fr-mac partout (local, VNC, Moonlight).
 - **Divers** : Steam ROM Manager, Flips, Google Chrome, flatpak (+ Flathub).

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lanceur Pegasus pour Namco System 246/256 (22/09), via PCSX2X6
+# Lanceur pour Namco System 246/256 (22/09), via PCSX2X6
 # (github.com/PS2Homebrew-arcade/pcsx2x6, fork arcade de PCSX2). Reprend le
 # fonctionnement de Batocera (batocera_launch/emulators/pcsx2x6.py) :
 #   - chaque jeu est un .squashfs contenant un .acgame (description du jeu,
@@ -19,14 +19,14 @@
 # désactivé, plein écran) :
 # tout autre réglage fait depuis l'interface de PCSX2X6 est conservé.
 set -uo pipefail
-# shellcheck source=pegasus-lib.sh
-. /usr/local/bin/scripts/pegasus-lib.sh
+# shellcheck source=game-lib.sh
+. /usr/local/bin/scripts/game-lib.sh
 
 rom="$1"
 mount_squashfs_rom "${rom}" || exit 1
 acgame=$(find "${MOUNTED_DIR}" -maxdepth 2 -name '*.acgame' -print -quit)
 if [[ -z "${acgame}" ]]; then
-    echo "pegasus-launch-namco2x6 : aucun .acgame dans ${rom}" >&2
+    echo "game-launch-namco2x6 : aucun .acgame dans ${rom}" >&2
     exit 1
 fi
 
@@ -39,8 +39,8 @@ MEMCARDS_DIR="${SAVES_DIR}/namco2x6/pcsx2x6"
 mkdir -p "${MEMCARDS_DIR}"
 if [[ -n "${dongle}" && ! -f "${MEMCARDS_DIR}/${dongle}" ]]; then
     msg="Dongle manquant : « ${dongle} » attendu dans ${MEMCARDS_DIR}"
-    echo "pegasus-launch-namco2x6 : ${msg}" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send -a Pegasus "Namco 246/256" "${msg}" 2>/dev/null
+    echo "game-launch-namco2x6 : ${msg}" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Namco 246/256" "${msg}" 2>/dev/null
     exit 1
 fi
 bios_file="r27v1602f.8g"
@@ -85,8 +85,8 @@ if grep -qE '^[[:space:]]*subdir[[:space:]]*=' "${acgame}"; then
     exit $?
 fi
 gameid=$(sed -n 's/^[[:space:]]*gameid[[:space:]]*=[[:space:]]*//p' "${acgame}" | head -1 | tr -d '\r')
-[[ -n "${gameid}" ]] || { echo "pegasus-launch-namco2x6 : gameid absent de ${acgame}" >&2; exit 1; }
-work="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/pegasus-namco2x6"
+[[ -n "${gameid}" ]] || { echo "game-launch-namco2x6 : gameid absent de ${acgame}" >&2; exit 1; }
+work="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/game-namco2x6"
 rm -rf "${work}"
 mkdir -p "${work}/${gameid}"
 for f in "${MOUNTED_DIR}"/*; do

@@ -107,7 +107,7 @@ EOF
 # continue (contrairement a la session headless wayland-1, occupee en
 # permanence par Steam), Xwayland meurt entre deux usages -- confirme en
 # direct : Steam ROM Manager (et tout le reste des apps DISPLAY=:0 du
-# menu -- Chrome, Pegasus, Cemu, Dolphin, Ludusavi) echouait "Missing X
+# menu -- Chrome, EmulationStation, Cemu, Dolphin, Ludusavi) echouait "Missing X
 # server or DISPLAY" des que le bureau restait quelques secondes sans
 # app X11 active, alors que le meme lancement reussissait juste apres un
 # autre test qui avait garde Xwayland chaud. Documente comme necessitant
@@ -187,7 +187,7 @@ rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null 
 # labwc : compositeur racine directement sur le GPU via seatd/libinput, sans
 # Xorg. Pas de --xwayland explicite comme kwin_wayland : labwc démarre son
 # Xwayland interne automatiquement dès quun client X11 (Steam, Wine,
-# Pegasus) en a besoin.
+# Chrome) en a besoin.
 #
 # WLR_DRM_DEVICES=/dev/dri/card0 : /sys/class/drm (lecture seule, vue non
 # isolée par conteneur) liste les GPU de lhôte multi-GPU (card0/1/2), mais

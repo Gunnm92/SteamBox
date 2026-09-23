@@ -132,12 +132,11 @@ fi
 # ("confirmés en direct sur la prod" : video_vsync=false pour le freeze
 # GLX, pause_nonactive=false, system_directory vers /userdata/bios)
 # n'avaient donc jamais réellement pris effet.
-# init_retroarch AVANT init_pegasus (22/09) : il repeuple le dossier de
-# cœurs utilisateur (liens vers les cœurs pacman) dont init_pegasus vérifie
-# l'existence avant d'écrire chaque commande de lancement — dans l'ordre
-# inverse, un /config neuf n'aurait eu aucune commande RetroArch au premier
-# démarrage.
-for script in init_system init_audio init_sunshine init_retroarch init_pegasus; do
+# init_retroarch AVANT init_emulationstation (22/09, Pegasus remplacé par
+# EmulationStation le 24/09) : il repeuple le dossier de cœurs utilisateur
+# (liens vers les cœurs pacman) vers lequel pointent les commandes RetroArch
+# de game-systems.sh.
+for script in init_system init_audio init_sunshine init_retroarch init_emulationstation; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
         "/usr/local/bin/scripts/${script}.sh" || echo "[init-system] ${script}.sh a échoué (code $?) — on continue"
     fi

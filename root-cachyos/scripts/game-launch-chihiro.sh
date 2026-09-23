@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lanceur Pegasus pour Sega Chihiro (22/09), via xemu. Reprend le
+# Lanceur pour Sega Chihiro (22/09), via xemu. Reprend le
 # fonctionnement de Batocera (batocera_launch/emulators/xemu.py, même xemu
 # officiel v0.8.x que cette image) : le jeu .iso est monté comme DVD, avec le
 # flashrom Cerbios, la bootrom MCPX, 128 Mo de RAM (valeur Chihiro) et le
@@ -16,7 +16,7 @@ DATA="${XDG_DATA_HOME:-${HOME}/.local/share}/xemu-chihiro"
 rom="$1"
 
 for f in cerbios.bin mcpx_1.0.bin; do
-    [[ -f "${BIOS_DIR}/${f}" ]] || { echo "pegasus-launch-chihiro : ${BIOS_DIR}/${f} absent" >&2; exit 1; }
+    [[ -f "${BIOS_DIR}/${f}" ]] || { echo "game-launch-chihiro : ${BIOS_DIR}/${f} absent" >&2; exit 1; }
 done
 mkdir -p "${DATA}"
 [[ -f "${DATA}/xbox_hdd.qcow2" ]] || cp /usr/share/xemu/xbox_hdd.qcow2 "${DATA}/xbox_hdd.qcow2"
@@ -25,7 +25,7 @@ mkdir -p "${DATA}"
 # jeu contenant une apostrophe est refusé plutôt que de produire un TOML
 # invalide.
 if [[ "${rom}" == *"'"* ]]; then
-    echo "pegasus-launch-chihiro : apostrophe non prise en charge dans ${rom}" >&2
+    echo "game-launch-chihiro : apostrophe non prise en charge dans ${rom}" >&2
     exit 1
 fi
 cat > "${DATA}/xemu.toml" <<EOF

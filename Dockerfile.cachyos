@@ -232,7 +232,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       core/lib32-gcc-libs core/lib32-glibc extra/libpulse extra/libasyncns \
       vulkan-radeon lib32-vulkan-radeon \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
-      pipewire pipewire-pulse wireplumber \
+      pipewire pipewire-pulse pipewire-alsa wireplumber \
       lib32-pipewire lib32-libpulse \
       lib32-libxrandr lib32-libxi lib32-libxcursor lib32-libxcomposite lib32-libxrender \
       ffmpeg \
@@ -422,6 +422,13 @@ cd /tmp
 git clone --depth 1 https://aur.archlinux.org/python-aiohttp-cors.git
 cd python-aiohttp-cors
 makepkg -si --noconfirm --needed
+
+# freeimage (24/09) : dépendance de build ET d'exécution de Batocera
+# EmulationStation (bloc 1a7), retirée des dépôts officiels Arch.
+cd /tmp
+git clone --depth 1 https://aur.archlinux.org/freeimage.git
+cd freeimage
+makepkg -si --noconfirm --needed
 BUILD_AUR_EOF
 
 RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
@@ -430,7 +437,7 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py 
     rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
     userdel -r aur-builder && \
     rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin \
-           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors && \
+           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/freeimage && \
     pacman -Rns --noconfirm meson ninja && \
     pacman -Scc --noconfirm
 
@@ -642,35 +649,54 @@ RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 /usr/sbin/xfdesktop-settings "$@
 # utilité réelle tant que ça reste le cas.
 RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null || true
 
-# ── 1a7. Pegasus Frontend — pas de paquet Arch/CachyOS, build x11-static
-# officiel (Qt5 sans plugin Wayland compilé — testé en direct : "Could not
-# find the Qt platform plugin wayland"), donc QT_QPA_PLATFORM=xcb explicite
-# ici (l'ENV globale du Dockerfile vaut "wayland" par défaut). Décision
-# utilisateur (29/08) : Steam est l'interface principale de la session
-# (gamepadui, niché dans gamescope via scripts/steam-gamescope-launch.sh),
-# PAS Pegasus en direct — Pegasus se lance DEPUIS Steam, ajouté comme "jeu
-# non-Steam" dans la bibliothèque (config manuelle côté utilisateur, liée à
-# son compte Steam, pas automatisable proprement dans l'image). Une fois
-# lancé : détecte Steam/GOG/manettes automatiquement (confirmé en direct :
-# 20 jeux Steam trouvés).
-#
-# Pas de DISPLAY dans l'Exec= (22/09) : un DISPLAY=:0 en dur y restait
-# depuis l'époque où la session labwc unset DISPLAY globalement — même bug
-# que celui corrigé au commit fc1f70a pour les autres .desktop (lancé depuis
-# l'app "Desktop" de Moonlight, Pegasus s'ouvrait sur le VNC). DISPLAY est
-# désormais ambiant dans les deux bureaux (wayland-session.sh côté visible,
-# sunshine-desktop-xfce.sh côté Moonlight) ; seul QT_QPA_PLATFORM=xcb reste
-# nécessaire (build x11-static, pas de plugin Qt Wayland).
-ARG PEGASUS_TAG=""
-RUN --mount=type=secret,id=github_token \
-    PEGASUS_URL=$(/usr/local/lib/steambox-build/gh-asset-url mmatyas/pegasus-frontend "${PEGASUS_TAG}" 'x11-static\.zip$') && \
-    curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
-    mkdir -p /opt/pegasus && \
-    unzip -q /tmp/pegasus.zip -d /opt/pegasus && \
-    ln -sf /opt/pegasus/pegasus-fe /usr/local/bin/pegasus-fe && \
-    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/pegasus.desktop && \
-    rm -f /tmp/pegasus.zip
+# ── 1a7. Batocera EmulationStation (24/09) — frontend des jeux rétro/arcade,
+# remplace Pegasus : sa SDL 2.0.20 embarquée ne lisait pas la DualSense
+# virtuelle de Sunshine (confirmé en direct), build X11 seulement, et il
+# fallait réécrire les metadata.pegasus.txt de RomM. La version Batocera
+# d'ES lit directement les gamelist.xml de la ludothèque AVEC leurs chemins
+# de médias (./covers/, ./videos/, ./marquees/...), tels que RomM/Batocera
+# les écrivent — ES-DE, lui, ignore ces chemins (arborescence de médias
+# propre). Pas de paquet ni de release binaire : compilé depuis les sources
+# (instructions Arch officielles du README), freeimage vient d'AUR (bloc
+# build-aur.sh plus haut). ES_REF : branche/tag, vide = branche par défaut.
+#   -DGL=ON          OpenGL bureau (NVIDIA/Mesa), pas GLES
+#   -DCEC=OFF        pas de HDMI-CEC dans un conteneur
+#   -DENABLE_PULSE=ON contrôle du volume via PulseAudio/PipeWire au lieu
+#                    d'ALSA ("Failed to attach to default card" sinon)
+# Les systèmes (es_systems.cfg) et réglages par défaut sont écrits au
+# démarrage par init_emulationstation.sh ; chaque jeu passe par
+# game-launch.sh. Thème Carbon (celui de Batocera, dépôt amont référencé
+# par leur buildroot) dans /usr/share/emulationstation/themes, lié dans
+# ~/.emulationstation/themes par l'init (seul dossier de thèmes que lit un
+# build non-Batocera). vlc-plugin-ffmpeg : décodage H.264/AAC des vidéos
+# d'aperçu (MP4) par libVLC — sans lui, aucun décodeur H.264 logiciel.
+ARG ES_REF=""
+RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
+      libvlc vlc-plugins-base vlc-plugin-ffmpeg && \
+    git clone --recursive --depth 1 ${ES_REF:+--branch "${ES_REF}"} \
+      https://github.com/batocera-linux/batocera-emulationstation.git /tmp/batocera-es && \
+    cd /tmp/batocera-es && \
+    git log -1 --format='batocera-emulationstation %h (%cs)' && \
+    cmake -DGL=ON -DCEC=OFF -DENABLE_PULSE=ON -DCMAKE_BUILD_TYPE=Release . && \
+    make -j"$(nproc)" && \
+    mkdir -p /opt/batocera-es && \
+    strip -o /opt/batocera-es/emulationstation emulationstation && \
+    cp -a resources locale /opt/batocera-es/ && \
+    git clone --depth 1 https://github.com/fabricecaruso/es-theme-carbon.git \
+      /usr/share/emulationstation/themes/es-theme-carbon && \
+    rm -rf /usr/share/emulationstation/themes/es-theme-carbon/.git && \
+    printf '[Desktop Entry]\nType=Application\nName=EmulationStation\nExec=/opt/batocera-es/emulationstation\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+      > /usr/share/applications/emulationstation.desktop && \
+    cd / && rm -rf /tmp/batocera-es && \
+    pacman -Rns --noconfirm cmake boost rapidjson && \
+    pacman -Scc --noconfirm && \
+    ldd /opt/batocera-es/emulationstation | grep -q "not found" \
+      && { echo "FATAL: bibliothèque manquante pour emulationstation"; exit 1; } || true
+
+# Manettes par défaut d'ES (consulté quand ~/.emulationstation/es_input.cfg
+# ne connaît pas une manette) : base Batocera (clavier + 314 manettes) +
+# DualSense virtuelle de Sunshine (identifiant SDL récent, absent de la base).
+COPY root-cachyos/opt/batocera-es/es_input.cfg /opt/batocera-es/es_input.cfg
 
 # ── 1a7b. Steam (gamepadui) niché dans gamescope — remplace l'entrée de
 # menu XFCE "Steam" générique du paquet (Exec=/usr/bin/steam nu, sans
@@ -682,11 +708,11 @@ RUN printf '[Desktop Entry]\nType=Application\nName=Steam\nExec=/usr/local/bin/s
       > /usr/share/applications/steam.desktop
 
 # "Steam (Bureau)" — client Steam classique (bibliothèque, réglages, ajout
-# de jeux non-Steam comme Pegasus) en fenêtre normale sur le bureau XFCE/
+# de jeux non-Steam) en fenêtre normale sur le bureau XFCE/
 # labwc, via l'Xwayland de labwc (distinct de l'Xwayland niché de gamescope
 # utilisé par l'entrée "Steam" gamepadui ci-dessus). Pas de -gamepadui :
 # interface desktop normale. DISPLAY=:0 en dur retiré (22/09, même motif
-# que Pegasus ci-dessus) : DISPLAY ambiant, :0 sur le bureau visible, :1
+# que l'ancien Pegasus) : DISPLAY ambiant, :0 sur le bureau visible, :1
 # depuis l'app "Desktop" de Moonlight.
 RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/steam\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-desktop.desktop
@@ -810,9 +836,9 @@ RUN /usr/local/lib/steambox-build/install-appimage lindbergh "Lindbergh Loader" 
       "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage"
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
-# Échec franc (22/09) au lieu du "skip" silencieux : init_pegasus.sh lance
+# Échec franc (22/09) au lieu du "skip" silencieux : game-systems.sh lance
 # les jeux Model 3 via /usr/local/bin/supermodel — une image construite sans
-# lui avait des jeux listés dans Pegasus mais impossibles à lancer, sans
+# lui avait des jeux listés dans le frontend mais impossibles à lancer, sans
 # rien au build pour le signaler. Le tarball est désormais publié à chaque
 # release (vérifié le 22/09), et curl -f fait échouer un téléchargement
 # tronqué au lieu de passer une page d'erreur à tar.
@@ -854,7 +880,7 @@ RUN ADDONS=$(curl -fsSL --retry 3 "https://raw.githubusercontent.com/wine-mirror
 
 # ── 1a13. Google Chrome — pas de paquet Arch officiel (AUR-only, nécessite un
 # helper AUR + base-devel), extrait manuellement du .deb officiel Google
-# (même approche que Pegasus/SRM/Lindbergh ci-dessus : curl + extraction, pas
+# (même approche que SRM/Lindbergh ci-dessus : curl + extraction, pas
 # d'installeur). --ozone-platform=x11 explicite (audit C4, 31/08). Le
 # DISPLAY=:0 en dur qui l'accompagnait est retiré (22/09, même motif que
 # Pegasus/Steam (Bureau)) : DISPLAY est ambiant dans les deux bureaux, et :0
@@ -896,7 +922,7 @@ RUN --mount=type=secret,id=github_token \
 # (PS2Homebrew-arcade/pcsx2x6), l'émulateur qu'utilise Batocera pour le
 # système namco2x6. AppImage Linux officielle publiée à chaque release ;
 # "latest" = dernière release stable (les préversions sont ignorées par
-# /releases/latest). Lancé depuis Pegasus par pegasus-launch-namco2x6.sh.
+# /releases/latest). Lancé depuis EmulationStation par game-launch-namco2x6.sh.
 ARG PCSX2X6_TAG=""
 RUN --mount=type=secret,id=github_token \
     URL=$(/usr/local/lib/steambox-build/gh-asset-url PS2Homebrew-arcade/pcsx2x6 "${PCSX2X6_TAG}" 'linux-appimage-x64-Qt\.AppImage$') && \
@@ -922,7 +948,7 @@ RUN --mount=type=secret,id=github_token \
 # Disque dur virtuel Xbox vierge (22/09) — xemu exige un hdd_path ; même
 # image que Batocera (release publique mborgerson/xemu-hdd-image 1.0, déjà
 # formatée, sans aucun contenu Microsoft). Copiée au premier lancement par
-# pegasus-launch-chihiro.sh dans les données utilisateur.
+# game-launch-chihiro.sh dans les données utilisateur.
 RUN curl -fSL --retry 3 -o /tmp/xbox_hdd.zip \
       "https://github.com/mborgerson/xemu-hdd-image/releases/download/1.0/xbox_hdd.qcow2.zip" && \
     mkdir -p /usr/share/xemu && \

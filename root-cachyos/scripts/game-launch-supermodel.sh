@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lanceur Pegasus pour Supermodel (Sega Model 3, 22/09). Supermodel ne
+# Lanceur pour Supermodel (Sega Model 3, 22/09). Supermodel ne
 # reconnaît un romset que via Config/Games.xml, et cherche ce dossier Config/
 # d'abord dans le RÉPERTOIRE COURANT, sinon dans ~/.config/supermodel
 # (Src/OSD/Unix/FileSystemPath.cpp, vérifié le 22/09). Games.xml n'est livré

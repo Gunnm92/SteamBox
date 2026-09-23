@@ -1,10 +1,9 @@
 #!/bin/bash
 # Lance Steam (gamepadui) niché dans gamescope — l'interface principale de
-# la session est Steam (Big Picture/gamepadui), pas Pegasus. Pegasus se
-# lance DEPUIS Steam (ajouté comme "jeu non-Steam" dans la bibliothèque,
-# configuration manuelle ponctuelle côté utilisateur, pas automatisable
-# proprement dans l'image — dépend du compte Steam connecté) — décision
-# utilisateur du 29/08, revenant sur l'autostart direct de Pegasus.
+# la session est Steam (Big Picture/gamepadui) pour les jeux PC — décision
+# utilisateur du 29/08. Les jeux rétro/arcade passent par Batocera
+# EmulationStation (entrée Moonlight dédiée, depuis le 24/09 ; remplace
+# Pegasus).
 #
 # evdev-bridge (ciblant les protocoles wlroots zwlr_virtual_pointer/
 # zwp_virtual_keyboard) retiré d'ici (29/08) : confirmé en direct que cette

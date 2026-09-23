@@ -1,5 +1,5 @@
 #!/bin/bash
-# Lanceur Pegasus pour la PS3 (22/09), via RPCS3. Reprend le fonctionnement
+# Lanceur pour la PS3 (22/09), via RPCS3. Reprend le fonctionnement
 # de Batocera (batocera_launch_rpcs3/emulator.py) :
 #   - .squashfs = disque complet (PS3_GAME/USRDIR/EBOOT.BIN, vérifié sur la
 #     ludothèque réelle) ou jeu PSN (dev_hdd0/game/<ID>/USRDIR/EBOOT.BIN) :
@@ -11,15 +11,15 @@
 # Options vérifiées dans rpcs3/rpcs3.cpp le 22/09 : --no-gui, --fullscreen
 # ("only useful with no-gui"), --installfw.
 set -uo pipefail
-# shellcheck source=pegasus-lib.sh
-. /usr/local/bin/scripts/pegasus-lib.sh
+# shellcheck source=game-lib.sh
+. /usr/local/bin/scripts/game-lib.sh
 
 RPCS3_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/rpcs3"
 rom="$1"
 
 if [[ ! -e "${RPCS3_DIR}/dev_flash/vsh/module/vsh.self" ]]; then
     if [[ ! -f "${BIOS_DIR}/PS3UPDAT.PUP" ]]; then
-        echo "pegasus-launch-ps3 : firmware PS3 absent (ni installé, ni ${BIOS_DIR}/PS3UPDAT.PUP)" >&2
+        echo "game-launch-ps3 : firmware PS3 absent (ni installé, ni ${BIOS_DIR}/PS3UPDAT.PUP)" >&2
         exit 1
     fi
     /usr/local/bin/rpcs3 --installfw "${BIOS_DIR}/PS3UPDAT.PUP"
@@ -42,7 +42,7 @@ case "${rom,,}" in
 esac
 
 if [[ -z "${eboot}" || ! -f "${eboot}" ]]; then
-    echo "pegasus-launch-ps3 : EBOOT.BIN introuvable pour ${rom} (jeu PSN non installé dans RPCS3 ?)" >&2
+    echo "game-launch-ps3 : EBOOT.BIN introuvable pour ${rom} (jeu PSN non installé dans RPCS3 ?)" >&2
     exit 1
 fi
 /usr/local/bin/rpcs3 "${eboot}" --no-gui --fullscreen

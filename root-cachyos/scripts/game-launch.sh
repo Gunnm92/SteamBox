@@ -1,36 +1,33 @@
 #!/bin/bash
-# Lanceur générique Pegasus (22/09) : UNE seule commande pour toute la
-# ludothèque — launch: /usr/local/bin/scripts/pegasus-launch.sh "{file.path}"
-# — posée par init_pegasus.sh dans chaque metadata.pegasus.txt.
+# Lanceur générique (22/09, frontend EmulationStation depuis le 24/09) : UNE
+# seule commande pour toute la ludothèque — <command> de chaque système dans
+# es_systems.cfg (généré par es-systems-gen.sh) : game-launch.sh %ROM%.
 #
-# Pourquoi générique : les metadata.pegasus.txt viennent de RomM, qui
-# regroupe plusieurs plateformes sous une même collection (20 dossiers
-# arcade — mame, naomi, segaalls, type-x... — tous "collection: Arcade", que
-# Pegasus fusionne) et les réécrit à chaque synchronisation. Une commande par
-# plateforme obligeait à éclater ces fichiers jeu par jeu ; ici la plateforme
-# est déduite du DOSSIER du jeu (roms/<plateforme>/...), la même ligne sert
-# partout, et la structure RomM reste intacte.
+# Pourquoi générique : la plateforme est déduite du DOSSIER du jeu
+# (roms/<plateforme>/...), la même commande sert partout — changer un
+# émulateur se fait dans game-systems.sh seulement, jamais dans les fichiers
+# de la ludothèque (gamelist.xml RomM intacts).
 #
 # Émulateur, extensions acceptées et commande de chaque plateforme :
-# pegasus-systems.sh. Journal : ${XDG_RUNTIME_DIR}/pegasus-launch.log.
+# game-systems.sh. Journal : ${XDG_RUNTIME_DIR}/game-launch.log.
 set -uo pipefail
-# shellcheck source=pegasus-systems.sh
-. /usr/local/bin/scripts/pegasus-systems.sh
+# shellcheck source=game-systems.sh
+. /usr/local/bin/scripts/game-systems.sh
 
-ROMS_DIR="${PEGASUS_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
-LOG="${XDG_RUNTIME_DIR:-/tmp}/pegasus-launch.log"
+ROMS_DIR="${GAMES_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
+LOG="${XDG_RUNTIME_DIR:-/tmp}/game-launch.log"
 rom="${1:-}"
 
 fail() {
     echo "[$(date '+%F %T')] ÉCHEC ${rom} : $*" | tee -a "${LOG}" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send -a Pegasus "Lancement impossible" "$*" 2>/dev/null
+    command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Lancement impossible" "$*" 2>/dev/null
     exit 1
 }
 
 [[ -e "${rom}" ]] || fail "fichier introuvable"
 
 # Plateforme = premier dossier sous roms/, chemins résolus (/home/arcade est
-# un lien vers /config : Pegasus peut transmettre l'une ou l'autre forme).
+# un lien vers /config : le frontend peut transmettre l'une ou l'autre forme).
 roms_real=$(realpath "${ROMS_DIR}")
 rom_real=$(realpath "${rom}")
 [[ "${rom_real}" == "${roms_real}/"* ]] || fail "hors de ${ROMS_DIR}, plateforme inconnue"
@@ -65,9 +62,16 @@ core=$(grep -oE '/[^ "]*_libretro\.so' <<< "${template}" || true)
 # des commandes de ce dépôt, le seul élément variable est le chemin du jeu.
 cmd="${template//\"\{file.path\}\"/$(printf '%q' "${rom}")}"
 echo "[$(date '+%F %T')] ${system} : ${cmd}" >> "${LOG}"
-# PEGASUS_LAUNCH_DRYRUN=1 : affiche la commande sans la lancer (tests).
-if [[ -n "${PEGASUS_LAUNCH_DRYRUN:-}" ]]; then
+# GAME_LAUNCH_DRYRUN=1 : affiche la commande sans la lancer (tests).
+if [[ -n "${GAME_LAUNCH_DRYRUN:-}" ]]; then
     echo "${cmd}"
     exit 0
 fi
+# Sortie du jeu dans son propre journal (écrasé à chaque lancement), jamais
+# vers le frontend : EmulationStation fait passer stdout par `head -300` —
+# au-delà de 300 lignes (Wine/wsquashfs-launcher les dépassent vite), head
+# se ferme, l'écriture suivante tue ce script par SIGPIPE, ES croit la partie
+# finie et relance sa musique pendant que le jeu tourne encore (confirmé en
+# direct : House of the Dead 3 toujours actif, un 2e jeu lancé par-dessus).
+exec > "${XDG_RUNTIME_DIR:-/tmp}/game-launch-last.log" 2>&1
 eval "exec ${cmd}"

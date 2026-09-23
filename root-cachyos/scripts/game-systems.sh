@@ -1,7 +1,7 @@
 #!/bin/bash
-# Table des systèmes Pegasus de SteamBox (22/09), à sourcer — partagée par
-# init_pegasus.sh (pose la ligne launch: dans chaque metadata.pegasus.txt)
-# et pegasus-launch.sh (lanceur générique qui démarre le bon émulateur
+# Table des systèmes de SteamBox (22/09), à sourcer — partagée par
+# es-systems-gen.sh (génère es_systems.cfg d'EmulationStation au démarrage)
+# et game-launch.sh (lanceur générique qui démarre le bon émulateur
 # d'après le dossier de plateforme du jeu). Une seule source de vérité :
 # changer un émulateur ici suffit, aucun fichier de la ludothèque à retoucher.
 # shellcheck disable=SC2034  # variables lues par les scripts qui sourcent
@@ -13,7 +13,7 @@ SCRIPTS="/usr/local/bin/scripts"
 # Core Downloader de RetroArch (opera, pcsx_rearmed, mednafen_ngp/pcfx...),
 # absents du dossier système — confirmé en direct le 22/09.
 CORES="/config/.config/retroarch/cores"
-# -f : plein écran (lancé depuis Pegasus/Moonlight, jamais en fenêtre).
+# -f : plein écran (lancé depuis EmulationStation/Moonlight, jamais en fenêtre).
 RA="retroarch -f -L"
 # Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
 # d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
@@ -119,7 +119,7 @@ SYSTEMS["gc"]="GameCube|iso,rvz,chd,gcm|${RA} ${CORES}/dolphin_libretro.so \"{fi
 SYSTEMS["wii"]="Wii|iso,wbfs,rvz,chd|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
 # 3DS retire (22/09) : pas de core libretro 3DS disponible, et Azahar (le
 # standalone vers lequel ces entrees pointaient) a ete retire de l image le
-# 18/09 - les jeux 3DS apparaissaient dans Pegasus avec une commande de
+# 18/09 - les jeux 3DS apparaissaient dans le frontend avec une commande de
 # lancement vers un binaire inexistant.
 
 # ── NEC (RetroArch) ───────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ SYSTEMS["neogeoaes"]="Neo Geo|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.pa
 SYSTEMS["igspgm"]="IGS PGM|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
 SYSTEMS["naomi"]="Sega NAOMI|zip,7z,chd,dat|/usr/local/bin/flycast \"{file.path}\""
 SYSTEMS["naomi2"]="Sega NAOMI 2|zip,7z,chd,dat|/usr/local/bin/flycast \"{file.path}\""
-SYSTEMS["model3"]="Sega Model 3|zip|${SCRIPTS}/pegasus-launch-supermodel.sh \"{file.path}\""
+SYSTEMS["model3"]="Sega Model 3|zip|${SCRIPTS}/game-launch-supermodel.sh \"{file.path}\""
 SYSTEMS["segaalls"]="Sega ALLS|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["segaer"]="Sega Europa-R|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["seganu"]="Sega Nu|wsquashfs|${WSQUASHFS} \"{file.path}\""
@@ -163,12 +163,12 @@ SYSTEMS["konamilcd"]="Konami LCD|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.
 # batocera-linux relu : emulators/pcsx2x6.py, rpcs3/emulator.py, xemu.py,
 # dolphin/emulator.py). BIOS attendus dans bios/ (namco2x6/, cerbios.bin,
 # mcpx_1.0.bin, PS3UPDAT.PUP) — voir chaque lanceur.
-SYSTEMS["namco2x6"]="Namco System 246/256|squashfs|${SCRIPTS}/pegasus-launch-namco2x6.sh \"{file.path}\""
-SYSTEMS["chihiro"]="Sega Chihiro|iso|${SCRIPTS}/pegasus-launch-chihiro.sh \"{file.path}\""
+SYSTEMS["namco2x6"]="Namco System 246/256|squashfs|${SCRIPTS}/game-launch-namco2x6.sh \"{file.path}\""
+SYSTEMS["chihiro"]="Sega Chihiro|iso|${SCRIPTS}/game-launch-chihiro.sh \"{file.path}\""
 # Triforce : Dolphin officiel, comme la GameCube (Batocera n'utilise plus de
 # build Triforce séparé) — remplace l'ancien mapping wsquashfs, faux.
 SYSTEMS["triforce"]="Triforce|rvz,iso,gcz|dolphin-emu -b -C Dolphin.Display.Fullscreen=True -e \"{file.path}\""
-SYSTEMS["ps3"]="PlayStation 3|squashfs,psn|${SCRIPTS}/pegasus-launch-ps3.sh \"{file.path}\""
+SYSTEMS["ps3"]="PlayStation 3|squashfs,psn|${SCRIPTS}/game-launch-ps3.sh \"{file.path}\""
 # ScummVM : jeux en DOSSIERS (« / » = dossier accepté), lancés par le
 # ScummVM standalone du paquet pacman avec détection automatique du jeu.
 SYSTEMS["scummvm"]="ScummVM|/|scummvm -f -p \"{file.path}\" --auto-detect"
@@ -176,7 +176,7 @@ SYSTEMS["scummvm"]="ScummVM|/|scummvm -f -p \"{file.path}\" --auto-detect"
 SYSTEMS["psx"]="PlayStation|chd,cue,pbp,7z,bin,m3u|/usr/local/bin/duckstation-qt -batch -nogui -fullscreen -- \"{file.path}\""
 SYSTEMS["ps2"]="PlayStation 2|iso,chd,gz,cso|/usr/local/bin/pcsx2 -batch -nogui -fullscreen -- \"{file.path}\""
 SYSTEMS["psp"]="PSP|iso,cso,chd,pbp|/usr/local/bin/ppsspp --fullscreen \"{file.path}\""
-SYSTEMS["psvita"]="PS Vita|psvita|${SCRIPTS}/pegasus-launch-psvita.sh \"{file.path}\""
+SYSTEMS["psvita"]="PS Vita|psvita|${SCRIPTS}/game-launch-psvita.sh \"{file.path}\""
 # Nintendo
 SYSTEMS["nes"]="NES|nes,zip,7z|${RA} ${CORES}/nestopia_libretro.so \"{file.path}\""
 SYSTEMS["famicom"]="Famicom|nes,zip,7z|${RA} ${CORES}/nestopia_libretro.so \"{file.path}\""
