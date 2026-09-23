@@ -1,0 +1,79 @@
+#!/bin/bash
+# Installe une AppImage EXTRAITE sous /opt/<nom> (outil de BUILD uniquement,
+# voir Dockerfile.cachyos) — factorise les 12 blocs quasi identiques qui
+# dupliquaient téléchargement, extraction, lanceur et .desktop, et dont les
+# variantes avaient divergé au fil des correctifs (seuls certains géraient le
+# squashfs-root en lien symbolique vers ./AppDir, certains utilisaient un
+# ln -sf cassant les AppRun qui calculent leur dossier via $0).
+#
+# Usage : install-appimage <nom> <nom affiché> <url | fichier local>
+# Variables optionnelles :
+#   BIN=...          nom du lanceur dans /usr/local/bin (défaut : <nom>)
+#   WRAPPER_ENV=...  ligne shell insérée dans le lanceur avant l'exec
+#                    (ex: "export APPDIR=/opt/x")
+#   DESKTOP_ARGS=... arguments ajoutés à l'Exec= du .desktop
+#
+# Choix communs à toutes les AppImage :
+#   - extraction (--appimage-extract) plutôt que l'AppImage brute : aucun FUSE
+#     requis au lancement ;
+#   - squashfs-root peut être un lien symbolique vers ./AppDir selon l'outil
+#     d'empaquetage (cas Lindbergh/RPCS3/PPSSPP/Cemu/Vita3K, confirmé en
+#     direct) — readlink -f déplace toujours le VRAI dossier, jamais le lien ;
+#   - lanceur = petit script "exec /opt/<nom>/AppRun" (jamais un ln -sf) : les
+#     AppRun générés par linuxdeploy résolvent leur dossier via $0 sans
+#     readlink -f — à travers un lien, $0 vaut /usr/local/bin/<bin> et l'AppRun
+#     cherche ses libs au mauvais endroit (Cemu/RPCS3/PPSSPP/Flycast/SRM,
+#     confirmé en direct). Sans effet de bord pour les AppRun qui sont
+#     eux-mêmes un lien vers le vrai binaire (PCSX2/DuckStation/Xemu) ;
+#   - chmod -R a+rX : certaines AppImage extraient des fichiers non lisibles
+#     par un autre utilisateur que root (SRM, confirmé en direct).
+set -euo pipefail
+
+name="$1"
+label="$2"
+src="$3"
+bin="${BIN:-${name}}"
+dest="/opt/${name}"
+
+work="$(mktemp -d)"
+trap 'rm -rf "${work}"' EXIT
+cd "${work}"
+
+if [[ "${src}" == http* ]]; then
+    curl -fSL --retry 3 -o app.AppImage "${src}"
+else
+    cp "${src}" app.AppImage
+fi
+chmod +x app.AppImage
+
+# Boucle de 3 essais conservée : extraction observée ponctuellement en échec
+# au build ("Text file busy" juste après le chmod), réussie au second essai.
+for _ in 1 2 3; do
+    rm -rf squashfs-root AppDir
+    ./app.AppImage --appimage-extract >/dev/null 2>&1 && break
+    sleep 1
+done
+if [ ! -e squashfs-root ]; then
+    echo "FATAL: extraction de l'AppImage ${name} échouée" >&2
+    exit 1
+fi
+
+rm -rf "${dest}"
+mv "$(readlink -f squashfs-root)" "${dest}"
+[ -e "${dest}/AppRun" ] || { echo "FATAL: ${dest}/AppRun absent après extraction" >&2; exit 1; }
+chmod -R a+rX "${dest}"
+
+{
+    echo '#!/bin/sh'
+    if [ -n "${WRAPPER_ENV:-}" ]; then
+        echo "${WRAPPER_ENV}"
+    fi
+    echo "exec ${dest}/AppRun \"\$@\""
+} > "/usr/local/bin/${bin}"
+chmod 755 "/usr/local/bin/${bin}"
+
+printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\nCategories=Game;\n' \
+    "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${dest}/.DirIcon" \
+    > "/usr/share/applications/${name}.desktop"
+
+echo "[install-appimage] ${label} installé dans ${dest} (lanceur /usr/local/bin/${bin})"

@@ -71,7 +71,16 @@ printf '%s' "${XDG_RUNTIME_DIR}" > /run/s6/container_environment/XDG_RUNTIME_DIR
 # statique (--device), pas d'un événement udev interne au conteneur —
 # udevadm trigger ne le touche jamais, d'où ce chmod one-shot comme pour
 # les autres devices ci-dessus.
-chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* /dev/input/event* 2>/dev/null || true
+#
+# /dev/input/event* retiré de ce chmod (audit 22/09) : /dev/input est un bind
+# mount du répertoire de l'HÔTE (voir docker-compose.cachyos.yml) — ce chmod
+# passait donc les vrais claviers/souris de l'Unraid en 666 côté hôte, et
+# seulement ceux présents au boot (aucun effet sur les devices Sunshine,
+# créés plus tard). Inutile côté conteneur : ces nodes appartiennent au GID
+# 71 et tous les services (runuser ET s6-setuidgid) ont déjà ce groupe via
+# le bloc ci-dessous — vérifié en direct sur la prod le 22/09 (Groups:
+# 71 ... 992 pour sunshine et evdev-bridge).
+chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* 2>/dev/null || true
 
 # ── Groupe GID 71 (/dev/uinput, /dev/input/* côté hôte) ────────────────────
 # Régression identifiée dans l'audit du 2026-08-26 : l'ancienne image
@@ -86,8 +95,8 @@ chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* /dev/input/even
 # ci-dessus), ce qui ne couvre ni le hotplug (manette branchée après coup)
 # ni les périphériques virtuels uinput que Sunshine crée à chaque connexion
 # Moonlight. group_add: ["71"] doit être présent côté docker-compose (voir
-# docker-compose.yml/.ubuntu.yml/.cachyos.yml) pour que ce bloc ait un GID
-# 71 à rejoindre.
+# docker-compose.cachyos.yml et docs/deploiement-unraid.md) pour que ce bloc
+# ait un GID 71 à rejoindre.
 # Ne pas supposer que le GID 71 existe déjà côté image/hôte (30/08) : sur ce
 # conteneur précis, `getent group 71` ne renvoie RIEN malgré `--group-add 71`
 # côté docker run — Docker injecte ce GID brut au niveau noyau pour le
@@ -123,7 +132,12 @@ fi
 # ("confirmés en direct sur la prod" : video_vsync=false pour le freeze
 # GLX, pause_nonactive=false, system_directory vers /userdata/bios)
 # n'avaient donc jamais réellement pris effet.
-for script in init_system init_audio init_sunshine init_pegasus init_retroarch; do
+# init_retroarch AVANT init_pegasus (22/09) : il repeuple le dossier de
+# cœurs utilisateur (liens vers les cœurs pacman) dont init_pegasus vérifie
+# l'existence avant d'écrire chaque commande de lancement — dans l'ordre
+# inverse, un /config neuf n'aurait eu aucune commande RetroArch au premier
+# démarrage.
+for script in init_system init_audio init_sunshine init_retroarch init_pegasus; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
         "/usr/local/bin/scripts/${script}.sh" || echo "[init-system] ${script}.sh a échoué (code $?) — on continue"
     fi

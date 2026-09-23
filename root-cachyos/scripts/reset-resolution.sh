@@ -5,7 +5,8 @@
 set -uo pipefail
 
 export WAYLAND_DISPLAY=wayland-1
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
 
 wlr-randr --output HEADLESS-1 --custom-mode "1920x1080@60Hz" \
     >/tmp/reset-resolution.log 2>&1

@@ -209,9 +209,17 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # cœurs écrivable en plus du dossier système). Règle ce même "menu Ozone
 # dégradé" documenté au commit précédent (retroarch-assets-ozone inclus
 # dans le groupe).
-RUN pacman -Syyu --noconfirm && \
-    pacman -S --noconfirm --needed \
-      sudo vim openssh curl wget tar xz git jq unzip \
+# Nouvel essai automatique (22/09, "make push" en échec) : chaque rebuild
+# fait un -Syyu complet, donc dépend de l'état des miroirs CachyOS À CET
+# INSTANT — confirmé en direct le 22/09 : base de paquets déjà publiée mais
+# fichiers pas encore propagés (404 sur cdn77 puis sur us.cachyos.org pour
+# bubblewrap .sig/libyuv/luajit/libcanberra), transaction annulée, alors
+# que les mêmes fichiers étaient disponibles sur la plupart des miroirs
+# quelques minutes plus tard. Jusqu'à 3 essais espacés de 60 s, avec
+# resynchronisation de la base (-Syy) à chaque fois ; la transaction
+# pacman est atomique ("no packages were upgraded"), rien à nettoyer entre
+# deux essais.
+RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
@@ -228,7 +236,6 @@ RUN pacman -Syyu --noconfirm && \
       lib32-pipewire lib32-libpulse \
       ffmpeg \
       steam \
-      heroic-games-launcher-bin \
       sunshine \
       gamemode mangohud \
       dbus polkit networkmanager \
@@ -246,8 +253,14 @@ RUN pacman -Syyu --noconfirm && \
       libva-utils \
       qt6-multimedia \
       gst-plugins-good gst-plugins-bad gst-libav \
-      flatpak \
-    && pacman -Scc --noconfirm
+      flatpak" && \
+    for i in 1 2 3; do \
+      pacman -Syyu --noconfirm && pacman -S --noconfirm --needed ${PKGS} && break; \
+      [ "${i}" = 3 ] && { echo "FATAL: pacman en échec après 3 essais (miroirs CachyOS)"; exit 1; }; \
+      echo "pacman : échec (miroirs désynchronisés ?), nouvel essai $((i + 1))/3 dans 60 s"; \
+      sleep 60; \
+    done && \
+    pacman -Scc --noconfirm
 
 # qt6-multimedia (audit menu XFCE 31/08) : melonDS a besoin de
 # libQt6Multimedia.so.6 au runtime mais ne l'embarque pas dans son zip
@@ -439,6 +452,40 @@ RUN mkdir -p /opt/decky-loader && \
 COPY root-cachyos/usr/local/bin/systemctl /usr/local/bin/systemctl
 RUN chmod +x /usr/local/bin/systemctl
 
+# Outils de build partagés (audit 22/09) — gh-asset-url (résolution d'un
+# asset de release GitHub, secret github_token compris, échec franc si rien
+# ne correspond) et install-appimage (extraction + lanceur + .desktop) :
+# remplacent ~15 copies du même code curl/grep/extraction qui avaient
+# divergé au fil des correctifs (voir chacun des deux scripts pour le
+# détail). Placés hors du PATH (outils de build, quelques Ko).
+COPY root-cachyos/build/ /usr/local/lib/steambox-build/
+RUN chmod +x /usr/local/lib/steambox-build/*
+
+# Heroic (Epic/GOG/Amazon) — paquet Arch officiel publié par le projet à
+# chaque release GitHub (Heroic-x.y.z-linux-x64.pacman), plus le
+# heroic-games-launcher-bin du dépôt cachyos (22/09) : ce dernier suit
+# l'amont avec retard (2.22.1 dans l'image alors que la 2.22.3 était sortie,
+# AUR compris, depuis le 16/09) — incompatible avec la règle "chaque rebuild
+# prend la dernière version". Même nom de dossier (/opt/Heroic) que le
+# paquet cachyos : prefixes, config (~/.config/heroic) et raccourcis Steam
+# existants restent valides. Dépendances résolues par pacman depuis les
+# dépôts (toutes présentes, vérifié le 22/09 ; libappindicator-gtk3 est
+# fournie par libappindicator).
+# Le scriptlet post_install du paquet ne s'exécute PAS ici (pacman refuse
+# les scriptlets sous le sandbox réseau de BuildKit, voir "could not isolate
+# the network" plus haut) : ses deux effets utiles sont reproduits à la main
+# — lien /usr/bin/heroic, et chrome-sandbox en 0755 (état identique au
+# paquet cachyos, fonctionnel en prod).
+ARG HEROIC_TAG=""
+RUN --mount=type=secret,id=github_token \
+    HEROIC_URL=$(/usr/local/lib/steambox-build/gh-asset-url Heroic-Games-Launcher/HeroicGamesLauncher "${HEROIC_TAG}" 'linux-x64\.pacman$') && \
+    curl -fSL --retry 3 -o /tmp/heroic.pkg.tar.xz "${HEROIC_URL}" && \
+    pacman -U --noconfirm --needed /tmp/heroic.pkg.tar.xz && \
+    ln -sf /opt/Heroic/heroic /usr/bin/heroic && \
+    chmod 0755 /opt/Heroic/chrome-sandbox && \
+    rm -f /tmp/heroic.pkg.tar.xz && \
+    pacman -Scc --noconfirm
+
 # DISPLAY sur Ludusavi, Dolphin et Winetricks (audit menu XFCE 31/08 puis
 # 18/09) : ces apps nécessitaient un sed sur leur .desktop upstream pour
 # forcer DISPLAY=:0 (Ludusavi : "neither WAYLAND_DISPLAY nor
@@ -570,7 +617,12 @@ RUN printf '#!/bin/sh\nexec env SDL_JOYSTICK_HIDAPI_PS5_RUMBLE=1 /usr/bin/steam 
 # donc sans aucun effet visible, confirmé en direct. Forcer GDK_BACKEND=x11
 # fait passer sa détection de sortie par XRandR (Xwayland), qui remonte le
 # vrai nom de connecteur — écrit alors correctement sur monitorHDMI-A-1.
-RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 DISPLAY=:0 /usr/sbin/xfdesktop-settings "$@"\n' \
+#
+# DISPLAY=:0 en dur retiré (22/09, même motif que fc1f70a) : DISPLAY est
+# désormais ambiant dans les deux bureaux (wayland-session.sh côté visible,
+# sunshine-desktop-xfce.sh côté Moonlight) — ouvert depuis l'app "Desktop"
+# de Moonlight, le dialogue s'affichait sur le VNC au lieu du stream.
+RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 /usr/sbin/xfdesktop-settings "$@"\n' \
       > /usr/local/bin/xfdesktop-settings && \
     chmod +x /usr/local/bin/xfdesktop-settings
 
@@ -597,23 +649,21 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # lancé : détecte Steam/GOG/manettes automatiquement (confirmé en direct :
 # 20 jeux Steam trouvés).
 #
-# DISPLAY=:0 explicite dans l'Exec= (audit menu XFCE 31/08) : Pegasus force
-# QT_QPA_PLATFORM=xcb (pas de plugin Wayland dans ce build), mais la session
-# labwc (wayland-session.sh) unset DISPLAY globalement — sans le fixer ici,
-# lancé depuis le menu XFCE Pegasus échoue immédiatement ("could not connect
-# to display", confirmé en direct). Même pattern que "Steam (Bureau)"
-# ci-dessous ; labwc démarre son Xwayland interne à la demande sur :0.
+# Pas de DISPLAY dans l'Exec= (22/09) : un DISPLAY=:0 en dur y restait
+# depuis l'époque où la session labwc unset DISPLAY globalement — même bug
+# que celui corrigé au commit fc1f70a pour les autres .desktop (lancé depuis
+# l'app "Desktop" de Moonlight, Pegasus s'ouvrait sur le VNC). DISPLAY est
+# désormais ambiant dans les deux bureaux (wayland-session.sh côté visible,
+# sunshine-desktop-xfce.sh côté Moonlight) ; seul QT_QPA_PLATFORM=xcb reste
+# nécessaire (build x11-static, pas de plugin Qt Wayland).
 ARG PEGASUS_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    PEGASUS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/mmatyas/pegasus-frontend/releases/${PEGASUS_TAG:+tags/}${PEGASUS_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*x11-static\.zip"' | cut -d'"' -f4) && \
-    [ -n "${PEGASUS_URL}" ] || { echo "FATAL: PEGASUS_URL vide"; exit 1; } && \
+    PEGASUS_URL=$(/usr/local/lib/steambox-build/gh-asset-url mmatyas/pegasus-frontend "${PEGASUS_TAG}" 'x11-static\.zip$') && \
     curl -fSL --retry 3 -o /tmp/pegasus.zip "${PEGASUS_URL}" && \
     mkdir -p /opt/pegasus && \
     unzip -q /tmp/pegasus.zip -d /opt/pegasus && \
     ln -sf /opt/pegasus/pegasus-fe /usr/local/bin/pegasus-fe && \
-    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env DISPLAY=:0 QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Pegasus\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/pegasus-fe\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/pegasus.desktop && \
     rm -f /tmp/pegasus.zip
 
@@ -628,10 +678,12 @@ RUN printf '[Desktop Entry]\nType=Application\nName=Steam\nExec=/usr/local/bin/s
 
 # "Steam (Bureau)" — client Steam classique (bibliothèque, réglages, ajout
 # de jeux non-Steam comme Pegasus) en fenêtre normale sur le bureau XFCE/
-# labwc, via l'Xwayland de labwc (DISPLAY=:0, confirmé en direct le 30/08 —
-# distinct de l'Xwayland niché de gamescope utilisé par l'entrée "Steam"
-# gamepadui ci-dessus). Pas de -gamepadui : interface desktop normale.
-RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env DISPLAY=:0 QT_QPA_PLATFORM=xcb /usr/local/bin/steam\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
+# labwc, via l'Xwayland de labwc (distinct de l'Xwayland niché de gamescope
+# utilisé par l'entrée "Steam" gamepadui ci-dessus). Pas de -gamepadui :
+# interface desktop normale. DISPLAY=:0 en dur retiré (22/09, même motif
+# que Pegasus ci-dessus) : DISPLAY ambiant, :0 sur le bureau visible, :1
+# depuis l'app "Desktop" de Moonlight.
+RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env QT_QPA_PLATFORM=xcb /usr/local/bin/steam\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-desktop.desktop
 
 # "Steam (Steam Link)" — raccourci séparé de l'entrée Sunshine "Steam Big
@@ -708,58 +760,34 @@ RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main
       -o /usr/local/bin/wsquashfs-launcher && \
     chmod +x /usr/local/bin/wsquashfs-launcher
 
-# DISPLAY=:0 en dur retiré de l'Exec= (18/09) : même bug que Ludusavi/
-# Dolphin/Winetricks/PPSSPP/Flycast/TeknoParrot/Xenia plus haut/plus bas —
-# jamais corrigé ici jusqu'à présent, repéré en relisant tous les .desktop
-# générés par ce Dockerfile pendant cet audit. DISPLAY est désormais
-# ambiant via wayland-session.sh (voir wayland-session.sh), donc
-# suppression pure et simple plutôt qu'un nouveau correctif ad hoc.
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
 ARG SRM_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    SRM_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/SteamGridDB/steam-rom-manager/releases/${SRM_TAG:+tags/}${SRM_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*[0-9]\.AppImage"' | grep -v arm64 | cut -d'"' -f4) && \
-    [ -n "${SRM_URL}" ] || { echo "FATAL: SRM_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/srm.AppImage "${SRM_URL}" && \
-    chmod +x /tmp/srm.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./srm.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction srm.AppImage échouée"; exit 1; } && \
-    mv /tmp/squashfs-root /opt/steam-rom-manager && \
-    chmod -R a+rX /opt/steam-rom-manager && \
-    printf '#!/bin/sh\nexport APPDIR=/opt/steam-rom-manager\nexec /opt/steam-rom-manager/AppRun "$@"\n' \
-      > /usr/local/bin/steam-rom-manager && chmod +x /usr/local/bin/steam-rom-manager && \
-    printf '[Desktop Entry]\nType=Application\nName=Steam ROM Manager\nExec=/usr/local/bin/steam-rom-manager --no-sandbox\nIcon=/opt/steam-rom-manager/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/steam-rom-manager.desktop && \
-    rm -rf /tmp/srm.AppImage /tmp/squashfs-root
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url SteamGridDB/steam-rom-manager "${SRM_TAG}" '[0-9]\.AppImage$' arm64) && \
+    WRAPPER_ENV='export APPDIR=/opt/steam-rom-manager' DESKTOP_ARGS='--no-sandbox' \
+      /usr/local/lib/steambox-build/install-appimage steam-rom-manager "Steam ROM Manager" "${URL}"
 
-# ── 1a10. Lindbergh Loader (arcade Sega Lindbergh) — AppImage officielle.
-RUN curl -fSL -o /tmp/lindbergh.app \
-      "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage" && \
-    chmod +x /tmp/lindbergh.app && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./lindbergh.app --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction lindbergh.app échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/lindbergh && rm -f squashfs-root || mv squashfs-root /opt/lindbergh; } && \
-    ln -sf /opt/lindbergh/AppRun /usr/local/bin/lindbergh && \
-    printf '[Desktop Entry]\nType=Application\nName=Lindbergh Loader\nExec=/usr/local/bin/lindbergh\nIcon=/opt/lindbergh/.DirIcon\nCategories=Game;\nTerminal=false\n' \
-      > /usr/share/applications/lindbergh.desktop && \
-    rm -rf /tmp/lindbergh.app /tmp/AppDir /tmp/squashfs-root
+# ── 1a10. Lindbergh Loader (arcade Sega Lindbergh) — AppImage officielle,
+# version figée (pas de résolution "latest" pour ce projet).
+RUN /usr/local/lib/steambox-build/install-appimage lindbergh "Lindbergh Loader" \
+      "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage"
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
+# Échec franc (22/09) au lieu du "skip" silencieux : init_pegasus.sh lance
+# les jeux Model 3 via /usr/local/bin/supermodel — une image construite sans
+# lui avait des jeux listés dans Pegasus mais impossibles à lancer, sans
+# rien au build pour le signaler. Le tarball est désormais publié à chaque
+# release (vérifié le 22/09), et curl -f fait échouer un téléchargement
+# tronqué au lieu de passer une page d'erreur à tar.
 ARG SUPERMODEL_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    SUPERMODEL_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/trzy/Supermodel/releases/${SUPERMODEL_TAG:+tags/}${SUPERMODEL_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*[Ll]inux[^"]*\.tar[^"]*"' | cut -d'"' -f4 | head -1) && \
-    if [ -n "${SUPERMODEL_URL}" ]; then \
-      curl -o /tmp/supermodel.tar.gz -L "${SUPERMODEL_URL}" && \
-      mkdir -p /opt/supermodel && \
-      tar -xzf /tmp/supermodel.tar.gz -C /opt/supermodel --strip-components=1 && \
-      ln -sf /opt/supermodel/supermodel /usr/local/bin/supermodel; \
-    else \
-      echo "Supermodel: pas de release Linux, skip"; \
-    fi && \
+    SUPERMODEL_URL=$(/usr/local/lib/steambox-build/gh-asset-url trzy/Supermodel "${SUPERMODEL_TAG}" '[Ll]inux[^/]*\.tar[^/]*$') && \
+    curl -fSL --retry 3 -o /tmp/supermodel.tar.gz "${SUPERMODEL_URL}" && \
+    mkdir -p /opt/supermodel && \
+    tar -xzf /tmp/supermodel.tar.gz -C /opt/supermodel --strip-components=1 && \
+    [ -x /opt/supermodel/supermodel ] || { echo "FATAL: binaire supermodel absent de l'archive"; exit 1; } && \
+    ln -sf /opt/supermodel/supermodel /usr/local/bin/supermodel && \
     rm -f /tmp/supermodel.tar.gz
 
 # ── 1a12. Wine Gecko + Mono — sans ça, tout préfixe Wine invite au
@@ -768,14 +796,20 @@ RUN --mount=type=secret,id=github_token \
 # officiel WineHQ, indépendant de la distro (déjà utilisé sur l'image
 # webstation) — wine cherche nativement dans /usr/share/wine/{gecko,mono},
 # chemin issu du code amont, pas d'un patch Debian.
-RUN GECKO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wine/refs/heads/master/dlls/appwiz.cpl/addons.c" \
-      | grep -oP '(?<=GECKO_VERSION ")[^"]+' | head -1) && \
-    MONO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wine/refs/heads/master/dlls/appwiz.cpl/addons.c" \
-      | grep -oP '(?<=MONO_VERSION ")[^"]+' | head -1) && \
+#
+# Échecs francs (22/09) : les deux .msi Gecko étaient téléchargés avec
+# "|| true", et une version vide (addons.c inaccessible ou reformaté)
+# produisait des URL invalides sans erreur — l'image partait alors sans
+# Gecko, et le popup bloquant réapparaissait sur chaque nouveau préfixe
+# sans que rien au build ne l'ait signalé.
+RUN ADDONS=$(curl -fsSL --retry 3 "https://raw.githubusercontent.com/wine-mirror/wine/refs/heads/master/dlls/appwiz.cpl/addons.c") && \
+    GECKO_VERSION=$(printf '%s' "${ADDONS}" | grep -oP '(?<=GECKO_VERSION ")[^"]+' | head -1) && \
+    MONO_VERSION=$(printf '%s' "${ADDONS}" | grep -oP '(?<=MONO_VERSION ")[^"]+' | head -1) && \
+    [ -n "${GECKO_VERSION}" ] && [ -n "${MONO_VERSION}" ] || { echo "FATAL: versions Gecko/Mono introuvables dans addons.c"; exit 1; } && \
     mkdir -p /usr/share/wine/gecko /usr/share/wine/mono && \
     for arch in x86 x86_64; do \
       curl -fsSL --retry 3 -o "/usr/share/wine/gecko/wine-gecko-${GECKO_VERSION}-${arch}.msi" \
-        "https://dl.winehq.org/wine/wine-gecko/${GECKO_VERSION}/wine-gecko-${GECKO_VERSION}-${arch}.msi" || true; \
+        "https://dl.winehq.org/wine/wine-gecko/${GECKO_VERSION}/wine-gecko-${GECKO_VERSION}-${arch}.msi" || exit 1; \
     done && \
     curl -fsSL --retry 3 -o "/tmp/wine-mono.tar.xz" \
       "https://dl.winehq.org/wine/wine-mono/${MONO_VERSION}/wine-mono-${MONO_VERSION}-x86.tar.xz" && \
@@ -785,11 +819,12 @@ RUN GECKO_VERSION=$(curl -fsSL "https://raw.githubusercontent.com/wine-mirror/wi
 # ── 1a13. Google Chrome — pas de paquet Arch officiel (AUR-only, nécessite un
 # helper AUR + base-devel), extrait manuellement du .deb officiel Google
 # (même approche que Pegasus/SRM/Lindbergh ci-dessus : curl + extraction, pas
-# d'installeur). --ozone-platform=x11 + env DISPLAY=:0 explicites (audit C4,
-# 31/08) : la session labwc unset DISPLAY globalement, et Chrome forcé en
-# x11 sans DISPLAY échoue depuis le menu — même pattern que Pegasus/Xenia/
-# Steam (Bureau) ; chmod 4755 sur chrome-sandbox reproduit ce que fait le
-# postinst du .deb (on ne l'exécute pas, on ne prend que data.tar).
+# d'installeur). --ozone-platform=x11 explicite (audit C4, 31/08). Le
+# DISPLAY=:0 en dur qui l'accompagnait est retiré (22/09, même motif que
+# Pegasus/Steam (Bureau)) : DISPLAY est ambiant dans les deux bureaux, et :0
+# en dur ouvrait Chrome sur le VNC depuis l'app "Desktop" de Moonlight.
+# chmod 4755 sur chrome-sandbox reproduit ce que fait le postinst du .deb
+# (on ne l'exécute pas, on ne prend que data.tar).
 RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb" && \
     cd /tmp && ar x chrome.deb && \
     mkdir -p /tmp/chrome-extract && \
@@ -798,7 +833,7 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
     cp -a /tmp/chrome-extract/opt/google/chrome/. /opt/google/chrome/ && \
     ln -sf /opt/google/chrome/google-chrome /usr/local/bin/google-chrome && \
     chmod 4755 /opt/google/chrome/chrome-sandbox && \
-    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=env DISPLAY=:0 /opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=/opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
@@ -806,93 +841,58 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
 # l'ancienne image de base lscr.io/linuxserver/webstation (dolphin-emu et
 # scummvm ci-dessus sont déjà des paquets Arch officiels ; le reste n'a pas
 # de paquet Arch/AUR-free, mais chaque projet publie une AppImage/archive
-# Linux officielle — même approche curl+extraction que Pegasus/SRM/Lindbergh/
-# Chrome ci-dessus, pas de build depuis les sources.
+# Linux officielle — pas de build depuis les sources.
 #
-# wrapper "exec /opt/X/AppRun" au lieu d'un ln -sf (audit menu XFCE 31/08) :
-# l'AppRun de Cemu/RPCS3/Azahar/ShadPS4/SRM est un SCRIPT (linuxdeploy) qui
-# calcule son propre dossier via `dirname "$0"` AVANT de résoudre les liens
-# symboliques — lancé via un ln -sf sous /usr/local/bin, dirname donne
-# /usr/local/bin au lieu de /opt/X, et le script part chercher ses hooks/
-# libs au mauvais endroit ("No such file", "No desktop file found").
-# env DISPLAY=:0 sur Cemu et Steam ROM Manager (audit menu XFCE 31/08,
-# second passage) : au-delà du bug AppRun ci-dessus, ces deux-là ont aussi
-# besoin d'un serveur X — Cemu via le hook linuxdeploy-plugin-gtk.sh sourcé
-# par son AppRun ("Unable to initialize GTK+"), SRM via son Electron/ozone
-# ("Missing X server or $DISPLAY", segfault ensuite) — même bug que Chrome/
-# Pegasus/Xenia, la session labwc unset DISPLAY globalement. Plus besoin du
-# "env DISPLAY=:0" en dur depuis le 18/09 (DISPLAY ambiant via
-# wayland-session.sh, voir plus haut) : Cemu (ré-ajouté le 20/09) et Steam
-# ROM Manager n'en ont plus dans leur Exec=.
-#
-# Confirmé en direct dans le conteneur : PCSX2/DuckStation/Xemu n'ont pas ce
-# problème car leur AppRun est un lien direct vers le vrai binaire (aucun
-# script, donc rien à mal résoudre) — un wrapper shell qui exec le chemin
-# absolu évite complètement le calcul de dossier.
+# Toutes les AppImage passent par install-appimage (22/09, voir ce script
+# pour le détail : extraction, cas squashfs-root -> AppDir, lanceur
+# "exec /opt/X/AppRun" plutôt qu'un ln -sf). Avant, chaque bloc portait sa
+# propre copie de cette logique, et les correctifs n'avaient été reportés
+# que sur une partie d'entre eux (PCSX2/DuckStation/Xemu/Xenia/SRM/Flycast
+# sans gestion du lien AppDir, lanceurs mixtes ln -sf/wrapper). Pas de
+# DISPLAY dans les Exec= : ambiant dans les deux bureaux depuis le 18/09
+# (wayland-session.sh / sunshine-desktop-xfce.sh).
 ARG PCSX2_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    PCSX2_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/PCSX2/pcsx2/releases/${PCSX2_TAG:+tags/}${PCSX2_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*linux-appimage-x64-Qt\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${PCSX2_URL}" ] || { echo "FATAL: PCSX2_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/pcsx2.AppImage "${PCSX2_URL}" && \
-    chmod +x /tmp/pcsx2.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./pcsx2.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction pcsx2.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/pcsx2 && \
-    ln -sf /opt/pcsx2/AppRun /usr/local/bin/pcsx2 && \
-    printf '[Desktop Entry]\nType=Application\nName=PCSX2\nExec=/usr/local/bin/pcsx2\nIcon=/opt/pcsx2/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/pcsx2.desktop && \
-    rm -f /tmp/pcsx2.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url PCSX2/pcsx2 "${PCSX2_TAG}" 'linux-appimage-x64-Qt\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage pcsx2 "PCSX2" "${URL}"
+
+# PCSX2X6 (22/09) — fork arcade de PCSX2 pour Namco System 246/256
+# (PS2Homebrew-arcade/pcsx2x6), l'émulateur qu'utilise Batocera pour le
+# système namco2x6. AppImage Linux officielle publiée à chaque release ;
+# "latest" = dernière release stable (les préversions sont ignorées par
+# /releases/latest). Lancé depuis Pegasus par pegasus-launch-namco2x6.sh.
+ARG PCSX2X6_TAG=""
+RUN --mount=type=secret,id=github_token \
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url PS2Homebrew-arcade/pcsx2x6 "${PCSX2X6_TAG}" 'linux-appimage-x64-Qt\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage pcsx2x6 "PCSX2X6 (Namco 246/256)" "${URL}"
 
 ARG RPCS3_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    RPCS3_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/RPCS3/rpcs3-binaries-linux/releases/${RPCS3_TAG:+tags/}${RPCS3_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*_linux64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${RPCS3_URL}" ] || { echo "FATAL: RPCS3_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/rpcs3.AppImage "${RPCS3_URL}" && \
-    chmod +x /tmp/rpcs3.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./rpcs3.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction rpcs3.AppImage échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/rpcs3 || mv squashfs-root /opt/rpcs3; } && \
-    printf '#!/bin/sh\nexec /opt/rpcs3/AppRun "$@"\n' > /usr/local/bin/rpcs3 && \
-    chmod +x /usr/local/bin/rpcs3 && \
-    printf '[Desktop Entry]\nType=Application\nName=RPCS3\nExec=/usr/local/bin/rpcs3\nIcon=/opt/rpcs3/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/rpcs3.desktop && \
-    rm -f /tmp/rpcs3.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url RPCS3/rpcs3-binaries-linux "${RPCS3_TAG}" '_linux64\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage rpcs3 "RPCS3" "${URL}"
 
 ARG DUCKSTATION_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    DUCKSTATION_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/stenzek/duckstation/releases/${DUCKSTATION_TAG:+tags/}${DUCKSTATION_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*DuckStation-x64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${DUCKSTATION_URL}" ] || { echo "FATAL: DUCKSTATION_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/duckstation.AppImage "${DUCKSTATION_URL}" && \
-    chmod +x /tmp/duckstation.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./duckstation.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction duckstation.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/duckstation && \
-    ln -sf /opt/duckstation/AppRun /usr/local/bin/duckstation-qt && \
-    printf '[Desktop Entry]\nType=Application\nName=DuckStation\nExec=/usr/local/bin/duckstation-qt\nIcon=/opt/duckstation/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/duckstation.desktop && \
-    rm -f /tmp/duckstation.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url stenzek/duckstation "${DUCKSTATION_TAG}" 'DuckStation-x64\.AppImage$') && \
+    BIN=duckstation-qt /usr/local/lib/steambox-build/install-appimage duckstation "DuckStation" "${URL}"
 
+# Xemu : la release publie aussi une variante -dbg (symboles de debug) au
+# même suffixe x86_64.AppImage — exclue explicitement.
 ARG XEMU_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    XEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/xemu-project/xemu/releases/${XEMU_TAG:+tags/}${XEMU_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | grep -v dbg | cut -d'"' -f4 | head -1) && \
-    [ -n "${XEMU_URL}" ] || { echo "FATAL: XEMU_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/xemu.AppImage "${XEMU_URL}" && \
-    chmod +x /tmp/xemu.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./xemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction xemu.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/xemu && \
-    ln -sf /opt/xemu/AppRun /usr/local/bin/xemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Xemu\nExec=/usr/local/bin/xemu\nIcon=/opt/xemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/xemu.desktop && \
-    rm -f /tmp/xemu.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url xemu-project/xemu "${XEMU_TAG}" 'x86_64\.AppImage$' dbg) && \
+    /usr/local/lib/steambox-build/install-appimage xemu "Xemu" "${URL}"
+
+# Disque dur virtuel Xbox vierge (22/09) — xemu exige un hdd_path ; même
+# image que Batocera (release publique mborgerson/xemu-hdd-image 1.0, déjà
+# formatée, sans aucun contenu Microsoft). Copiée au premier lancement par
+# pegasus-launch-chihiro.sh dans les données utilisateur.
+RUN curl -fSL --retry 3 -o /tmp/xbox_hdd.zip \
+      "https://github.com/mborgerson/xemu-hdd-image/releases/download/1.0/xbox_hdd.qcow2.zip" && \
+    mkdir -p /usr/share/xemu && \
+    unzip -q -o -j /tmp/xbox_hdd.zip xbox_hdd.qcow2 -d /usr/share/xemu && \
+    chmod 644 /usr/share/xemu/xbox_hdd.qcow2 && \
+    rm -f /tmp/xbox_hdd.zip
 
 # Base de données RetroArch (18/09, "Scan Directory"/Manual Scan ne créait
 # aucune liste) : content_database_path pointe par défaut sur
@@ -909,7 +909,7 @@ RUN --mount=type=secret,id=github_token \
 # utilisateur) — init_retroarch.sh pointe content_database_path dessus.
 RUN mkdir -p /usr/share/retroarch/database/rdb && \
     curl -fsSL --retry 3 -o /tmp/database-rdb.zip \
-      "http://buildbot.libretro.com/assets/frontend/database-rdb.zip" && \
+      "https://buildbot.libretro.com/assets/frontend/database-rdb.zip" && \
     unzip -q /tmp/database-rdb.zip -d /usr/share/retroarch/database/rdb && \
     rm -f /tmp/database-rdb.zip
 
@@ -917,120 +917,42 @@ RUN mkdir -p /usr/share/retroarch/database/rdb && \
 # "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
 # a son propre frontend avec plus d'options de compatibilité par jeu,
 # utile pour les .iso/.cso qui posent problème sous le core seul.
-# Exec= en clair (18/09) : DISPLAY désormais ambiant via l'export de
-# wayland-session.sh (voir commentaire Ludusavi/Dolphin/Winetricks plus
-# haut) — le détour par x11-wrap.sh, essayé brièvement le même jour pour
-# choisir :0 ou :1 par app, est abandonné pour ce correctif à la source.
-# squashfs-root en lien symbolique vers ./AppDir (pas un vrai dossier,
-# confirmé en direct après un premier build où /opt/ppsspp se retrouvait
-# être un symlink cassé — mv déplace alors le lien, pas le contenu) :
-# même cas que Lindbergh/RPCS3 plus haut, même contournement -L/AppDir.
-# Script wrapper (printf) plutôt qu'un simple "ln -sf .../AppRun
-# /usr/local/bin/ppsspp" (confirmé en direct, PPSSPP ET Flycast juste en
-# dessous) : l'AppRun de ces deux-là résout son propre dossier via $0 SANS
-# passer par readlink -f, donc à travers un symlink $0 vaut le CHEMIN DU
-# LIEN (/usr/local/bin/ppsspp), pas sa cible réelle — l'AppRun cherche
-# alors ses fichiers sous /usr/local/bin/... et échoue ("No such file or
-# directory"). Un exec vers le chemin absolu de AppRun (pas un symlink)
-# donne directement le bon $0, contournement déjà utilisé plus haut pour
-# Cemu/Azahar/ShadPS4/Pegasus/SRM — juste pas appliqué uniformément ici.
 ARG PPSSPP_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    PPSSPP_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/hrydgard/ppsspp/releases/${PPSSPP_TAG:+tags/}${PPSSPP_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*anylinux-x86_64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${PPSSPP_URL}" ] || { echo "FATAL: PPSSPP_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/ppsspp.AppImage "${PPSSPP_URL}" && \
-    chmod +x /tmp/ppsspp.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./ppsspp.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction ppsspp.AppImage échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/ppsspp && rm -f squashfs-root || mv squashfs-root /opt/ppsspp; } && \
-    printf '#!/bin/sh\nexec /opt/ppsspp/AppRun "$@"\n' > /usr/local/bin/ppsspp && \
-    chmod +x /usr/local/bin/ppsspp && \
-    printf '[Desktop Entry]\nType=Application\nName=PPSSPP\nExec=/usr/local/bin/ppsspp\nIcon=/opt/ppsspp/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/ppsspp.desktop && \
-    rm -f /tmp/ppsspp.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url hrydgard/ppsspp "${PPSSPP_TAG}" 'anylinux-x86_64\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage ppsspp "PPSSPP" "${URL}"
 
 # Flycast standalone (18/09) — même logique que PPSSPP ci-dessus : en plus
 # du core libretro-flycast (groupe "libretro"), la version standalone
 # (flyinghead/flycast) a son propre frontend avec le support Naomi/
-# Atomiswave/AtomisWave complet et le netplay, pas juste le cœur Dreamcast.
+# Atomiswave complet et le netplay, pas juste le cœur Dreamcast.
 ARG FLYCAST_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    FLYCAST_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/flyinghead/flycast/releases/${FLYCAST_TAG:+tags/}${FLYCAST_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*x86_64-[0-9.]+\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${FLYCAST_URL}" ] || { echo "FATAL: FLYCAST_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/flycast.AppImage "${FLYCAST_URL}" && \
-    chmod +x /tmp/flycast.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./flycast.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction flycast.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/flycast && \
-    printf '#!/bin/sh\nexec /opt/flycast/AppRun "$@"\n' > /usr/local/bin/flycast && \
-    chmod +x /usr/local/bin/flycast && \
-    printf '[Desktop Entry]\nType=Application\nName=Flycast\nExec=/usr/local/bin/flycast\nIcon=/opt/flycast/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/flycast.desktop && \
-    rm -f /tmp/flycast.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url flyinghead/flycast "${FLYCAST_TAG}" 'x86_64-[0-9.]+\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage flycast "Flycast" "${URL}"
 
 # Cemu (20/09, ré-ajouté) — seul émulateur Wii U du conteneur, retiré à tort
 # le 18/09 en même temps qu'Azahar/GZDoom (nettoyage qui n'aurait pas dû
-# l'inclure). Même motif d'extraction que PPSSPP plus haut (squashfs-root
-# peut être un lien symbolique vers ./AppDir selon l'AppImage) et même
-# wrapper (printf) plutôt que ln -sf, pour la même raison : AppRun résout
-# son dossier via $0 sans readlink -f.
+# l'inclure).
 ARG CEMU_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    CEMU_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/cemu-project/Cemu/releases/${CEMU_TAG:+tags/}${CEMU_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*x86_64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${CEMU_URL}" ] || { echo "FATAL: CEMU_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/cemu.AppImage "${CEMU_URL}" && \
-    chmod +x /tmp/cemu.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./cemu.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction cemu.AppImage échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/cemu && rm -f squashfs-root || mv squashfs-root /opt/cemu; } && \
-    printf '#!/bin/sh\nexec /opt/cemu/AppRun "$@"\n' > /usr/local/bin/cemu && \
-    chmod +x /usr/local/bin/cemu && \
-    printf '[Desktop Entry]\nType=Application\nName=Cemu\nExec=/usr/local/bin/cemu\nIcon=/opt/cemu/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/cemu.desktop && \
-    rm -f /tmp/cemu.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url cemu-project/Cemu "${CEMU_TAG}" 'x86_64\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage cemu "Cemu" "${URL}"
 
 # Vita3K (20/09) — seul émulateur PS Vita disponible sur Linux. Release
-# "continuous" (pas de tag versionné, builds CI en continu) plutôt que
-# "latest" au sens strict : c'est déjà ce que ${TAG:-latest} résout côté
-# API GitHub pour ce dépôt (la release marquée "latest" EST la continuous).
-# Regex ancré sur "Vita3K-x86_64.AppImage" : le dépôt publie aussi une
-# variante aarch64 (Vita3K-aarch64.AppImage) qu'un simple "x86_64\.AppImage"
-# suffirait déjà à exclure, mais autant fixer le nom complet pour éviter
-# toute ambiguïté future si le nommage évolue. Même motif d'extraction/
-# wrapper que Cemu/PPSSPP ci-dessus, MAIS wrapper enrichi (20/09, "vita3k
+# "continuous" (builds CI en continu) : c'est déjà ce que "latest" résout
+# côté API GitHub pour ce dépôt. Nom complet Vita3K-x86_64.AppImage (le
+# dépôt publie aussi une variante aarch64). Lanceur enrichi (20/09, "vita3k
 # est bien présent mais il ne se lance pas") : son AppRun.wrapped (généré
-# par linuxdeploy-plugin-qt, contrairement à Cemu où AppRun.wrapped EST
-# directement le binaire) est un script shell qui ne lance le vrai binaire
-# QUE si APPIMAGE est non vide — confirmé en direct : sans ça, le script
-# sort silencieusement (aucune erreur, aucun log, exactement le symptôme
-# "ne se lance pas") car APPIMAGE/APPDIR ne sont jamais positionnées ici
-# (on exécute l'AppDir extrait directement, pas l'AppImage via son vrai
-# runtime squashfs, seul contexte où ces variables existent normalement).
-# QT_QPA_PLATFORM=xcb nécessaire en plus (confirmé en direct) : Qt détecte
-# WAYLAND_DISPLAY et essaie le plugin Qt "wayland", absent de cet AppImage
-# (seul xcb est embarqué) — même motif que Pegasus/Steam plus haut.
+# par linuxdeploy-plugin-qt) ne lance le vrai binaire QUE si APPIMAGE est
+# non vide — sinon il sort silencieusement, confirmé en direct. APPIMAGE/
+# APPDIR n'existent normalement que sous le vrai runtime squashfs, jamais
+# pour un AppDir extrait. QT_QPA_PLATFORM=xcb en plus (confirmé en direct) :
+# seul le plugin Qt xcb est embarqué dans cet AppImage.
 ARG VITA3K_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    VITA3K_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Vita3K/Vita3K/releases/${VITA3K_TAG:+tags/}${VITA3K_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*Vita3K-x86_64\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${VITA3K_URL}" ] || { echo "FATAL: VITA3K_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/vita3k.AppImage "${VITA3K_URL}" && \
-    chmod +x /tmp/vita3k.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root AppDir; ./vita3k.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    { [ -d squashfs-root ] || [ -d AppDir ]; } || { echo "FATAL: extraction vita3k.AppImage échouée"; exit 1; } && \
-    { [ -L squashfs-root ] && mv AppDir /opt/vita3k && rm -f squashfs-root || mv squashfs-root /opt/vita3k; } && \
-    printf '#!/bin/sh\nexport APPDIR=/opt/vita3k APPIMAGE=/opt/vita3k/AppRun QT_QPA_PLATFORM=xcb\nexec /opt/vita3k/AppRun "$@"\n' > /usr/local/bin/vita3k && \
-    chmod +x /usr/local/bin/vita3k && \
-    printf '[Desktop Entry]\nType=Application\nName=Vita3K\nExec=/usr/local/bin/vita3k\nIcon=/opt/vita3k/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/vita3k.desktop && \
-    rm -f /tmp/vita3k.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url Vita3K/Vita3K "${VITA3K_TAG}" 'Vita3K-x86_64\.AppImage$') && \
+    WRAPPER_ENV='export APPDIR=/opt/vita3k APPIMAGE=/opt/vita3k/AppRun QT_QPA_PLATFORM=xcb' /usr/local/lib/steambox-build/install-appimage vita3k "Vita3K" "${URL}"
 
 # TeknoParrotUI (18/09) — build .NET 8 natif Linux (teknogods/TeknoParrotUI,
 # release "TeknoParrotUI-net8"), PAS la release GitHub "latest" de ce dépôt :
@@ -1067,10 +989,7 @@ RUN --mount=type=secret,id=github_token \
 # système), pas un script shell lisant $0 à la main.
 ARG TEKNOPARROT_TAG="TeknoParrotUI-net8"
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    TEKNOPARROT_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/teknogods/TeknoParrotUI/releases/tags/${TEKNOPARROT_TAG}" \
-      | grep -oE '"browser_download_url": *"[^"]*linux-x64\.zip"' | cut -d'"' -f4) && \
-    [ -n "${TEKNOPARROT_URL}" ] || { echo "FATAL: TEKNOPARROT_URL vide"; exit 1; } && \
+    TEKNOPARROT_URL=$(/usr/local/lib/steambox-build/gh-asset-url teknogods/TeknoParrotUI "${TEKNOPARROT_TAG}" 'linux-x64\.zip$') && \
     curl -fSL --retry 3 -o /tmp/teknoparrot.zip "${TEKNOPARROT_URL}" && \
     mkdir -p /opt/teknoparrot && \
     unzip -q /tmp/teknoparrot.zip -d /opt/teknoparrot && \
@@ -1083,19 +1002,8 @@ RUN --mount=type=secret,id=github_token \
 
 ARG XENIA_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    XENIA_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/has207/xenia-edge/releases/${XENIA_TAG:+tags/}${XENIA_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*linux\.AppImage"' | cut -d'"' -f4) && \
-    [ -n "${XENIA_URL}" ] || { echo "FATAL: XENIA_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/xenia.AppImage "${XENIA_URL}" && \
-    chmod +x /tmp/xenia.AppImage && cd /tmp && \
-    for i in 1 2 3; do rm -rf squashfs-root; ./xenia.AppImage --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction xenia.AppImage échouée"; exit 1; } && \
-    mv squashfs-root /opt/xenia && \
-    ln -sf /opt/xenia/AppRun /usr/local/bin/xenia && \
-    printf '[Desktop Entry]\nType=Application\nName=Xenia (Xbox 360)\nExec=/usr/local/bin/xenia\nIcon=/opt/xenia/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/xenia.desktop && \
-    rm -f /tmp/xenia.AppImage
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url has207/xenia-edge "${XENIA_TAG}" 'linux\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage xenia "Xenia (Xbox 360)" "${URL}"
 
 # melonDS (Nintendo DS) — zip, pas d'AppImage.
 ARG MELONDS_TAG=""
@@ -1130,24 +1038,18 @@ RUN --mount=type=secret,id=github_token \
     rm -f /tmp/dosbox.tar.xz
 
 # ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
+# Liste /releases complète (pas /releases/latest) pour capter les
+# prereleases — d'où l'appel direct à l'API plutôt que gh-asset-url.
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    SHADPS4_TAG=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
-      | grep -oE '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4) && \
-    SHADPS4_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
+    SHADPS4_URL=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
       | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
     [ -n "${SHADPS4_URL}" ] || { echo "FATAL: SHADPS4_URL vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/shadps4.zip "${SHADPS4_URL}" && \
-    mkdir -p /tmp/shadps4 && cd /tmp/shadps4 && unzip -q /tmp/shadps4.zip && \
-    APPIMAGE=$(find . -name "*.AppImage" | head -1) && \
-    chmod +x "${APPIMAGE}" && \
-    for i in 1 2 3; do rm -rf squashfs-root; "./${APPIMAGE##./}" --appimage-extract >/dev/null 2>&1 && break; sleep 1; done && \
-    [ -d squashfs-root ] || { echo "FATAL: extraction shadps4 échouée"; exit 1; } && \
-    mv squashfs-root /opt/shadps4 && \
-    printf '#!/bin/sh\nexec /opt/shadps4/AppRun "$@"\n' > /usr/local/bin/shadps4 && \
-    chmod +x /usr/local/bin/shadps4 && \
-    printf '[Desktop Entry]\nType=Application\nName=ShadPS4\nExec=/usr/local/bin/shadps4\nIcon=/opt/shadps4/.DirIcon\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/shadps4.desktop && \
+    mkdir -p /tmp/shadps4 && unzip -q /tmp/shadps4.zip -d /tmp/shadps4 && \
+    APPIMAGE=$(find /tmp/shadps4 -name "*.AppImage" | head -1) && \
+    [ -n "${APPIMAGE}" ] || { echo "FATAL: aucune AppImage dans le zip ShadPS4"; exit 1; } && \
+    /usr/local/lib/steambox-build/install-appimage shadps4 "ShadPS4" "${APPIMAGE}" && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 
 # Eden (Nintendo Switch) — remplacé par le paquet AUR eden-nightly-bin
@@ -1160,10 +1062,7 @@ RUN --mount=type=secret,id=github_token \
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
 ARG FLIPS_TAG=""
 RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    FLIPS_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Alcaro/Flips/releases/${FLIPS_TAG:+tags/}${FLIPS_TAG:-latest}" \
-      | grep -oE '"browser_download_url": *"[^"]*linux\.zip"' | cut -d'"' -f4) && \
-    [ -n "${FLIPS_URL}" ] || { echo "FATAL: FLIPS_URL vide"; exit 1; } && \
+    FLIPS_URL=$(/usr/local/lib/steambox-build/gh-asset-url Alcaro/Flips "${FLIPS_TAG}" 'linux\.zip$') && \
     curl -fSL --retry 3 -o /tmp/flips.zip "${FLIPS_URL}" && \
     mkdir -p /tmp/flips && cd /tmp/flips && unzip -q /tmp/flips.zip && \
     install -Dm755 flips /usr/local/bin/flips && \
@@ -1201,12 +1100,20 @@ RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
 RUN pip install --break-system-packages --no-cache-dir websockify
 
 ARG NOVNC_TAG=""
+# Contrôles ajoutés (22/09) : une URL vide (rate-limit API) ou un tarball
+# tronqué laissaient passer le build avec un noVNC vide ou partiel — le
+# bureau navigateur (seul accès d'administration) cassé sans aucun signal
+# avant le premier déploiement.
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    NOVNC_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/novnc/noVNC/releases/${NOVNC_TAG:+tags/}${NOVNC_TAG:-latest}" \
+    NOVNC_URL=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "https://api.github.com/repos/novnc/noVNC/releases/${NOVNC_TAG:+tags/}${NOVNC_TAG:-latest}" \
       | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
+    [ -n "${NOVNC_URL}" ] || { echo "FATAL: NOVNC_URL vide"; exit 1; } && \
     mkdir -p /usr/share/webapps/novnc && \
-    curl -fSL "${NOVNC_URL}" | tar -xz -C /usr/share/webapps/novnc --strip-components=1
+    curl -fSL --retry 3 -o /tmp/novnc.tar.gz "${NOVNC_URL}" && \
+    tar -xzf /tmp/novnc.tar.gz -C /usr/share/webapps/novnc --strip-components=1 && \
+    [ -f /usr/share/webapps/novnc/vnc.html ] || { echo "FATAL: vnc.html absent après extraction noVNC"; exit 1; } && \
+    rm -f /tmp/novnc.tar.gz
 
 # La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
 # (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
@@ -1266,7 +1173,7 @@ RUN printf 'ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="*passthrough*"
 ARG PUID=1000
 ARG PGID=1000
 RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
-    useradd -m -u "${PUID}" -g "${PGID}" \
+    useradd -l -m -u "${PUID}" -g "${PGID}" \
       -G wheel,video,input,render,audio -s /bin/bash arcade && \
     echo "arcade ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
     mkdir -p /home/arcade/.config/sunshine && \
@@ -1292,8 +1199,23 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 # répétition alors que le binaire portait déjà cap_sys_nice+p. +ep la rend
 # effective dès l'exec, sans que Sunshine ait quoi que ce soit à faire —
 # threads d'encodage/audio correctement priorisés sous charge CPU.
-RUN setcap 'cap_sys_nice,cap_sys_admin+ep' "$(readlink -f /usr/bin/sunshine)" 2>/dev/null || \
-    echo "WARN: setcap sunshine impossible ici, à refaire si le binaire change au runtime"
+#
+# CORRECTION (audit 22/09, vérifié en direct sur la prod) : +ep ne suffit
+# PAS pour CAP_SYS_NICE côté Sunshine. Le binaire porte bien
+# cap_sys_admin,cap_sys_nice=ep, mais Sunshine vide lui-même son set
+# effectif après son initialisation (CapEff=0 sur le process en cours) : ses
+# 18 threads tournaient tous en nice 0, et "setpriority failed for nice
+# -15/-10" apparaissait toujours dans sunshine.log. Le vrai correctif est
+# côté conteneur : --ulimit nice=40 (docker-compose.cachyos.yml ulimits,
+# template Unraid — voir docs/deploiement-unraid.md), qui autorise un
+# process NON privilégié à descendre jusqu'à nice -20, sans capacité.
+# La capacité de fichier reste posée ici pour CAP_SYS_ADMIN (voir plus haut).
+#
+# Échec franc (22/09) au lieu d'un simple WARN : sans cette capacité,
+# Sunshine ne démarre jamais son serveur (voir plus haut) — une image
+# construite sans elle est inutilisable, autant le savoir au build.
+RUN setcap 'cap_sys_nice,cap_sys_admin+ep' "$(readlink -f /usr/bin/sunshine)" && \
+    getcap "$(readlink -f /usr/bin/sunshine)" | grep -q cap_sys_admin
 
 # PipeWire — même classe de correctif (audit M8, 05/09) : sans CAP_SYS_NICE
 # effective, PipeWire ne peut obtenir de priorité temps réel (SCHED_FIFO)
@@ -1303,8 +1225,11 @@ RUN setcap 'cap_sys_nice,cap_sys_admin+ep' "$(readlink -f /usr/bin/sunshine)" 2>
 # gourmand, compilation de shaders). cap_add: SYS_NICE existe déjà côté
 # docker-compose ; il ne manquait que la capacité de fichier sur le binaire
 # réellement exécuté, comme pour Sunshine ci-dessus.
-RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)" 2>/dev/null || \
-    echo "WARN: setcap pipewire impossible ici, à refaire si le binaire change au runtime"
+# Contrairement à Sunshine, PipeWire garde bien cette capacité effective
+# (CapEff contient CAP_SYS_NICE, vérifié en direct le 22/09). Échec franc
+# (22/09) pour la même raison que Sunshine : un WARN noyé dans un log de
+# build de 12 Go n'est jamais lu.
+RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)"
 
 # Catégorie "Emulator" (audit menu XFCE, 07/09) : xfce-applications.menu
 # définit le menu "Système" comme <Or><Category>Emulator</Category>
@@ -1349,9 +1274,9 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
     ln -sf /usr/local/bin/scripts/steamos-session-select.sh /usr/bin/steamos-session-select && \
     ln -sf /usr/local/bin/scripts/os-session-select.sh /usr/lib/os-session-select
 
-# Caches de shaders (DXVK/NVIDIA) HORS de /config — voir commentaire détaillé
-# dans Dockerfile.ubuntu (audit 2026-08-26) : /config est sur un partage
-# Unraid FUSE/shfs, le stockage écrivable du conteneur est sur le pool Docker
+# Caches de shaders (DXVK/NVIDIA) HORS de /config (audit 2026-08-26) :
+# /config est sur un partage Unraid FUSE/shfs, lent en accès aléatoire,
+# alors que le stockage écrivable du conteneur est sur le pool Docker
 # direct (typiquement le pool cache Unraid). Cache non persistant entre
 # recréations du conteneur, contre un accès disque nettement plus rapide.
 RUN mkdir -p /var/cache/steambox/dxvk /var/cache/steambox/nv-shader && \
@@ -1398,7 +1323,6 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     NVD_BACKEND=direct \
     LANG=fr_FR.UTF-8 \
     LANGUAGE=fr_FR:fr \
-    DOOMWADDIR=/usr/local/share/doom \
     DXVK_STATE_CACHE_PATH=/var/cache/steambox/dxvk \
     __GL_SHADER_DISK_CACHE_PATH=/var/cache/steambox/nv-shader \
     __GL_SHADER_DISK_CACHE_SIZE=1073741824 \
@@ -1411,7 +1335,9 @@ VOLUME /config
 # network_mode: host, cette directive n'a donc aucun effet — gardée comme
 # inventaire des ports réellement utilisés : 6080 noVNC, 47984/47989/47990
 # Sunshine (HTTPS/HTTP/Web UI), 47998-48000/udp flux vidéo/audio/contrôle,
-# 48010 RTSP, 1337 interface web decky-loader (gestion des plugins).
-EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010 1337
+# 48010 RTSP. 1337 (decky-loader) retiré de la liste (22/09) : decky
+# n'écoute que sur 127.0.0.1 (vérifié en direct, ss -ltnp), il n'est
+# joignable que par Steam dans le conteneur, jamais depuis le LAN.
+EXPOSE 6080 47990 47984 47989 47998-48000/udp 48010
 
 ENTRYPOINT ["/init"]

@@ -10,11 +10,13 @@
 # depuis le 30/08 : c'est la session que Sunshine capture, pas le bureau
 # XFCE visible en local/VNC (wayland-0), donc c'est là que doit atterrir
 # l'input Sunshine.
-# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : cette variable est déjà
-# fixée globalement dans le Dockerfile à /run/user/1000 (UID générique), qui
+# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : historiquement, cette
+# variable était fixée globalement dans le Dockerfile à /run/user/1000, qui
 # ne correspond PAS à l'UID réel d'arcade (99 côté Unraid/PUID) — le repli
-# ":-" ne se déclenche donc jamais puisque la variable est déjà définie
-# (juste avec la mauvaise valeur). Confirmé en direct le 30/08 : "Cannot
+# ":-" ne se déclenchait donc jamais. Cette ENV a été retirée (audit F2,
+# 05/09 ; init-system exporte désormais la vraie valeur) ; le calcul
+# explicite est gardé, il ne dépend d'aucun héritage.
+# Bug d'origine, confirmé en direct le 30/08 : "Cannot
 # connect to Wayland display" en boucle, evdev-bridge cherchait le socket
 # au mauvais endroit malgré le zwlr_virtual_pointer_manager_v1 bien présent
 # côté labwc.

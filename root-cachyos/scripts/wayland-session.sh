@@ -18,7 +18,16 @@ mkdir -p "${ARCADE_RUNTIME_DIR}"
 chown arcade:arcade "${ARCADE_RUNTIME_DIR}"
 chmod 700 "${ARCADE_RUNTIME_DIR}"
 
-runuser -u arcade -- env \
+# exec (audit 22/09, reproduit en test) : sans lui, ce script restait le
+# process supervisé par s6 et runuser n'en était qu'un enfant. Un
+# s6-svc -r/-d envoie SIGTERM à CE script seul : il mourait, mais runuser, le
+# bash -c et toute la session (labwc, XFCE) survivaient en orphelins — le
+# trap EXIT plus bas ne se déclenchait jamais puisque son shell ne recevait
+# aucun signal. Le labwc orphelin gardait wayland-0, et le nouveau démarrait
+# sur un autre socket. Avec exec, s6 signale directement runuser, qui relaie
+# SIGTERM au bash -c : le trap tue alors proprement tous les processus
+# lancés en arrière-plan.
+exec runuser -u arcade -- env \
     HOME=/home/arcade XDG_RUNTIME_DIR="${ARCADE_RUNTIME_DIR}" \
     QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_TYPE=wayland \
     SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
@@ -45,7 +54,9 @@ cd "${HOME}"
 # xfce4-panel, nm-applet et lagent polkit sont tous lances en arriere-plan
 # plus bas dans ce script -- si s6 relance ce service (crash de labwc,
 # redemarrage manuel), ces processus orphelins survivaient jusquici,
-# confirme en direct (second panneau/xfdesktop apres un restart). Double
+# confirme en direct (second panneau/xfdesktop apres un restart). Ne
+# couvre le redemarrage manuel que depuis le exec runuser du 22/09 (voir
+# en tete de fichier) : avant, ce shell ne recevait jamais le SIGTERM. Double
 # guillemets et $ echappe ici, PAS de simple guillemet -- tout ce bloc
 # tourne dans un bash -c entre apostrophes simples (ligne 27), un seul
 # guillemet simple ici casserait la chaine exactement comme une apostrophe

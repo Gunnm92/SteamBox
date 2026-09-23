@@ -22,7 +22,12 @@ ifdef GITHUB_TOKEN
 BUILD_ARGS  += --secret id=github_token,env=GITHUB_TOKEN
 endif
 
-.PHONY: build push run stop logs clean help
+.PHONY: build push run stop logs clean lint help
+
+# Fichiers shell du dépôt : scripts de session/init, outils de build, et
+# les "run" s6 (shebang with-contenv, non reconnu par shellcheck d'où -s bash).
+SHELL_FILES  = root-cachyos/scripts root-cachyos/build root-cachyos/usr/local/bin \
+               root-cachyos/etc/s6-overlay/s6-rc.d
 
 # Seul Dockerfile restant depuis le pivot Waybox -> SteamBox (Dockerfile et
 # Dockerfile.ubuntu supprimés — plus de variante webstation/Debian ni
@@ -56,8 +61,31 @@ logs:
 clean:
 	$(DOCKER) compose --file docker-compose.cachyos.yml down --rmi local --volumes
 
+# Lint (audit 22/09) — shellcheck + hadolint via leurs images officielles,
+# rien à installer localement. Les fichiers passent par stdin (tar), pas par
+# un bind mount : le démon Docker est joint via docker-socket-proxy, un
+# chemin local n'existerait pas de son côté. Sévérité "warning" pour
+# shellcheck (bugs probables, pas le style). Règles hadolint écartées, en
+# connaissance de cause :
+#   DL3059  RUN consécutifs — un RUN par composant est voulu (cache, lisibilité)
+#   DL4006  pipefail — chaque "curl | grep" vérifie explicitement un résultat
+#           vide ; un pipefail global ferait échouer au hasard les
+#           "grep | head -1" (SIGPIPE sur grep)
+#   DL3003  cd dans un RUN — uniquement dans des dossiers /tmp jetables
+#   DL3010  ADD pour les archives — le thème est patché juste après extraction
+#   DL3013  versions pip épinglées — contraire à la politique "tout à jour à
+#           chaque rebuild" du projet
+lint:
+	tar -c $(SHELL_FILES) | $(DOCKER) run --rm -i --entrypoint sh koalaman/shellcheck-alpine:stable -c \
+		'mkdir /w && cd /w && tar -x && find . -type f \( -name "*.sh" -o -name run -o -path "*/build/*" -o -path "*/usr/local/bin/*" \) \
+		| sort | xargs shellcheck -s bash -S warning'
+	$(DOCKER) run --rm -i hadolint/hadolint hadolint --no-color --failure-threshold warning \
+		--ignore DL3059 --ignore DL4006 --ignore DL3003 --ignore DL3010 --ignore DL3013 \
+		- < Dockerfile.cachyos
+
 help:
 	@echo "Targets:"
+	@echo "  lint     shellcheck + hadolint (via Docker)"
 	@echo "  build    Build l'image localement (--load)"
 	@echo "  push     Build + push vers $(REGISTRY)"
 	@echo "  run      docker compose up -d"

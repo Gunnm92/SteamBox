@@ -62,6 +62,7 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 ```
 --runtime=nvidia --ipc=host --shm-size=2g
 --cap-add=SYS_NICE --cap-add=SYS_ADMIN --cap-add=NET_ADMIN
+--ulimit nice=40
 --group-add=71
 --device-cgroup-rule='c 13:* rmw'
 --device-cgroup-rule='c 226:* rmw'
@@ -79,6 +80,17 @@ virtuelle tant qu'un client Moonlight reste connecté — consomme des cycles
 CPU en continu sans jamais aboutir. N'affecte pas la création des devices
 elle-même (mknod/permissions, déjà traitée par udevd avant cette étape),
 mais mérite d'être ajoutée à la prochaine recréation du conteneur.
+
+**`--ulimit nice=40` (audit 22/09, à ajouter au template)** — sans elle,
+les threads d'encodage de Sunshine tournent en priorité normale : Sunshine
+vide son set de capacités effectif après son initialisation, donc la
+capacité de fichier `cap_sys_nice` posée sur son binaire ne lui sert
+jamais (vérifié en direct : `CapEff: 0`, 18 threads en nice 0,
+`setpriority failed for nice -15/-10` en continu dans `sunshine.log`). Avec
+cette limite, n'importe quel process du conteneur peut descendre jusqu'à
+nice -20 sans privilège. Vérification après recréation :
+`grep "setpriority failed" /config/.config/sunshine/sunshine.log` ne doit
+plus rien renvoyer pour la nouvelle session.
 
 Justification des trois règles cgroup — **les trois sont requises** :
 

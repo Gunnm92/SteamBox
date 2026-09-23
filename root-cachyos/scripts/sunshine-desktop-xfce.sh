@@ -25,7 +25,8 @@ set -uo pipefail
 # l'était pas (voir historique wayland-session.sh).
 export WAYLAND_DISPLAY=wayland-1
 export DISPLAY=:1
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
 
 PIDFILE="${XDG_RUNTIME_DIR}/sunshine-desktop-xfce.pid"
 
@@ -39,7 +40,7 @@ fi
 echo "$$" > "${PIDFILE}"
 
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
-cd "${HOME}"
+cd "${HOME}" || exit 1
 
 exec dbus-run-session -- bash -c '
 xfsettingsd &

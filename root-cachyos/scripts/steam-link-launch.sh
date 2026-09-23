@@ -63,7 +63,8 @@ set -uo pipefail
 
 export WAYLAND_DISPLAY=wayland-1
 export DISPLAY=:1
-export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_RUNTIME_DIR
 export XDG_CURRENT_DESKTOP=XFCE
 
 PIDFILE="${XDG_RUNTIME_DIR}/steam-link-launch.pid"

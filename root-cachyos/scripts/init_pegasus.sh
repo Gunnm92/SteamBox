@@ -13,147 +13,47 @@
 #
 # La génération des metadata ne s'exécute qu'une seule fois (déjà fait sur
 # le volume /config persistant). Pour forcer une régénération : pegasus-update
+# (sans risque depuis le 22/09 : un metadata.pegasus.txt existant, scrapé ou
+# non, n'est jamais réécrit — seule sa ligne launch: gérée est mise à jour).
 set -e
 
 # Plus sous /userdata (15/09, reliquat d'un montage séparé et redondant —
 # voir la même note dans init_retroarch.sh) : /home/arcade est un symlink
 # vers /config, et /config/games est déjà le montage du parent
 # /mnt/user/Game, qui contient Batocera/ — mêmes fichiers, un seul montage.
-ROMS_DIR="/home/arcade/games/Batocera/roms"
-PEGASUS_CFG="/config/.config/pegasus-frontend"
-CORES="/usr/lib/libretro"
-RA="retroarch -L"
-# Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
-# d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
-# root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre
-# session bureau/wine tourne en tant qu'"arcade" (non-root) — squashfuse monte le
-# paquet en préservant ces UID/permissions d'origine, donc "arcade" se voit
-# refuser la lecture (confirmé en direct : erreurs "Permission denied" sur
-# autorun.cmd, jeu qui ne démarre pas). Confirmé aussi que les fichiers ne
-# sont PAS corrompus : le même paquet non modifié se lance sans erreur une
-# fois élevé en root. sudo -E (accès NOPASSWD déjà configuré pour arcade)
-# élève le montage/lancement en root tout en gardant DISPLAY/XDG_RUNTIME_DIR
-# d'arcade, donc la session graphique et l'audio (PipeWire) restent accessibles.
-WSQUASHFS="sudo -E /usr/local/bin/wsquashfs-launcher"
+# Surchargeables (22/09) pour tester ce script sur une copie de la
+# ludothèque sans toucher aux vrais fichiers.
+ROMS_DIR="${PEGASUS_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
+PEGASUS_CFG="${PEGASUS_CFG_DIR:-/config/.config/pegasus-frontend}"
+# Table des systèmes (émulateur, extensions, commande) : pegasus-systems.sh.
+# shellcheck source=pegasus-systems.sh
+. /usr/local/bin/scripts/pegasus-systems.sh
 FLAG_FILE="${PEGASUS_CFG}/.metadata-generated"
 
 [ -d "${ROMS_DIR}" ] || exit 0
 mkdir -p "${PEGASUS_CFG}"
 
-# ── Mapping systèmes ──────────────────────────────────────────────────────────
-# Format : "Nom affiché|extensions (sans point)|commande de lancement"
-declare -A SYSTEMS
-
-# ── Windows / Arcade PC (wsquashfs-launcher) ──────────────────────────────────
-SYSTEMS["windows"]="Windows|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["windows3x"]="Windows 3.x|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["windows9x"]="Windows 9x|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["win311"]="Windows 3.11|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["win95"]="Windows 95|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["nesicax"]="NESiCAxLive|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["nesicax2"]="NESiCAxLive 2|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["typex"]="Taito Type X|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["typex2"]="Taito Type X2|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["type-x"]="Taito Type X|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["arcadepc"]="Arcade PC|wsquashfs,zip|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["rawthrills"]="Raw Thrills|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["cave3rd"]="Cave 3rd|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["konamipc"]="Konami PC|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["konamilcd"]="Konami LCD|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["namco2x6"]="Namco System 2x6|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["namcoes3"]="Namco ES3|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["chihiro"]="Sega Chihiro|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["triforce"]="Namco Triforce|wsquashfs,zip|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["ikemen"]="Ikemen|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["unis"]="Unis|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["exl100"]="EXL100|wsquashfs|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["pc"]="PC (DOS/Windows)|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
-SYSTEMS["dos"]="MS-DOS|wsquashfs,exe,com,bat|${WSQUASHFS} \"{file.path}\""
-
-# ── Standalone launchers ──────────────────────────────────────────────────────
-SYSTEMS["lindbergh"]="Sega Lindbergh|elf,sh,zip|/usr/local/bin/lindbergh \"{file.path}\""
-SYSTEMS["model3"]="Sega Model 3|zip|/usr/local/bin/supermodel -res=1920,1080 -fullscreen \"{file.path}\""
-SYSTEMS["model2"]="Sega Model 2|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-SYSTEMS["model1"]="Sega Model 1|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-
-# ── Arcade (MAME / FBNeo) ─────────────────────────────────────────────────────
-# Verifie en direct contre /usr/lib/libretro (ls) - la version precedente de
-# ce mapping (portee telle quelle de l'ancienne image webstation) referencait
-# des noms de core qui n'ont jamais ete installes ici (fbalpha2012_*, neocd,
-# gearsystem, yabasanshiro, snes9x2010, citra2018, virtualjaguar, mednafen_ngp/
-# lynx/pcfx, pcsx2, opera) et pointait CORES vers un dossier vide
-# (~/.config/retroarch/cores au lieu de /usr/lib/libretro, ou pacman installe
-# reellement les cores) - aucun de ces systemes n'a donc jamais fonctionne.
-# Cores installes en plus pour combler les ecarts : fbneo, picodrive,
-# beetle-pce(-fast), beetle-supergrafx, snes9x, melonds, scummvm. Systemes
-# sans core disponible dans les depots retires (neogeocd, jaguar, pcfx, ngp,
-# lynx, ps2, 3do) plutot que de laisser une reference morte.
-SYSTEMS["arcade"]="Arcade|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-SYSTEMS["mame"]="MAME|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-SYSTEMS["fbneo"]="FBNeo|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["fba"]="FBA|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-# FBNeo est un core unifie moderne qui couvre CPS-1/2/3 et Neo Geo - remplace
-# les anciens cores fbalpha2012_* separes, plus maintenus/disponibles.
-SYSTEMS["cps1"]="CPS-1|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["cps2"]="CPS-2|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["cps3"]="CPS-3|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["neogeo"]="Neo Geo|zip,7z|${RA} ${CORES}/fbneo_libretro.so \"{file.path}\""
-SYSTEMS["atomiswave"]="Atomiswave|zip,7z|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
-SYSTEMS["naomi"]="Sega NAOMI|zip,7z,chd|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
-SYSTEMS["naomi2"]="Sega NAOMI 2|zip,7z,chd|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
-SYSTEMS["naomigd"]="Sega NAOMI GD-ROM|zip,7z,chd|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
-SYSTEMS["stv"]="Sega ST-V|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-SYSTEMS["hikaru"]="Sega Hikaru|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
-
-# ── Sega (RetroArch) ──────────────────────────────────────────────────────────
-SYSTEMS["megadrive"]="Mega Drive|md,bin,smd,gen,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["genesis"]="Genesis|md,bin,smd,gen,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["sega32x"]="Sega 32X|32x,bin,md,zip,7z|${RA} ${CORES}/picodrive_libretro.so \"{file.path}\""
-SYSTEMS["segacd"]="Sega CD|iso,chd,cue,bin|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["megacd"]="Mega CD|iso,chd,cue,bin|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-# Genesis Plus GX est multi-systeme (couvre aussi Master System/Game Gear/
-# SG-1000) - gearsystem_libretro.so n'a jamais ete disponible dans les depots.
-SYSTEMS["mastersystem"]="Master System|sms,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["mark3"]="Sega Mark III|sms,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["sg-1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["sg1000"]="SG-1000|sg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["gamegear"]="Game Gear|gg,bin,zip,7z|${RA} ${CORES}/genesis_plus_gx_libretro.so \"{file.path}\""
-SYSTEMS["saturn"]="Saturn|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabause_libretro.so \"{file.path}\""
-SYSTEMS["saturnjp"]="Saturn JP|iso,chd,cue,bin,mdf|${RA} ${CORES}/yabause_libretro.so \"{file.path}\""
-SYSTEMS["dreamcast"]="Dreamcast|chd,cdi,gdi,iso|${RA} ${CORES}/flycast_libretro.so \"{file.path}\""
-
-# ── Nintendo (RetroArch) ──────────────────────────────────────────────────────
-SYSTEMS["snes"]="Super Nintendo|sfc,smc,fig,bs,zip,7z|${RA} ${CORES}/snes9x_libretro.so \"{file.path}\""
-SYSTEMS["sfc"]="Super Famicom|sfc,smc,fig,zip,7z|${RA} ${CORES}/snes9x_libretro.so \"{file.path}\""
-SYSTEMS["supergrafx"]="SuperGrafx|pce,sgx,bin,zip,7z|${RA} ${CORES}/mednafen_supergrafx_libretro.so \"{file.path}\""
-SYSTEMS["gamecube"]="GameCube|iso,rvz,chd,gcm|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
-SYSTEMS["gc"]="GameCube|iso,rvz,chd,gcm|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
-SYSTEMS["wii"]="Wii|iso,wbfs,rvz,chd|${RA} ${CORES}/dolphin_libretro.so \"{file.path}\""
-# Pas de core libretro 3DS disponible (citra2018 jamais installe ni maintenu,
-# citra lui-meme discontinue) - redirige vers Azahar, deja installe en
-# standalone dans cette image (voir plus haut dans le Dockerfile).
-SYSTEMS["3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|/usr/local/bin/azahar \"{file.path}\""
-SYSTEMS["n3ds"]="Nintendo 3DS|3ds,3dsx,cci,cxi,zip|/usr/local/bin/azahar \"{file.path}\""
-
-# ── NEC (RetroArch) ───────────────────────────────────────────────────────────
-SYSTEMS["pcengine"]="PC Engine|pce,bin,ccd,img,zip,7z|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
-SYSTEMS["tg16"]="TurboGrafx-16|pce,bin,ccd,img,zip,7z|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
-SYSTEMS["pcenginecd"]="PC Engine CD|iso,chd,cue,bin|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
-SYSTEMS["tg-cd"]="TurboGrafx CD|iso,chd,cue,bin|${RA} ${CORES}/mednafen_pce_libretro.so \"{file.path}\""
-
-# ── ScummVM (RetroArch) ───────────────────────────────────────────────────────
-SYSTEMS["scummvm"]="ScummVM|scummvm,zip|${RA} ${CORES}/scummvm_libretro.so \"{file.path}\""
-
 # ── Fonction de génération des metadata ───────────────────────────────────────
 generate_metadata() {
     local GAME_DIRS_FILE="${PEGASUS_CFG}/game_dirs.txt"
-    > "${GAME_DIRS_FILE}"
+    : > "${GAME_DIRS_FILE}"
     local generated=0 skipped=0
 
     for system_dir in "${ROMS_DIR}"/*/; do
         local system
         system=$(basename "${system_dir}")
         local meta_file="${system_dir}metadata.pegasus.txt"
+
+        # Jamais d'écrasement (22/09) : un metadata.pegasus.txt existant vient
+        # le plus souvent d'un scraper (descriptions, visuels, 205 dossiers
+        # sur la ludothèque réelle) — l'ancien "cat >" plus bas le remplaçait
+        # par un en-tête nu à chaque pegasus-update. Leur commande de
+        # lancement vient du fichier metafiles/ (write_command_metafile).
+        if [[ -f "${meta_file}" ]]; then
+            echo "${system_dir}" >> "${GAME_DIRS_FILE}"
+            skipped=$((skipped + 1))
+            continue
+        fi
 
         if [[ -z "${SYSTEMS[$system]+x}" ]]; then
             skipped=$((skipped + 1))
@@ -177,12 +77,20 @@ generate_metadata() {
             continue
         fi
 
+        # Pas de launch: ici (22/09) : la commande vient du fichier de
+        # commandes metafiles/ (write_command_metafile, source unique).
         cat > "${meta_file}" <<EOF
 collection: ${display_name}
 shortname: ${system}
 extensions: ${extensions}
-launch: ${launch_cmd}
 EOF
+
+        # mtime remis à l'epoch (22/09) : ce fichier vient d'être réécrit
+        # avec l'en-tête seul, donc plus récent que gamelist.xml — la garde
+        # mtime de l'import plus bas le sautait, et un pegasus-update
+        # effaçait toutes les fiches de jeux (noms, descriptions, visuels)
+        # sans jamais les réimporter. Epoch = "à réimporter".
+        touch -d @0 "${meta_file}"
 
         echo "${system_dir}" >> "${GAME_DIRS_FILE}"
         echo "[pegasus] ${system} → ${meta_file}"
@@ -196,7 +104,7 @@ EOF
 # ── Reconstruction rapide de game_dirs.txt depuis les metadata existants ──────
 rebuild_game_dirs() {
     local GAME_DIRS_FILE="${PEGASUS_CFG}/game_dirs.txt"
-    > "${GAME_DIRS_FILE}"
+    : > "${GAME_DIRS_FILE}"
     local count=0
     for system_dir in "${ROMS_DIR}"/*/; do
         if [[ -f "${system_dir}metadata.pegasus.txt" ]]; then
@@ -216,6 +124,139 @@ else
     echo "[pegasus] Première génération des metadata..."
     generate_metadata
 fi
+
+# ── Commandes de lancement : fichier de commandes Pegasus (22/09) ────────────
+# Cause réelle de "beaucoup d'émulateurs ne fonctionnent pas" (lastrun.log :
+# "Cannot launch the game ... because there is no launch command defined for
+# it") : les metadata.pegasus.txt de la ludothèque viennent de RomM —
+# collection, fiches, visuels, mais aucune ligne launch:.
+#
+# Ces fichiers restent INTACTS (RomM les réécrit à chaque synchronisation, et
+# c'est lui qui en a la charge). Les commandes vivent dans un fichier à nous,
+# dans le dossier "metafiles" global de Pegasus — mécanisme standard, lu AVANT
+# les dossiers de jeux (PegasusProvider.cpp, find_all_metafiles). L'ordre est
+# indispensable : un jeu copie la commande de sa collection au moment où il
+# est créé (SearchContext.cpp, create_game_for/game_add_to), et Pegasus
+# fusionne les collections de même nom (get_or_create_collection) — notre
+# "collection: X / launch: ..." déclaré en premier s'applique donc aux jeux
+# que le fichier RomM ajoute ensuite à X.
+#
+# Une entrée par nom de collection RomM :
+#   - commande directe de l'émulateur quand la collection correspond à une
+#     seule commande (cas standard) ;
+#   - lanceur générique pegasus-launch.sh (choix de l'émulateur d'après le
+#     dossier de plateforme du jeu) quand RomM regroupe des plateformes aux
+#     émulateurs différents sous un même nom (20 dossiers arcade => "Arcade")
+#     ou quand une partie des jeux du dossier est dans un format non pris en
+#     charge (le lanceur l'indique au lieu d'un échec muet).
+# Régénéré à chaque démarrage depuis pegasus-systems.sh : un émulateur changé
+# là-bas est pris en compte au redémarrage suivant, sans toucher la
+# ludothèque.
+write_command_metafile() {
+    local tsv system entry display_name extensions launch_cmd bin core ok
+    tsv=$(mktemp)
+    local -a missing=()
+    for system_dir in "${ROMS_DIR}"/*/; do
+        system=$(basename "${system_dir}")
+        [[ -f "${system_dir}metadata.pegasus.txt" ]] || continue
+        entry="${SYSTEMS[$system]:-}"
+        [[ -n "${entry}" ]] || continue
+        IFS='|' read -r display_name extensions launch_cmd <<< "${entry}"
+        read -r -a words <<< "${launch_cmd}"
+        bin="${words[0]}"
+        [[ "${bin}" == "sudo" ]] && bin="${words[2]}"
+        core=$(grep -oE '/[^ "]*_libretro\.so' <<< "${launch_cmd}" || true)
+        ok=1
+        if ! command -v "${bin}" >/dev/null 2>&1 || [[ -n "${core}" && ! -e "${core}" ]]; then
+            ok=0
+            missing+=("${system}")
+        fi
+        printf '%s\t%s\t%s\t%s\t%s\n' "${system}" "${system_dir}metadata.pegasus.txt" "${extensions}" "${launch_cmd}" "${ok}" >> "${tsv}"
+    done
+    if (( ${#missing[@]} )); then
+        echo "[pegasus] ${#missing[@]} plateforme(s) sans émulateur/cœur installé (Core Downloader de RetroArch pour les cœurs) : ${missing[*]}"
+    fi
+
+    mkdir -p "${PEGASUS_CFG}/metafiles"
+    python3 - "${tsv}" "${PEGASUS_CFG}/metafiles/steambox.metadata.pegasus.txt" <<'METAFILE_EOF'
+import collections, os, sys
+
+GENERIC = '/usr/local/bin/scripts/pegasus-launch.sh "{file.path}"'
+MARK = "# steambox:launch-auto (ligne suivante gérée par init_pegasus.sh)"
+
+def ext_ok(fname, exts, base):
+    if "/" in exts and os.path.isdir(os.path.join(base, fname)):
+        return True
+    return "." in fname and fname.rsplit(".", 1)[1].lower() in exts
+
+groups = collections.OrderedDict()
+for row in open(sys.argv[1], encoding="utf-8"):
+    system, path, exts, launch, ok = row.rstrip("\n").split("\t")
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"[pegasus] {system} : illisible ({e}) — ignoré")
+        continue
+
+    # Nettoyage unique des lignes launch: que la version du 22/09 ajoutait
+    # DANS les fichiers RomM (repérées par leur marqueur, rien d'autre n'est
+    # touché) : remplacement atomique, possible en arcade car les dossiers de
+    # plateforme lui appartiennent, même quand le fichier est à root.
+    if MARK in text:
+        lines, out, i = text.split("\n"), [], 0
+        while i < len(lines):
+            if lines[i] == MARK:
+                i += 2 if i + 1 < len(lines) and lines[i + 1].startswith("launch:") else 1
+                continue
+            out.append(lines[i]); i += 1
+        tmp = path + ".steambox-tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(out))
+            os.chmod(tmp, os.stat(path).st_mode & 0o777)
+            os.replace(tmp, path)
+            text = "\n".join(out)
+            print(f"[pegasus] {system} : anciennes lignes launch retirées du fichier RomM")
+        except OSError as e:
+            print(f"[pegasus] {system} : nettoyage impossible ({e})")
+
+    col = next((l.split(":", 1)[1].strip() for l in text.split("\n") if l.startswith("collection:")), None)
+    if not col:
+        continue
+    base = os.path.dirname(path)
+    exts_set = {x.lower() for x in exts.split(",") if x}
+    games = [l[5:].strip() for l in text.split("\n") if l.startswith("file:")]
+    all_ok = all(ext_ok(g, exts_set, base) for g in games)
+    groups.setdefault(col, []).append((system, launch, ok == "1", all_ok))
+
+out = ["# Commandes de lancement SteamBox — GÉNÉRÉ à chaque démarrage par",
+       "# init_pegasus.sh, ne pas modifier à la main (émulateurs : voir",
+       "# pegasus-systems.sh). Lu par Pegasus avant les fichiers RomM des",
+       "# dossiers de jeux, qui eux restent intacts.", ""]
+direct = generic = 0
+for col, members in groups.items():
+    usable = [m for m in members if m[2]]
+    if not usable:
+        continue
+    launches = {m[1] for m in members}
+    if len(members) == 1 and members[0][3]:
+        cmd, kind = members[0][1], "direct"
+        direct += 1
+    else:
+        cmd, kind = GENERIC, "générique"
+        generic += 1
+    out += [f"# {', '.join(m[0] for m in members)} ({kind})", f"collection: {col}", f"launch: {cmd}", ""]
+
+dest = sys.argv[2]
+tmp = dest + ".tmp"
+with open(tmp, "w", encoding="utf-8") as f:
+    f.write("\n".join(out))
+os.replace(tmp, dest)
+print(f"[pegasus] fichier de commandes : {direct} collection(s) en commande directe, {generic} via le lanceur générique -> {dest}")
+METAFILE_EOF
+    rm -f "${tsv}"
+}
+write_command_metafile
 
 # ── Import gamelist.xml (EmulationStation/ARRM) → metadata.pegasus.txt ────────
 # Contrairement à la génération ci-dessus, s'exécute (le script Python) à
@@ -246,7 +287,12 @@ ASSET_MAP = [
 def resolve(system_dir, path):
     if not path:
         return None
-    path = path.lstrip("./").lstrip("/")
+    # Retrait du préfixe "./" (22/09) : lstrip("./") retirait n'importe
+    # quelle suite de "." et "/" en tête, pas le préfixe — "../media/x.png"
+    # devenait "media/x.png" et un nom commençant par "." perdait son point.
+    while path.startswith("./"):
+        path = path[2:]
+    path = path.lstrip("/")
     return os.path.join(system_dir, path)
 
 def convert_date(d):

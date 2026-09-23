@@ -63,9 +63,10 @@ Chaque app applique la résolution du client à la connexion et revient à
 
 - **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon), Wine-staging +
   DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera).
-- **Émulateurs standalone** : Cemu, PCSX2, RPCS3, DuckStation, Xemu, Azahar,
-  Xenia, melonDS, DOSBox Staging, GZDoom+Freedoom, ShadPS4, Eden (Switch),
-  Dolphin, ScummVM, Lindbergh Loader.
+- **Émulateurs standalone** : Cemu (Wii U), PCSX2, RPCS3, DuckStation, Xemu,
+  Xenia, melonDS, PPSSPP, Flycast, Vita3K (PS Vita), DOSBox Staging, ShadPS4,
+  Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3),
+  TeknoParrotUI (lanceur natif, jeux toujours sous Wine).
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
 - **Frontends** : Steam gamepadui (principal), Pegasus (lancé depuis Steam).
@@ -87,6 +88,7 @@ make build                 # build local (--load)
 make push                  # build + push vers registry.elfenn.eu/steambox:latest
 make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
                            # (~18 requêtes/build, limite anonyme 60/h/IP)
+make lint                  # shellcheck + hadolint (via Docker, rien à installer)
 ```
 
 ## Accès
@@ -96,13 +98,17 @@ make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
 | noVNC (bureau navigateur) | `6080` | **aucune** — LAN de confiance uniquement |
 | Sunshine Web UI | `47990` | compte Sunshine (appairage PIN Moonlight) |
 | Flux Moonlight | `47984-48010` | appairage Sunshine |
+| decky-loader | `1337` | écoute sur `127.0.0.1` uniquement (utilisé par Steam, pas joignable du LAN) |
 
 ## Modèle de sécurité
 
 **Le conteneur n'est pas une frontière de sécurité.** C'est une console de
 salon : l'utilisateur `arcade` a `sudo NOPASSWD` (montages wsquashfs élevés
 en root), les devices d'entrée sont en `666`, le binaire Sunshine porte
-`cap_sys_admin` (capture KMS), et noVNC n'a pas de mot de passe. Ce qui le
+`cap_sys_admin` (capture KMS), et noVNC n'a pas de mot de passe. `/dev/input`
+est un bind mount du répertoire de l'**hôte** : les règles udev du conteneur
+(permissions des manettes virtuelles Sunshine) s'appliquent donc aussi aux
+nœuds côté Unraid. Ce qui le
 rend acceptable : réseau **LAN uniquement** — aucun de ces ports ne doit être
 exposé sur Internet, directement ou via redirection. Pour un accès distant,
 passer par un VPN ou un reverse proxy authentifié en amont.
@@ -118,9 +124,10 @@ root-cachyos/
   etc/s6-overlay/           # services s6 (labwc ×2, sunshine, wayvnc, evdev-bridge…)
   etc/udev/rules.d/         # règles manettes (hidraw fallback)
   scripts/                  # session Wayland, init_*, résolution dynamique
+  build/                    # outils de build (gh-asset-url, install-appimage)
   usr/local/bin/            # install driver NVIDIA userspace (matché à l'hôte)
 evdev-bridge/               # pont uinput→Wayland pour l'input Sunshine (C, vendored)
-Heroic Launcher/            # sauvegarde manuelle de bibliothèque Heroic
+Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignorée par git)
 Status.md                   # résultats de compatibilité wsquashfs (jeux Windows)
 ```
 

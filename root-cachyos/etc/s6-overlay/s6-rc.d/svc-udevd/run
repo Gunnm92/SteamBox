@@ -21,5 +21,5 @@ rm -f /run/udev/control
 
 # Nécessaire pour le hotplug (souris/clavier virtuels créés par Sunshine à
 # la connexion d'un client) : sans démon udev tournant en continu,
-# libinput/Hyprland ne détecte jamais ces périphériques uinput.
+# libinput (labwc) ne détecte jamais ces périphériques uinput.
 exec /usr/lib/systemd/systemd-udevd

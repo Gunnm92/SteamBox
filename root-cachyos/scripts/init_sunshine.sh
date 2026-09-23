@@ -43,9 +43,16 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # profil par manette selon ce que Moonlight négocie ; si le pavé tactile
     # DS4 ne remonte quand même pas, creuser côté client Moonlight Android
     # TV (négociation des capacités manette), pas côté ce fichier.
-    cat > "${CONF_DIR}/sunshine.conf" <<'EOF'
+    #
+    # csrf_allowed_origins calculé (22/09) au lieu de l'IP 10.1.1.1 écrite
+    # en dur : IP propre à CE déploiement, alors que ce script sert pour
+    # toute installation neuve. network_mode: host -> l'IP source de la
+    # route par défaut est l'IP LAN de l'hôte, celle qu'on tape dans le
+    # navigateur. Repli sur localhost seul si la route est introuvable.
+    LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
+    cat > "${CONF_DIR}/sunshine.conf" <<EOF
 locale = fr
-csrf_allowed_origins = https://10.1.1.1:47990
+csrf_allowed_origins = https://${LAN_IP:-localhost}:47990
 system_tray = 0
 dd_hdr_option = disabled
 encoder = nvenc

@@ -97,5 +97,17 @@ services:
     security_opt:
       - apparmor:unconfined
       - seccomp:unconfined
+    # RLIMIT_NICE (audit 22/09, vérifié en direct) : Sunshine vide son set de
+    # capacités effectif après son init — la capacité de fichier
+    # cap_sys_nice+ep ne lui sert donc jamais, ses threads d'encodage
+    # restaient en nice 0 ("setpriority failed for nice -15/-10" en continu
+    # dans sunshine.log). nice=40 autorise tout process du conteneur, même
+    # non privilégié, à descendre jusqu'à nice -20 (limite = 20 - nice) :
+    # Sunshine applique alors lui-même ses -15/-10, et gamemode peut
+    # prioriser les jeux. Figé à la CRÉATION du conteneur (recréer, pas
+    # redémarrer) ; impossible à relever de l'intérieur (pas de
+    # CAP_SYS_RESOURCE).
+    ulimits:
+      nice: 40
     shm_size: "2gb"
     restart: unless-stopped

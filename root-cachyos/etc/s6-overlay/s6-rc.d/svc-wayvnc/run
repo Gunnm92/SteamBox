@@ -3,11 +3,13 @@
 # ici contrairement à KWin (voir point 6 de l'historique Dockerfile.cachyos).
 # Sert le RFB brut sur 5900, en local uniquement : websockify (svc-websockify)
 # fait le pont websocket pour l'accès navigateur.
-# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : cette variable est déjà
-# fixée globalement dans le Dockerfile à /run/user/1000 (UID générique), qui
+# $(id -u arcade), pas ${XDG_RUNTIME_DIR:-...} : historiquement, cette
+# variable était fixée globalement dans le Dockerfile à /run/user/1000, qui
 # ne correspond PAS à l'UID réel d'arcade (99 côté Unraid/PUID) — le repli
-# ":-" ne se déclenche donc jamais puisque la variable est déjà définie
-# (juste avec la mauvaise valeur). Confirmé en direct le 30/08 : le service
+# ":-" ne se déclenchait donc jamais. Cette ENV a été retirée (audit F2,
+# 05/09 ; init-system exporte désormais la vraie valeur) ; le calcul
+# explicite est gardé, il ne dépend d'aucun héritage.
+# Bug d'origine, confirmé en direct le 30/08 : le service
 # cherchait le socket au mauvais endroit et ne démarrait jamais wayvnc.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 SOCKET_PATH="${XDG_RUNTIME_DIR}/wayland-0"

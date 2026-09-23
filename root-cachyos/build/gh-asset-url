@@ -1,0 +1,49 @@
+#!/bin/bash
+# Résout l'URL de téléchargement d'un asset de release GitHub (outil de BUILD
+# uniquement, voir Dockerfile.cachyos) — factorise les ~15 blocs
+# "curl api.github.com | grep browser_download_url" qui dupliquaient chacun la
+# lecture du secret github_token, le choix latest/tag et le contrôle "URL vide".
+#
+# Usage : gh-asset-url <owner/repo> <tag|""> <regex ERE sur le nom de l'asset> [regex à exclure]
+#   tag vide  -> release "latest" (comportement par défaut, voir ARG *_TAG)
+#   la regex porte sur l'URL complète : l'ancrer avec $ (ex: 'x86_64\.AppImage$')
+#
+# Sortie : l'URL du premier asset correspondant sur stdout, ou échec franc
+# (code 1 + message FATAL) si l'API est inaccessible ou si rien ne correspond —
+# jamais une URL vide transmise silencieusement à l'étape suivante.
+set -euo pipefail
+
+repo="$1"
+tag="${2:-}"
+pattern="$3"
+exclude="${4:-}"
+
+if [ -n "${tag}" ]; then
+    api="https://api.github.com/repos/${repo}/releases/tags/${tag}"
+else
+    api="https://api.github.com/repos/${repo}/releases/latest"
+fi
+
+# Secret BuildKit optionnel (audit C1, 05/09) : lu ici, jamais passé en ARG.
+token="$(cat /run/secrets/github_token 2>/dev/null || true)"
+auth=()
+if [ -n "${token}" ]; then
+    auth=(-H "Authorization: Bearer ${token}")
+fi
+
+json=$(curl -fsSL --retry 3 "${auth[@]}" "${api}") || {
+    echo "FATAL: API GitHub inaccessible pour ${repo} (${api}) — rate-limit ? passer GITHUB_TOKEN au make" >&2
+    exit 1
+}
+
+url=$(printf '%s' "${json}" \
+    | grep -oE '"browser_download_url": *"[^"]*"' | cut -d'"' -f4 \
+    | grep -E "${pattern}" \
+    | { if [ -n "${exclude}" ]; then grep -vE "${exclude}"; else cat; fi; } \
+    | head -1) || true
+
+if [ -z "${url}" ]; then
+    echo "FATAL: aucun asset '${pattern}' dans la release ${tag:-latest} de ${repo}" >&2
+    exit 1
+fi
+printf '%s\n' "${url}"
