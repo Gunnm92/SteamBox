@@ -234,6 +234,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
       pipewire pipewire-pulse wireplumber \
       lib32-pipewire lib32-libpulse \
+      lib32-libxrandr lib32-libxi lib32-libxcursor lib32-libxcomposite lib32-libxrender \
       ffmpeg \
       steam \
       sunshine \
@@ -252,7 +253,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       ttf-jetbrains-mono-nerd cantarell-fonts noto-fonts ttf-dejavu \
       libva-utils \
       qt6-multimedia \
-      gst-plugins-good gst-plugins-bad gst-libav \
+      gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav \
       flatpak" && \
     for i in 1 2 3; do \
       pacman -Syyu --noconfirm && pacman -S --noconfirm --needed ${PKGS} && break; \
@@ -283,6 +284,10 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
 # (MP4/MOV) et la plupart des formats courants ; gst-plugins-bad et
 # gst-libav (décodeurs de secours via FFmpeg) ajoutés pour une couverture
 # large plutôt que corriger un format à la fois.
+# gst-plugins-ugly (23/09) : asfdemux (ASF/WMV) n'est QUE là — les vidéos
+# .wmv des jeux wsquashfs passent par winegstreamer et échouaient ("Missing
+# decoder: Advanced Streaming Format"), confirmé en direct : BlazBlue Central
+# Fiction (nesicax) quittait au lancement.
 #
 # flatpak (demandé 31/08) — xdg-desktop-portal(-gtk/-wlr) déjà installés
 # ci-dessus couvrent les besoins runtime des apps Flatpak (permissions,
@@ -756,9 +761,40 @@ RUN python3 /tmp/patch-theme.py && rm -f /tmp/patch-theme.py
 # Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
 # le script wsquashfs-batocera embarqué dans l'image webstation — plus
 # portable (détection auto Docker/FUSE, fallback unsquashfs), maintenu à part.
-RUN curl -fsSL https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main/wsquashfs-launcher \
-      -o /usr/local/bin/wsquashfs-launcher && \
-    chmod +x /usr/local/bin/wsquashfs-launcher
+# ADD d'URL plutôt que RUN curl (23/09) : BuildKit télécharge et compare le
+# CONTENU à chaque build — un RUN curl à la commande inchangée restait en
+# cache et figeait silencieusement une ancienne version du lanceur tant
+# qu'aucune couche antérieure ne bougeait.
+ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main/wsquashfs-launcher \
+    /usr/local/bin/wsquashfs-launcher
+
+# ── 1a9. Wine "classique" pour les prefixes win32 (23/09) — wine-staging
+# d'Arch est WoW64 seul (pas de lib/wine/i386-unix) et refuse les prefixes
+# 32 bits : "... is a 32-bit installation, it cannot support 64-bit
+# applications". 8 jeux wsquashfs sur 312 sont dans ce cas (konamipc,
+# rawthrills, namcoes3) — confirmé en direct, Lethal Enforcers 3 et
+# MachStorm démarrent avec ce build. Build Kron4ek staging NON-wow64
+# (i386-unix + x86_64-unix). Installé dans /opt/wine-win32, nom SANS
+# "tkg"/"ge" : find_wine_binary() de wsquashfs-launcher ne le prend donc pas
+# par défaut — il n'est choisi que pour un prefix win32 (voir
+# wine_supports_win32), les 301 autres jeux restent sur wine-staging.
+# Dépendances 32 bits : couvertes par les lib32-* déjà présents (Steam,
+# Mesa, PipeWire) + lib32-libxrandr/xi/xcursor/xcomposite/xrender ajoutés
+# plus haut (changements de résolution, curseur). Pas de lib32-sdl2 dans
+# multilib : manettes via le backend udev/hidraw de winebus dans ce cas.
+ARG WINE32_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    WINE32_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Kron4ek/Wine-Builds/releases/${WINE32_TAG:+tags/}${WINE32_TAG:-latest}" \
+      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
+    [ -n "${WINE32_VERSION}" ] || { echo "FATAL: WINE32_VERSION vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/wine32.tar.xz \
+      "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE32_VERSION}/wine-${WINE32_VERSION}-staging-amd64.tar.xz" && \
+    mkdir -p /opt/wine-win32 && \
+    tar -xf /tmp/wine32.tar.xz -C /opt/wine-win32 --strip-components=1 && \
+    rm -f /tmp/wine32.tar.xz && \
+    [ -d /opt/wine-win32/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
+    /opt/wine-win32/bin/wine --version
 
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
