@@ -95,10 +95,13 @@ static int find_device(const char *name_prefix, char *out_path, size_t path_len)
         close(fd);
 
         if (strncmp(name, name_prefix, strlen(name_prefix)) == 0) {
-            /* For "Mouse passthrough" vs "Mouse passthrough (absolute)" */
-            if (strcmp(name_prefix, "Mouse passthrough") == 0 &&
-                strstr(name, "absolute") != NULL) {
-                continue; /* Skip absolute, we want relative */
+            /* Souris relative recherchée : ignorer la variante absolue, dont le
+             * nom commence par le même préfixe ("Mouse passthrough
+             * (absolute)" / "libvirtualhid Mouse (Absolute)" — casse
+             * différente selon le backend, d'où strcasestr). */
+            if (strcasestr(name_prefix, "absolute") == NULL &&
+                strcasestr(name, "absolute") != NULL) {
+                continue;
             }
             snprintf(out_path, path_len, "%s", path);
             closedir(dir);
@@ -617,14 +620,28 @@ int main(int argc, char *argv[]) {
     }
     fprintf(stderr, "[bridge] All Wayland objects ready\n");
 
-    /* Wait for Sunshine devices */
+    /* Wait for Sunshine devices — deux familles de noms selon le backend
+     * d'entrée de Sunshine : inputtino ("Keyboard passthrough"...) ou
+     * libvirtualhid ("libvirtualhid Keyboard"...). Le passage de Sunshine à
+     * libvirtualhid (rebuild du 23/09) a laissé le bridge en attente infinie :
+     * clavier/souris morts sous Moonlight, confirmé en direct. Même plage
+     * absolue 0-65535 dans les deux cas (vérifiée par EVIOCGABS). */
+    static const char *const names[][3] = {
+        { "Keyboard passthrough", "Mouse passthrough", "Mouse passthrough (absolute)" },
+        { "libvirtualhid Keyboard", "libvirtualhid Mouse", "libvirtualhid Mouse (Absolute)" },
+    };
     fprintf(stderr, "[bridge] Looking for Sunshine input devices...\n");
-    while (running) {
-        if (find_device("Keyboard passthrough", kbd_path, sizeof(kbd_path)) == 0 &&
-            find_device("Mouse passthrough", rel_mouse_path, sizeof(rel_mouse_path)) == 0) {
-            find_device("Mouse passthrough (absolute)", abs_mouse_path, sizeof(abs_mouse_path));
-            break;
+    int found = 0;
+    while (running && !found) {
+        for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+            if (find_device(names[i][0], kbd_path, sizeof(kbd_path)) == 0 &&
+                find_device(names[i][1], rel_mouse_path, sizeof(rel_mouse_path)) == 0) {
+                find_device(names[i][2], abs_mouse_path, sizeof(abs_mouse_path));
+                found = 1;
+                break;
+            }
         }
+        if (found) break;
         fprintf(stderr, "[bridge] Waiting for Sunshine devices...\n");
         sleep(2);
     }
