@@ -1009,13 +1009,21 @@ RUN mkdir -p /usr/share/retroarch/database/rdb && \
 # par pilote (udev/, sdl2/...). Sans eux, la DualSense (dont la virtuelle de
 # Sunshine) n'avait aucun mapping dans les jeux. init_retroarch.sh les
 # copie dans le dossier d'autoconfig utilisateur sans écraser l'existant.
+# Copie du profil Xbox Series avec l'identifiant produit de la manette Xbox
+# virtuelle de Sunshine (0b12 = 2834, USB ; le profil officiel est pour la
+# version Bluetooth, 2835) : reconnaissance exacte plutôt que par le nom.
 RUN mkdir -p /usr/share/libretro/autoconfig && \
     curl -fsSL --retry 3 -o /tmp/autoconfig.zip \
       "https://buildbot.libretro.com/assets/frontend/autoconfig.zip" && \
     unzip -q /tmp/autoconfig.zip -d /usr/share/libretro/autoconfig && \
     rm -f /tmp/autoconfig.zip && \
     [ -f "/usr/share/libretro/autoconfig/udev/Sony Interactive Entertainment DualSense Wireless Controller.cfg" ] \
-      || { echo "FATAL: profil DualSense absent de autoconfig.zip"; exit 1; }
+      || { echo "FATAL: profil DualSense absent de autoconfig.zip"; exit 1; } && \
+    X=/usr/share/libretro/autoconfig/sdl2 && \
+    [ -f "${X}/Xbox Series X Controller.cfg" ] \
+      || { echo "FATAL: profil Xbox Series absent de autoconfig.zip"; exit 1; } && \
+    sed 's/^input_product_id = "2835"/input_product_id = "2834"/' "${X}/Xbox Series X Controller.cfg" \
+      > "${X}/Xbox Series X Controller (Sunshine).cfg"
 
 # PPSSPP standalone (18/09) — en plus du core libretro-ppsspp (groupe
 # "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
@@ -1433,6 +1441,20 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
+
+# Mapping SDL de la manette Xbox virtuelle de Sunshine (24/09) — libvirtualhid
+# profil xbox_series : périphérique USB 045e:0b12 nommé comme une vraie
+# manette Xbox Series, mais boutons dans l'ordre standard (A B X Y LB RB View
+# Menu L3 R3 . Share, Guide à part). SDL lui applique le mapping d'une VRAIE
+# Xbox Series (boutons espacés : X=b3, Y=b4, LB=b6...) : tout était décalé
+# (X muet, Y lu comme X, LB comme Y, Menu comme RB, Guide/L3/R3 absents) —
+# vérifié en simulant le périphérique exact via /dev/uhid (descripteur HID
+# copié de libvirtualhid). Ce mapping, clé par le GUID SDL exact du
+# périphérique, remet chaque bouton en place (vérifié de même, croix,
+# gâchettes et sticks compris). Lu par tout ce qui utilise SDL : RetroArch,
+# Steam, winebus (Wine) — wsquashfs-launcher le transmet à Wine. Le nom
+# "Xbox Series X Controller" est gardé : c'est celui du profil RetroArch.
+ENV SDL_GAMECONTROLLERCONFIG="030025cd5e040000120b000000050000,Xbox Series X Controller,a:b0,b:b1,x:b2,y:b3,leftshoulder:b4,rightshoulder:b5,back:b6,start:b7,leftstick:b8,rightstick:b9,misc1:b11,guide:b12,dpup:h0.1,dpdown:h0.4,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,rightx:a3,righty:a4,lefttrigger:a2,righttrigger:a5,platform:Linux,"
 
 VOLUME /config
 # EXPOSE purement documentaire (audit B4, 31/08) : le conteneur tourne en
