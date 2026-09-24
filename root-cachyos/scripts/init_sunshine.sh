@@ -131,7 +131,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"],
+    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "image-path": "/opt/batocera-es/resources/window_icon_256.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -232,7 +232,7 @@ if [ "${INSTALLED_VERSION}" -lt 5 ]; then
     if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
         if ! jq -e '.apps[] | select(.name == "Pegasus" or .name == "EmulationStation")' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
             cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v5"
-            jq '.apps += [{"name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}]' \
+            jq '.apps += [{"name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "image-path": "/opt/batocera-es/resources/window_icon_256.png", "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}]' \
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v5 : entrée EmulationStation ajoutée à apps.json (sauvegarde .bak-migration-v5)"
@@ -271,13 +271,17 @@ if [ "${INSTALLED_VERSION}" -lt 7 ]; then
     # v6 -> v7 (24/09, Pegasus remplacé par EmulationStation) : retire
     # l'entrée "Pegasus" qui lance pegasus-fe (absent de l'image) et ajoute
     # "EmulationStation" si elle manque. Une entrée "Pegasus" personnalisée
-    # (autre commande que pegasus-fe) est laissée telle quelle.
+    # (autre commande que pegasus-fe) est laissée telle quelle. Logo officiel
+    # d'ES (resources/window_icon_256.png) comme vignette Moonlight s'il n'y
+    # en a pas déjà une.
     if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
         cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v7"
         jq --arg cmd "env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation" \
+           --arg icon "/opt/batocera-es/resources/window_icon_256.png" \
             '.apps |= (map(select(.name != "Pegasus" or ((.detached // []) | tostring | test("pegasus-fe") | not)))
                        | if any(.[]; .name == "EmulationStation") then .
-                         else . + [{"name": "EmulationStation", "detached": [$cmd], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}] end)' \
+                         else . + [{"name": "EmulationStation", "detached": [$cmd], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}] end
+                       | map(if .name == "EmulationStation" and (has("image-path") | not) then . + {"image-path": $icon} else . end))' \
             "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
             && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
             && echo "[init_sunshine] migration v7 : Pegasus remplacé par EmulationStation (sauvegarde .bak-migration-v7)"

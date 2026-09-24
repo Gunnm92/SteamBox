@@ -685,7 +685,7 @@ RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
     git clone --depth 1 https://github.com/fabricecaruso/es-theme-carbon.git \
       /usr/share/emulationstation/themes/es-theme-carbon && \
     rm -rf /usr/share/emulationstation/themes/es-theme-carbon/.git && \
-    printf '[Desktop Entry]\nType=Application\nName=EmulationStation\nExec=/opt/batocera-es/emulationstation\nIcon=applications-games\nTerminal=false\nCategories=Game;\n' \
+    printf '[Desktop Entry]\nType=Application\nName=EmulationStation\nExec=/opt/batocera-es/emulationstation\nIcon=/opt/batocera-es/resources/window_icon_256.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/emulationstation.desktop && \
     cd / && rm -rf /tmp/batocera-es && \
     pacman -Rns --noconfirm cmake boost rapidjson && \
