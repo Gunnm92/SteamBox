@@ -41,6 +41,17 @@
 # dépendre du comportement devtmpfs et rendre ce filet de secours complet.
 ACTION=="add", SUBSYSTEM=="hidraw", KERNELS=="*054C:*", TEST!="/dev/%k", RUN+="/usr/bin/sh -c 'mknod -m 0660 /dev/%k c $env{MAJOR} $env{MINOR} && chgrp input /dev/%k'"
 ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="*054C:*", MODE="0660", GROUP="input"
+# Manettes Xbox (045E) et Nintendo Switch Pro (057E) (25/09) : mêmes
+# profils libvirtualhid que Sunshine crée quand le client Moonlight annonce
+# une manette Xbox ou Switch. Seul 054C était couvert : la manette Xbox
+# virtuelle (045e:0b13, pilote hid-microsoft) n'avait AUCUN /dev/hidraw —
+# Steam Input lisait donc la DualSense en HID brut mais la Xbox par evdev,
+# et mélangeait les deux manettes en configuration deux joueurs (confirmé
+# en direct : /sys/class/hidraw/hidraw5 présent, /dev/hidraw5 absent).
+ACTION=="add", SUBSYSTEM=="hidraw", KERNELS=="*045E:*", TEST!="/dev/%k", RUN+="/usr/bin/sh -c 'mknod -m 0660 /dev/%k c $env{MAJOR} $env{MINOR} && chgrp input /dev/%k'"
+ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="*045E:*", MODE="0660", GROUP="input"
+ACTION=="add", SUBSYSTEM=="hidraw", KERNELS=="*057E:*", TEST!="/dev/%k", RUN+="/usr/bin/sh -c 'mknod -m 0660 /dev/%k c $env{MAJOR} $env{MINOR} && chgrp input /dev/%k'"
+ACTION!="remove", SUBSYSTEM=="hidraw", KERNELS=="*057E:*", MODE="0660", GROUP="input"
 # "Wireless Controller" (04/09, bascule test libvirtualhid) — le nouveau
 # backend gamepad de Sunshine (libvirtualhid, remplace inputtino) n'appelle
 # plus ses pads virtuels "Sunshine ... (virtual) pad" : pour les profils
