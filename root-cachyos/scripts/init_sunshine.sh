@@ -148,7 +148,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=7
+CURRENT_VERSION=8
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -271,20 +271,34 @@ if [ "${INSTALLED_VERSION}" -lt 7 ]; then
     # v6 -> v7 (24/09, Pegasus remplacé par EmulationStation) : retire
     # l'entrée "Pegasus" qui lance pegasus-fe (absent de l'image) et ajoute
     # "EmulationStation" si elle manque. Une entrée "Pegasus" personnalisée
-    # (autre commande que pegasus-fe) est laissée telle quelle. Logo officiel
-    # d'ES (resources/window_icon_256.png) comme vignette Moonlight s'il n'y
-    # en a pas déjà une.
+    # (autre commande que pegasus-fe) est laissée telle quelle.
     if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
         cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v7"
         jq --arg cmd "env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation" \
-           --arg icon "/opt/batocera-es/resources/window_icon_256.png" \
             '.apps |= (map(select(.name != "Pegasus" or ((.detached // []) | tostring | test("pegasus-fe") | not)))
                        | if any(.[]; .name == "EmulationStation") then .
-                         else . + [{"name": "EmulationStation", "detached": [$cmd], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}] end
-                       | map(if .name == "EmulationStation" and (has("image-path") | not) then . + {"image-path": $icon} else . end))' \
+                         else . + [{"name": "EmulationStation", "detached": [$cmd], "prep-cmd": [{"do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh"}]}] end)' \
             "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
             && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
             && echo "[init_sunshine] migration v7 : Pegasus remplacé par EmulationStation (sauvegarde .bak-migration-v7)"
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 8 ]; then
+    # v7 -> v8 (24/09) : logo officiel d'ES (resources/window_icon_256.png)
+    # comme vignette Moonlight de l'entrée "EmulationStation", si elle n'a
+    # pas déjà une image. Migration séparée de v7 : une image avec v7 seule
+    # a pu être déployée avant, v7 ne serait alors jamais rejouée.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        if jq -e '.apps[] | select(.name == "EmulationStation" and (has("image-path") | not))' \
+            "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v8"
+            jq --arg icon "/opt/batocera-es/resources/window_icon_256.png" \
+                '.apps |= map(if .name == "EmulationStation" and (has("image-path") | not) then . + {"image-path": $icon} else . end)' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v8 : logo EmulationStation ajouté (sauvegarde .bak-migration-v8)"
+        fi
     fi
 fi
 
