@@ -677,10 +677,11 @@ RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null |
 # game-launch.sh. Thème Carbon (celui de Batocera, dépôt amont référencé
 # par leur buildroot) dans /usr/share/emulationstation/themes, lié dans
 # ~/.emulationstation/themes par l'init (seul dossier de thèmes que lit un
-# build non-Batocera). Traductions (.mo) dans resources/locale/lang : ES
-# les cherche via ses ressources (":/locale/lang/<langue>/LC_MESSAGES"),
-# PAS dans le dossier locale/ voisin du binaire — installées à côté, ES
-# restait en anglais (confirmé en direct). vlc-plugin-ffmpeg : décodage H.264/AAC des vidéos
+# build non-Batocera). Traductions (.mo) dans /usr/share/locale : sous
+# Linux ES passe par gettext (bindtextdomain sur ./locale/lang relatif au
+# dossier COURANT, sinon /usr/share/locale) ; resources/locale n'est lu que
+# par le build Windows — installées ailleurs, ES restait en anglais malgré
+# LANG=fr_FR.UTF-8 (confirmé en direct, deux fois). vlc-plugin-ffmpeg : décodage H.264/AAC des vidéos
 # d'aperçu (MP4) par libVLC — sans lui, aucun décodeur H.264 logiciel.
 ARG ES_REF=""
 RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
@@ -694,9 +695,12 @@ RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
     mkdir -p /opt/batocera-es && \
     strip -o /opt/batocera-es/emulationstation emulationstation && \
     cp -a resources /opt/batocera-es/ && \
-    mkdir -p /opt/batocera-es/resources/locale && \
-    cp -a locale/lang /opt/batocera-es/resources/locale/ && \
-    [ -f /opt/batocera-es/resources/locale/lang/fr/LC_MESSAGES/emulationstation2.mo ] \
+    for d in locale/lang/*/; do \
+      [ -f "${d}LC_MESSAGES/emulationstation2.mo" ] || continue; \
+      install -Dm644 "${d}LC_MESSAGES/emulationstation2.mo" \
+        "/usr/share/locale/$(basename "${d}")/LC_MESSAGES/emulationstation2.mo"; \
+    done && \
+    [ -f /usr/share/locale/fr/LC_MESSAGES/emulationstation2.mo ] \
       || { echo "FATAL: traduction française d'ES absente"; exit 1; } && \
     git clone --depth 1 https://github.com/fabricecaruso/es-theme-carbon.git \
       /usr/share/emulationstation/themes/es-theme-carbon && \
