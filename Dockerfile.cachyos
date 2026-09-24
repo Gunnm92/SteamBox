@@ -667,6 +667,27 @@ RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 /usr/sbin/xfdesktop-settings "$@
 # utilité réelle tant que ça reste le cas.
 RUN ln -sf /usr/share/dxvk/setup_dxvk.sh /usr/local/bin/dxvk_setup 2>/dev/null || true
 
+# d7vk (24/09) — DirectDraw (DX7 et antérieurs) traduit en Vulkan via DXVK,
+# 32 bits uniquement. Même source que le paquet d7vk de Batocera (release
+# officielle, seul x32/ddraw.dll est utile). Sans lui, un jeu DirectDraw
+# rendait par l'OpenGL de wined3d, soit llvmpipe (rendu logiciel) sous
+# Xwayland + NVIDIA ; ~21 jeux wsquashfs de la collection référencent
+# ddraw.dll. wsquashfs-launcher le relie à chaque lancement (install_d7vk,
+# D7VK=0 pour l'écarter) — confirmé en direct sur Arcana Heart 2 :
+# "D3D7Interface::CreateDevice" puis device Vulkan.
+ARG D7VK_TAG=""
+RUN --mount=type=secret,id=github_token \
+    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
+    D7VK_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/WinterSnowfall/d7vk/releases/${D7VK_TAG:+tags/}${D7VK_TAG:-latest}" \
+      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
+    [ -n "${D7VK_VERSION}" ] || { echo "FATAL: D7VK_VERSION vide"; exit 1; } && \
+    curl -fSL --retry 3 -o /tmp/d7vk.zip \
+      "https://github.com/WinterSnowfall/d7vk/releases/download/${D7VK_VERSION}/d7vk-${D7VK_VERSION}.zip" && \
+    mkdir -p /usr/share/d7vk/x32 && \
+    unzip -j -o -q /tmp/d7vk.zip "*/x32/ddraw.dll" -d /usr/share/d7vk/x32 && \
+    rm -f /tmp/d7vk.zip && \
+    [ -f /usr/share/d7vk/x32/ddraw.dll ] || { echo "FATAL: ddraw.dll absent de l'archive d7vk"; exit 1; }
+
 # ── 1a7. Batocera EmulationStation (24/09) — frontend des jeux rétro/arcade,
 # remplace Pegasus : sa SDL 2.0.20 embarquée ne lisait pas la DualSense
 # virtuelle de Sunshine (confirmé en direct), build X11 seulement, et il
