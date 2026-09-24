@@ -37,13 +37,20 @@ if [ ! -f "${ES_HOME}/es_settings.cfg" ]; then
 <?xml version="1.0"?>
 <config>
   <string name="ThemeSet" value="es-theme-carbon" />
-  <string name="Language" value="fr_FR" />
   <bool name="ParseGamelistOnly" value="false" />
   <bool name="SaveGamelistsOnExit" value="false" />
 </config>
 EOF
     echo "[emulationstation] es_settings.cfg par défaut créé"
 fi
+
+# Langue : ES (build non-Batocera) la lit dans ~/.emulationstation/
+# batocera.conf (clé system.language), PAS dans es_settings.cfg — et le menu
+# qui permet de la choisir est masqué hors Batocera. Français par défaut,
+# une valeur déjà présente (modifiée à la main) est conservée.
+CONF="${ES_HOME}/batocera.conf"
+touch "${CONF}"
+grep -q '^system.language=' "${CONF}" || echo 'system.language=fr_FR' >> "${CONF}"
 
 # es_systems.cfg régénéré à chaque démarrage depuis game-systems.sh (seule
 # source de vérité des émulateurs) — un système ajouté ou un dossier de
@@ -62,4 +69,4 @@ fi
 # /opt/batocera-es/es_input.cfg, consultée par ES quand le fichier
 # utilisateur ne connaît pas une manette.
 
-chown -h "${OWNER}" "${ES_HOME}" "${ES_HOME}/themes" "${ES_HOME}"/es_*.cfg 2>/dev/null || true
+chown -h "${OWNER}" "${ES_HOME}" "${ES_HOME}/themes" "${ES_HOME}"/es_*.cfg "${CONF}" 2>/dev/null || true
