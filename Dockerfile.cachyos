@@ -573,6 +573,15 @@ RUN glib-compile-schemas /usr/share/glib-2.0/schemas/
 # menu applications nwg-drawer) plante instantanément dessus.
 RUN update-mime-database /usr/share/mime
 
+# ── 1a3b'. Capacité réseau de ping — même classe de hook pacman bloqué au
+# build : iputils pose cap_net_raw sur /usr/bin/ping dans son scriptlet
+# d'installation, refusé par le sandbox réseau de buildkit. Sans elle, ping
+# échoue pour tout utilisateur non-root ("socket: Operation not permitted")
+# — EmulationStation teste le réseau par ping (8.8.8.8/1.1.1.1/9.9.9.9) et
+# affichait "pas de réseau" dans son téléchargeur de thèmes, connexion
+# pourtant fonctionnelle (confirmé en direct le 24/09).
+RUN setcap cap_net_raw+p /usr/bin/ping && getcap /usr/bin/ping | grep -q cap_net_raw
+
 # ── 1a3c'. Config xdg-desktop-portal — sans elle, ScreenCast (Steam Link,
 # PipeWire) n'est JAMAIS enregistré, même avec xdg-desktop-portal-wlr
 # installé et un WAYLAND_DISPLAY correct (confirmé en direct 07/09, voir
