@@ -30,6 +30,9 @@ done
 
 # Réglages par défaut, uniquement au premier démarrage : ensuite c'est ES
 # (menu Réglages) qui fait foi.
+# subset.helpsystem=psxbuttons : barre d'aide du thème Carbon avec les
+# symboles PlayStation (✕ ○ △ □) — la manette de la session est la
+# DualSense virtuelle de Sunshine.
 # SaveGamelistsOnExit=false : les gamelist.xml appartiennent à RomM
 # (synchronisation) — ES ne doit pas les réécrire (compteurs de parties...).
 if [ ! -f "${ES_HOME}/es_settings.cfg" ]; then
@@ -37,6 +40,7 @@ if [ ! -f "${ES_HOME}/es_settings.cfg" ]; then
 <?xml version="1.0"?>
 <config>
   <string name="ThemeSet" value="es-theme-carbon" />
+  <string name="subset.helpsystem" value="psxbuttons" />
   <bool name="ParseGamelistOnly" value="false" />
   <bool name="SaveGamelistsOnExit" value="false" />
 </config>
