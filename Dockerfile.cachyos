@@ -218,7 +218,12 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # quelques minutes plus tard. Jusqu'à 3 essais espacés de 60 s, avec
 # resynchronisation de la base (-Syy) à chaque fois ; la transaction
 # pacman est atomique ("no packages were upgraded"), rien à nettoyer entre
-# deux essais.
+# deux essais. Rotation des miroirs entre deux essais (24/09) : sur une
+# signature invalide, pacman ne passe PAS au miroir suivant, il abandonne —
+# vécu en direct, cdn77.cachyos.org (1er de la liste de l'image de base)
+# servait une signature périmée pour une base pourtant identique aux autres
+# miroirs, trois essais d'affilée sur le même miroir ne pouvaient
+# qu'échouer. Le premier miroir de chaque liste CachyOS passe en dernier.
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
@@ -259,6 +264,10 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       pacman -Syyu --noconfirm && pacman -S --noconfirm --needed ${PKGS} && break; \
       [ "${i}" = 3 ] && { echo "FATAL: pacman en échec après 3 essais (miroirs CachyOS)"; exit 1; }; \
       echo "pacman : échec (miroirs désynchronisés ?), nouvel essai $((i + 1))/3 dans 60 s"; \
+      for f in /etc/pacman.d/cachyos*mirrorlist; do \
+        awk '/^Server/ && !moved {first=$0; moved=1; next} {print} END {if (moved) print first}' "$f" > "$f.new" && mv "$f.new" "$f"; \
+      done; \
+      echo "pacman : miroirs CachyOS décalés, nouveau premier : $(grep -m1 '^Server' /etc/pacman.d/cachyos-mirrorlist)"; \
       sleep 60; \
     done && \
     pacman -Scc --noconfirm
