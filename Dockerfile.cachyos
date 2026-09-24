@@ -975,6 +975,19 @@ RUN mkdir -p /usr/share/retroarch/database/rdb && \
     unzip -q /tmp/database-rdb.zip -d /usr/share/retroarch/database/rdb && \
     rm -f /tmp/database-rdb.zip
 
+# Profils de manettes RetroArch (24/09) — même origine que "Mettre à jour
+# les profils de manettes" du menu RetroArch (buildbot officiel), un dossier
+# par pilote (udev/, sdl2/...). Sans eux, la DualSense (dont la virtuelle de
+# Sunshine) n'avait aucun mapping dans les jeux. init_retroarch.sh les
+# copie dans le dossier d'autoconfig utilisateur sans écraser l'existant.
+RUN mkdir -p /usr/share/libretro/autoconfig && \
+    curl -fsSL --retry 3 -o /tmp/autoconfig.zip \
+      "https://buildbot.libretro.com/assets/frontend/autoconfig.zip" && \
+    unzip -q /tmp/autoconfig.zip -d /usr/share/libretro/autoconfig && \
+    rm -f /tmp/autoconfig.zip && \
+    [ -f "/usr/share/libretro/autoconfig/udev/Sony Interactive Entertainment DualSense Wireless Controller.cfg" ] \
+      || { echo "FATAL: profil DualSense absent de autoconfig.zip"; exit 1; }
+
 # PPSSPP standalone (18/09) — en plus du core libretro-ppsspp (groupe
 # "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
 # a son propre frontend avec plus d'options de compatibilité par jeu,

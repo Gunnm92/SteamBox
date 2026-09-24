@@ -68,6 +68,39 @@ set_cfg "menu_show_core_updater" "true"
 # référence, pas de raison d'en avoir une copie par-utilisateur.
 set_cfg "content_database_path" "/usr/share/retroarch/database/rdb"
 
+# Profils de manettes (24/09) : dossier d'autoconfig vide jusqu'ici — la
+# DualSense (y compris la virtuelle de Sunshine, reconnue par
+# vendeur/produit 054c:0ce6) n'avait aucun mapping dans les jeux. Profils
+# officiels libretro copiés depuis l'image, SANS écraser un profil existant
+# (RetroArch y enregistre aussi ceux créés depuis son menu).
+AUTOCONF_DIR="$(dirname "${CFG}")/autoconfig"
+mkdir -p "${AUTOCONF_DIR}"
+[ -d /usr/share/libretro/autoconfig ] && cp -rn /usr/share/libretro/autoconfig/. "${AUTOCONF_DIR}/" 2>/dev/null || true
+chown -R "$(id -u arcade):$(id -g arcade)" "${AUTOCONF_DIR}" 2>/dev/null || true
+set_cfg "joypad_autoconfig_dir" "${AUTOCONF_DIR}"
+
+# Pilote de manettes sdl2, pas udev (24/09) : le noyau Unraid n'a pas de
+# pilote PlayStation (hid-playstation absent, confirmé en direct) — la
+# DualSense virtuelle de Sunshine est prise par hid-generic, qui ne décode
+# pas ses rapports Bluetooth (0x31) : son périphérique evdev reste muet
+# (0 événement), seul hidraw reçoit les données. Le pilote udev de RetroArch
+# (evdev) ne voyait donc AUCUN bouton ; SDL lit directement hidraw (HIDAPI),
+# comme EmulationStation et Steam, qui fonctionnent.
+set_cfg "input_joypad_driver" "sdl2"
+
+# Raccourcis manette façon Batocera (24/09, demande utilisateur) : sans eux,
+# impossible de quitter un jeu RetroArch à la manette pour revenir à
+# EmulationStation. Bouton de raccourci = PS (transmis par Moonlight,
+# vérifié en direct). Numéros = pilote sdl2 (profil officiel "PS5
+# Controller") : 1 Rond, 4 Share, 5 PS, 6 Options, 9 L1, 10 R1.
+#   PS + Options : quitter        PS + Rond : menu RetroArch
+#   PS + R1      : sauvegarder    PS + L1   : charger
+set_cfg "input_enable_hotkey_btn" "5"
+set_cfg "input_exit_emulator_btn" "6"
+set_cfg "input_menu_toggle_btn" "1"
+set_cfg "input_save_state_btn" "10"
+set_cfg "input_load_state_btn" "9"
+
 # Garde de propriétaire (audit F4, 05/09, même motif qu'init_system.sh) :
 # ce chown -R tournait inconditionnellement à CHAQUE boot sur un dossier
 # qui contient thumbnails et shaders RetroArch, potentiellement volumineux
