@@ -16,10 +16,12 @@ LAUNCH="/usr/local/bin/scripts/game-launch.sh"
 
 # Nom de thème/plateforme Batocera pour les dossiers de roms nommés
 # autrement (convention RomM, renommages : "win" au lieu de "windows"...).
-# Sans correspondance, le thème (Carbon) n'a pas de visuel pour le système :
-# 34 systèmes s'affichaient sans logo ni image, dont Windows (confirmé le
-# 25/09 en comparant es_systems.cfg aux art/logos de Carbon). Systèmes
-# arcade sans visuel propre : famille du constructeur, sinon "arcade".
+# Sans correspondance, le thème n'a pas de visuel pour le système (Windows
+# s'affichait sans logo ni image, 25/09). Systèmes arcade sans visuel
+# propre : famille du constructeur, sinon "arcade".
+# Repli SEULEMENT si le thème actif ne connaît pas le nom d'origine :
+# ckau-book-PixN a ses propres visuels segare, namcoes3, nesicax... que
+# l'alias remplaçait par le logo générique de la famille (vu le 25/09).
 declare -A THEME_ALIAS=(
     [win]=windows            [type-x]=typex           [arcadepc]=arcade
     [rawthrills]=arcade      [unis]=arcade            [nesicax]=taito
@@ -35,6 +37,26 @@ declare -A THEME_ALIAS=(
     [vic-20]=vic20           [wonderswan-color]=wonderswancolor
     [zxs]=zxspectrum
 )
+
+# Images du thème actif (ThemeSet d'es_settings.cfg), par nom sans
+# extension : les thèmes Batocera nomment leurs visuels d'après le système
+# (Carbon : art/consoles/sega.png, ckau-book : _inc/logos/segare.svg).
+ES_HOME="${ES_HOME:-${HOME}/.emulationstation}"
+theme_set=$(grep -o 'name="ThemeSet" value="[^"]*"' "${ES_HOME}/es_settings.cfg" 2>/dev/null | cut -d'"' -f4)
+declare -A THEME_NAMES=()
+for d in "${ES_HOME}/themes/${theme_set}" "/usr/share/emulationstation/themes/${theme_set}"; do
+    [[ -n "$theme_set" && -d "$d" ]] || continue
+    while IFS= read -r n; do THEME_NAMES[$n]=1; done < <(
+        find -L "$d" -type f \( -iname '*.png' -o -iname '*.svg' -o -iname '*.jpg' -o -iname '*.webp' \) \
+            -printf '%f\n' 2>/dev/null | sed 's/\.[^.]*$//' | sort -u)
+    break
+done
+
+theme_name() {
+    local sys="$1"
+    [[ -n "${THEME_NAMES[$sys]:-}" ]] && { echo "$sys"; return; }
+    echo "${THEME_ALIAS[$sys]:-$sys}"
+}
 
 xml_escape() {
     local s="$1"
@@ -60,6 +82,7 @@ while IFS= read -r sys; do
         echo "es-systems-gen: ${sys} ignoré (jeux en dossier sans extension)" >&2
         continue
     fi
+    theme=$(theme_name "$sys")
     cat <<EOF
   <system>
     <name>${sys}</name>
@@ -67,8 +90,8 @@ while IFS= read -r sys; do
     <path>${ROMS_DIR}/${sys}</path>
     <extension>${exts% }</extension>
     <command>${LAUNCH} %ROM%</command>
-    <platform>${THEME_ALIAS[$sys]:-$sys}</platform>
-    <theme>${THEME_ALIAS[$sys]:-$sys}</theme>
+    <platform>${theme}</platform>
+    <theme>${theme}</theme>
   </system>
 EOF
 done < <(printf '%s\n' "${!SYSTEMS[@]}" | sort)
