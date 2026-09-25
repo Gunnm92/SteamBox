@@ -36,8 +36,7 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 | `TZ` | `Europe/Paris` | |
 | `NVIDIA_VISIBLE_DEVICES` | `GPU-993ff90a-304b-da13-1287-c533c1073ab4` | UUID de la RTX 3090 dédiée |
 | `NVIDIA_DRIVER_CAPABILITIES` | `all` | NVENC + graphique + compute |
-| `GAMES_DIR` | `/home/arcade/games/Batocera` | Ludothèque Batocera (roms/, bios/, saves/) |
-| `GAMES_ROMS_DIR` | `/home/arcade/games/Batocera/roms` | Chemin des ROMs tel qu'écrit dans `es_systems.cfg` |
+| `GAMES_DIR` | `/home/arcade/games/Batocera` | Ludothèque Batocera (roms/, bios/, saves/ s'en déduisent) — variable seule, aucun montage en plus |
 | `KEYBOARD_LAYOUT` | `fr` | Clavier bureau / Moonlight / VNC |
 | `KEYBOARD_VARIANT` | `mac` | AZERTY Mac |
 | `LANG` | `fr_FR.UTF-8` | Langue du bureau, d'ES et de Sunshine |

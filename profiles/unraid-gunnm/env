@@ -2,9 +2,9 @@
 # root-cachyos/scripts/steambox-env.sh). À reporter aussi dans le template
 # Unraid (voir deploiement-unraid.md).
 
-# Ludothèque au format Batocera, dans un sous-dossier du partage Game.
+# Ludothèque au format Batocera, dans un sous-dossier du partage Game
+# (roms/, bios/, saves/ s'en déduisent).
 GAMES_DIR=/home/arcade/games/Batocera
-GAMES_ROMS_DIR=/home/arcade/games/Batocera/roms
 
 # AZERTY Mac (bureau labwc, clavier Moonlight via evdev-bridge, VNC).
 KEYBOARD_LAYOUT=fr
