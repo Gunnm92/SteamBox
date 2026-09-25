@@ -66,9 +66,50 @@ fi
 # WorkingDirectory=${HOMEBREW_FOLDER} dans l'unit systemd d'origine.
 cd "${DECKY_VAR_DATA}" || exit 1
 
-exec env \
-    UNPRIVILEGED_PATH="${DECKY_VAR_DATA}" \
-    PRIVILEGED_PATH="${DECKY_VAR_DATA}" \
-    LOG_LEVEL=INFO \
-    HOME="${DECKY_HOME}" \
-    "${DECKY_BINARY}"
+# Decky seulement pendant que Steam tourne (26/09) : il ne sert qu'à
+# injecter son interface dans Steam (debug CEF, 127.0.0.1:8080), mais
+# tournait en permanence avec ses plugins — ~250 Mo mesurés sans Steam, et
+# CSS Loader remplissait les logs de "Cannot connect to host 127.0.0.1:8080"
+# en boucle. Démarré dans les 3 s qui suivent le lancement de Steam (Decky
+# réessaie seul la connexion à Steam le temps que son interface charge),
+# arrêté à sa fermeture. setsid : Decky et ses plugins (un processus par
+# plugin, en arcade) forment un groupe, arrêté d'un bloc.
+decky_pid=""
+stop_decky() {
+    [ -n "${decky_pid}" ] || return 0
+    kill -TERM -- "-${decky_pid}" 2>/dev/null
+    for _ in $(seq 1 20); do
+        kill -0 "${decky_pid}" 2>/dev/null || break
+        sleep 0.5
+    done
+    kill -KILL -- "-${decky_pid}" 2>/dev/null
+    wait "${decky_pid}" 2>/dev/null
+    decky_pid=""
+}
+trap 'stop_decky; exit 0' TERM INT
+
+steam_running() { pgrep -u arcade -x steam >/dev/null 2>&1; }
+
+while true; do
+    until steam_running; do sleep 3 & wait $!; done
+    echo "[decky] Steam démarré : lancement de Decky"
+    setsid env \
+        UNPRIVILEGED_PATH="${DECKY_VAR_DATA}" \
+        PRIVILEGED_PATH="${DECKY_VAR_DATA}" \
+        LOG_LEVEL=INFO \
+        HOME="${DECKY_HOME}" \
+        "${DECKY_BINARY}" &
+    decky_pid=$!
+    while steam_running && kill -0 "${decky_pid}" 2>/dev/null; do sleep 3 & wait $!; done
+    if kill -0 "${decky_pid}" 2>/dev/null; then
+        echo "[decky] Steam fermé : arrêt de Decky"
+        stop_decky
+    else
+        # Decky arrêté seul (plantage, ou redémarrage après une mise à jour
+        # depuis son interface) : relancé au tour suivant si Steam tourne.
+        wait "${decky_pid}" 2>/dev/null
+        echo "[decky] Decky arrêté (code $?), relance si Steam tourne"
+        decky_pid=""
+        sleep 2
+    fi
+done
