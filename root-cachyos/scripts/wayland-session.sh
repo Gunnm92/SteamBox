@@ -287,8 +287,27 @@ xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorHDMI-A-1/workspace0/im
     -n -t int -s 5 2>/dev/null || true
 xfdesktop &
 
-xfce4-panel &
-nm-applet &
+# Relance automatique du panneau et de nm-applet (25/09) : GTK3 arrete net
+# le programme (assertion fatale ensure_surface_for_gicon, "Bail out!") des
+# quune icone ne se charge pas -- vu en direct, xfce4-panel et nm-applet
+# tues a la meme seconde par un echec passager de glycin, le chargeur
+# dimages de gdk-pixbuf 2.44 ("zbus i/o error"), non reproductible ensuite.
+# Sans relance, le bureau restait sans barre jusquau redemarrage. Le trap
+# TERM transmet larret de session (trap EXIT plus haut) au programme.
+respawn() {
+    while kill -0 "${LABWC_PID}" 2>/dev/null; do
+        "$@" &
+        child=$!
+        trap "kill \$child 2>/dev/null; exit 0" TERM
+        wait "${child}"
+        echo "[session] $1 arrete (code $?), relance dans 2 s"
+        sleep 2 &
+        child=$!
+        wait "${child}"
+    done
+}
+respawn xfce4-panel &
+respawn nm-applet &
 /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
 
 wait "${LABWC_PID}"
