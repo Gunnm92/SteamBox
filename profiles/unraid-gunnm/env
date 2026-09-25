@@ -1,6 +1,6 @@
 # Variables d'installation du profil unraid-gunnm (lues par
 # root-cachyos/scripts/steambox-env.sh). À reporter aussi dans le template
-# Unraid (voir deploiement-unraid.md).
+# Unraid (voir docs/deploiement-unraid.md).
 
 # Ludothèque au format Batocera, dans un sous-dossier du partage Game
 # (roms/, bios/, saves/ s'en déduisent).

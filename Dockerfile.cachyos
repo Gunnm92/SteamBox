@@ -1339,7 +1339,7 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 # 18 threads tournaient tous en nice 0, et "setpriority failed for nice
 # -15/-10" apparaissait toujours dans sunshine.log. Le vrai correctif est
 # côté conteneur : --ulimit nice=40 (docker-compose.yml ulimits,
-# template Unraid — voir profiles/unraid-gunnm/deploiement-unraid.md), qui autorise un
+# template Unraid — voir docs/deploiement-unraid.md), qui autorise un
 # process NON privilégié à descendre jusqu'à nice -20, sans capacité.
 # La capacité de fichier reste posée ici pour CAP_SYS_ADMIN (voir plus haut).
 #

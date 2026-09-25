@@ -77,48 +77,14 @@ Chaque app applique la résolution du client à la connexion et revient à
 ## Déploiement
 
 Tout ce qui dépend d'une installation (GPU, chemins de l'hôte, clavier,
-langue, registre) vit dans un **profil** : `profiles/<nom>/`. Le reste du
+langue, registre) vit dans un **profil** `profiles/<nom>/` ; le reste du
 dépôt est générique.
 
-| Fichier du profil | Rôle |
-|---|---|
-| `compose.override.yml` | GPU (runtime nvidia ou `/dev/dri`), volumes, PUID/PGID, TZ |
-| `env` | variables du conteneur : ludothèque, clavier, langue (voir ci-dessous) |
-| `profile.mk` | build/push : `REGISTRY`, commande `DOCKER`, `BUILD_ARGS` |
-
-Démarrer sa propre installation :
-
-```bash
-cp -r profiles/example profiles/maison     # puis adapter les trois fichiers
-echo 'PROFILE = maison' > local.mk         # profil par défaut de make (non versionné)
-make build                                 # image locale steambox:latest
-make run                                   # docker compose avec l'override du profil
-```
-
-`profiles/unraid-gunnm/` est un déploiement réel (Unraid, template Docker,
-RTX 3090) : sa référence complète — volumes, devices, Extra Parameters,
-règles cgroup — est dans
-[deploiement-unraid.md](profiles/unraid-gunnm/deploiement-unraid.md).
-
-### Variables du conteneur
-
-Lues par [steambox-env.sh](root-cachyos/scripts/steambox-env.sh), toutes
-facultatives :
-
-| Variable | Défaut | Rôle |
-|---|---|---|
-| `GAMES_DIR` | `/config/games` | Ludothèque au format Batocera : `roms/<système>/`, `bios/`, `saves/` |
-| `GAMES_ROMS_DIR`, `GAMES_BIOS_DIR`, `GAMES_SAVES_DIR` | `$GAMES_DIR/…` | Chaque dossier séparément |
-| `KEYBOARD_LAYOUT`, `KEYBOARD_VARIANT` | `us`, vide | Disposition XKB (ex. `fr` + `mac`) |
-| `LANG`, `LANGUAGE` | `en_US.UTF-8` | Langue du bureau, d'EmulationStation et de Sunshine |
-| `GPU_VENDOR` | `auto` | `nvidia` / `amd` / `intel` — choisit l'encodeur Sunshine (nvenc / vaapi) |
-| `LIBVA_DRIVER_NAME` | vide | `nvidia` sur GPU NVIDIA (AMD/Intel : détection libva) |
-
-Locales disponibles : `en_US` + `EXTRA_LOCALES` (build-arg, défaut
-`fr_FR de_DE es_ES it_IT pt_BR`).
-
-**GPU AMD/Intel** : pilotes Mesa et encodage VA-API prévus, mais **non testés
-sur matériel** (développé et validé sur NVIDIA uniquement).
+- **[docs/configuration.md](docs/configuration.md)** — profils et variables
+  du conteneur (ludothèque, clavier, langue, GPU).
+- **[docs/deploiement-unraid.md](docs/deploiement-unraid.md)** — exemple de
+  déploiement réel sur Unraid (profil `unraid-gunnm`) : template, devices,
+  Extra Parameters, règles cgroup.
 
 ### Build
 
@@ -158,9 +124,10 @@ passer par un VPN ou un reverse proxy authentifié en amont.
 Dockerfile.cachyos          # l'image — historique des architectures en tête
 Makefile                    # build/push/run (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN)
 docker-compose.yml          # compose générique, complété par l'override du profil
+docs/                       # configuration (profils, variables), déploiement Unraid
 profiles/
   example/                  # modèle de profil commenté
-  unraid-gunnm/             # déploiement réel : override, env, doc Unraid, compat wsquashfs
+  unraid-gunnm/             # déploiement réel : override, env, compat wsquashfs
 root-cachyos/
   etc/s6-overlay/           # services s6 (labwc ×2, sunshine, wayvnc, evdev-bridge…)
   etc/udev/rules.d/         # règles manettes (hidraw fallback)

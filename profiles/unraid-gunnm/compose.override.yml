@@ -1,6 +1,6 @@
 # Profil unraid-gunnm — override compose du déploiement réel (Unraid, RTX 3090).
 # Le conteneur de production est créé par un template Unraid, pas par ce
-# fichier : il reste aligné sur deploiement-unraid.md (source de vérité),
+# fichier : il reste aligné sur docs/deploiement-unraid.md (source de vérité),
 # toute divergence doit être résolue dans LES DEUX (audit C3, 31/08 — la règle
 # cgroup 226 avait déjà silencieusement disparu du template).
 services:

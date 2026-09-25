@@ -2,9 +2,9 @@
 
 **Source de vérité du déploiement réel** (audit C3, 31/08/2026). Le conteneur
 de production est créé par un template Unraid (onglet Docker), pas par
-`docker-compose.yml` + `compose.override.yml` de ce profil — ces derniers sont
+`docker-compose.yml` + `profiles/unraid-gunnm/compose.override.yml` — ces derniers sont
 maintenus alignés sur ce document pour le développement. **Toute modification
-du template doit être reportée ici et dans l'override du profil**, et inversement : la dérive est réelle (la règle
+du template doit être reportée ici et dans le profil `unraid-gunnm`**, et inversement : la dérive est réelle (la règle
 cgroup 226 a disparu du template sans signal lors d'un ajout manuel le 31/08).
 
 Extrait de `docker inspect SteamBox` sur le conteneur en production le
@@ -47,7 +47,7 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 25/09/2026** : ces valeurs étaient figées dans l'image jusque-là. Sans elles,
 l'image générique démarre en QWERTY, en anglais, et cherche les ROMs sous
 `/config/games/roms` (EmulationStation vide). Même contenu que le fichier
-`env` de ce profil.
+`profiles/unraid-gunnm/env`. Toutes les variables : [configuration.md](configuration.md).
 
 ## Volumes
 
