@@ -753,8 +753,9 @@ RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
     cd / && rm -rf /tmp/batocera-es && \
     pacman -Rns --noconfirm cmake boost rapidjson && \
     pacman -Scc --noconfirm && \
-    ldd /opt/batocera-es/emulationstation | grep -q "not found" \
-      && { echo "FATAL: bibliothèque manquante pour emulationstation"; exit 1; } || true
+    if ldd /opt/batocera-es/emulationstation | grep -q "not found"; then \
+      echo "FATAL: bibliothèque manquante pour emulationstation"; exit 1; \
+    fi
 
 # Manettes par défaut d'ES (consulté quand ~/.emulationstation/es_input.cfg
 # ne connaît pas une manette) : base Batocera (clavier + 314 manettes) +
@@ -845,6 +846,22 @@ print('gtk.css theme patche avec succes')
 PATCH_THEME_EOF
 
 RUN python3 /tmp/patch-theme.py && rm -f /tmp/patch-theme.py
+
+# ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
+# novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau
+# (GPL-2), ni paquet Arch ni AUR, compilé depuis les sources avec son
+# Makefile simple. Figé sur un commit (XFCE_LAUNCHER_REF) : petit projet
+# d'un seul auteur, testé dans le conteneur le 25/09 sur ce commit. Seul
+# gtk_window_fullscreen côté fenêtre, rien de propre à X11 : fonctionne sous
+# labwc. À ajouter au panneau par clic droit > Panneau > Ajouter des éléments.
+ARG XFCE_LAUNCHER_REF=15dd4b2a42904c1de9e1aa777271f1d558613891
+RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl && \
+    cd /tmp/xpl && git checkout -q "${XFCE_LAUNCHER_REF}" && \
+    make && make install PREFIX=/usr && \
+    cd / && rm -rf /tmp/xpl && \
+    if ldd /usr/lib/xfce4/panel/plugins/libxfce-launcher.so | grep -q "not found"; then \
+      echo "FATAL: bibliothèque manquante pour libxfce-launcher.so"; exit 1; \
+    fi
 
 # ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
 # Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
