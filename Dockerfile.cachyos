@@ -555,12 +555,20 @@ RUN rm -f /usr/share/dbus-1/system-services/org.freedesktop.UPower.service
 # recréé depuis le miroir officiel plutôt que de basculer sur le paquet glibc
 # standard d'Arch (risqué : glibc est la libc système, pas question d'en
 # changer). EXTRA_LOCALES (25/09) : liste séparée par des espaces, choisie
-# ensuite au lancement par LANG (voir profiles/).
+# ensuite au lancement par LANG (voir docs/configuration.md). fetch suit
+# les "copy" des définitions : pt_BR reprend pt_PT, absent de l'image
+# ("cannot open locale definition file `pt_PT'", build du 25/09).
 ARG EXTRA_LOCALES="fr_FR de_DE es_ES it_IT pt_BR"
-RUN for loc in ${EXTRA_LOCALES}; do \
-      curl -fsSL "https://raw.githubusercontent.com/bminor/glibc/master/localedata/locales/${loc}" \
-        -o "/usr/share/i18n/locales/${loc}" && \
-      localedef -i "${loc}" -f UTF-8 "${loc}.UTF-8" || exit 1; \
+RUN fetch() { \
+      f="/usr/share/i18n/locales/$1"; \
+      [ -f "$f" ] && return 0; \
+      curl -fsSL "https://raw.githubusercontent.com/bminor/glibc/master/localedata/locales/$1" -o "$f" || return 1; \
+      for dep in $(sed -n 's/^[[:space:]]*copy[[:space:]]*"\([^"]*\)".*/\1/p' "$f" | sort -u); do \
+        fetch "$dep" || return 1; \
+      done; \
+    } && \
+    for loc in ${EXTRA_LOCALES}; do \
+      fetch "${loc}" && localedef -i "${loc}" -f UTF-8 "${loc}.UTF-8" || exit 1; \
     done
 
 # ── 1a3. Schémas GSettings — non compilés au build (hook pacman bloqué par le
