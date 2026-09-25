@@ -1,0 +1,18 @@
+# Variables d'installation du profil unraid-gunnm (lues par
+# root-cachyos/scripts/steambox-env.sh). À reporter aussi dans le template
+# Unraid (voir deploiement-unraid.md).
+
+# Ludothèque au format Batocera, dans un sous-dossier du partage Game.
+GAMES_DIR=/home/arcade/games/Batocera
+GAMES_ROMS_DIR=/home/arcade/games/Batocera/roms
+
+# AZERTY Mac (bureau labwc, clavier Moonlight via evdev-bridge, VNC).
+KEYBOARD_LAYOUT=fr
+KEYBOARD_VARIANT=mac
+
+# Interface en français.
+LANG=fr_FR.UTF-8
+LANGUAGE=fr_FR:fr
+
+# GPU NVIDIA : pilote VA-API (nvidia-vaapi-driver).
+LIBVA_DRIVER_NAME=nvidia

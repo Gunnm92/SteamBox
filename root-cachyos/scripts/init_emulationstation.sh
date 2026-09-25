@@ -12,7 +12,8 @@
 set -e
 
 ES_HOME="/config/.emulationstation"
-ROMS_DIR="${GAMES_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
 IMAGE_THEMES="/usr/share/emulationstation/themes"
 OWNER="$(id -u arcade):$(id -g arcade)"
 
@@ -50,11 +51,12 @@ fi
 
 # Langue : ES (build non-Batocera) la lit dans ~/.emulationstation/
 # batocera.conf (clé system.language), PAS dans es_settings.cfg — et le menu
-# qui permet de la choisir est masqué hors Batocera. Français par défaut,
-# une valeur déjà présente (modifiée à la main) est conservée.
+# qui permet de la choisir est masqué hors Batocera. STEAMBOX_LANG par
+# défaut (steambox-env.sh), une valeur déjà présente (modifiée à la main)
+# est conservée.
 CONF="${ES_HOME}/batocera.conf"
 touch "${CONF}"
-grep -q '^system.language=' "${CONF}" || echo 'system.language=fr_FR' >> "${CONF}"
+grep -q '^system.language=' "${CONF}" || echo "system.language=${STEAMBOX_LANG}" >> "${CONF}"
 
 # es_systems.cfg régénéré à chaque démarrage depuis game-systems.sh (seule
 # source de vérité des émulateurs) — un système ajouté ou un dossier de

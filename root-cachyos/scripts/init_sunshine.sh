@@ -5,6 +5,20 @@ set -e
 CONF_DIR="/config/.config/sunshine"
 mkdir -p "${CONF_DIR}"
 
+# Encodeur d'après le GPU (25/09) : nvenc sur NVIDIA, vaapi sur AMD/Intel
+# (Mesa radeonsi / intel-media-driver, installés dans l'image). GPU_VENDOR
+# est exporté par init-system ; recalculé si le script est lancé seul.
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+[ "${GPU_VENDOR}" = "auto" ] && GPU_VENDOR="$(gpu_vendor)"
+case "${GPU_VENDOR}" in
+    nvidia)    ENCODER=nvenc ;;
+    amd|intel) ENCODER=vaapi ;;
+    *)         ENCODER=software ;;
+esac
+# Langue de la Web UI Sunshine : code court de la locale (fr, de, en...).
+SUNSHINE_LOCALE="${STEAMBOX_LANG%%_*}"
+
 if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # csrf_allowed_origins : la Web UI de Sunshine bloque par défaut toute
     # origine hors localhost — nécessaire pour y accéder via l'IP LAN.
@@ -20,10 +34,9 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # streaming HDR") si son GPU ne décode pas le 10-bit. "disabled" laisse
     # l'affichage tel quel plutôt que de laisser Sunshine changer son état.
     #
-    # encoder = nvenc : sans le forcer, Sunshine peut retomber sur un
-    # encodeur logiciel si sa détection GPU échoue silencieusement — sur ce
-    # matériel (NVIDIA direct, pas de passthrough) nvenc doit toujours être
-    # disponible.
+    # encoder forcé (nvenc/vaapi selon le GPU, voir plus haut) : sans le
+    # forcer, Sunshine peut retomber sur un encodeur logiciel si sa
+    # détection GPU échoue silencieusement.
     # min_log_level = info (audit 2026-08-26) : par défaut Sunshine ne dit
     # jamais explicitement quelle méthode de capture d'écran il a retenue
     # (NvFBC vs. repli logiciel X11). Sans le patch keylase/nvidia-patch
@@ -51,11 +64,11 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # navigateur. Repli sur localhost seul si la route est introuvable.
     LAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "src") print $(i + 1)}')
     cat > "${CONF_DIR}/sunshine.conf" <<EOF
-locale = fr
+locale = ${SUNSHINE_LOCALE}
 csrf_allowed_origins = https://${LAN_IP:-localhost}:47990
 system_tray = 0
 dd_hdr_option = disabled
-encoder = nvenc
+encoder = ${ENCODER}
 min_log_level = info
 EOF
 fi
@@ -173,9 +186,9 @@ if [ "${INSTALLED_VERSION}" -lt 2 ]; then
                 echo "${key} =${value}" >> "${CONF_DIR}/sunshine.conf"
                 echo "[init_sunshine] migration v2 : ${key} ajouté à sunshine.conf"
             }
-        done <<'MIGRATE_EOF'
+        done <<MIGRATE_EOF
 dd_hdr_option= disabled
-encoder= nvenc
+encoder= ${ENCODER}
 min_log_level= info
 system_tray= 0
 MIGRATE_EOF

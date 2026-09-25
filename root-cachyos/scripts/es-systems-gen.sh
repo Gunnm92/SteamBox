@@ -11,7 +11,6 @@ set -uo pipefail
 # shellcheck source=game-systems.sh
 . /usr/local/bin/scripts/game-systems.sh
 
-ROMS_DIR="${GAMES_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
 LAUNCH="/usr/local/bin/scripts/game-launch.sh"
 
 # Nom de thème/plateforme Batocera pour les dossiers de roms nommés

@@ -11,7 +11,8 @@
 # seule fois pour garder les sauvegardes.
 set -euo pipefail
 
-BIOS_DIR="/home/arcade/games/Batocera/bios"
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
 DATA="${XDG_DATA_HOME:-${HOME}/.local/share}/xemu-chihiro"
 rom="$1"
 

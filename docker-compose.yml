@@ -1,0 +1,65 @@
+# Compose générique SteamBox. Ce qui dépend de l'installation (GPU, chemins de
+# l'hôte, clavier, langue, registre) vit dans un profil : profiles/<nom>/ —
+# voir profiles/example/ pour partir d'un modèle, profiles/unraid-gunnm/ pour
+# un déploiement réel. Lancement avec un profil :
+#   make run PROFILE=<nom>
+# ou directement :
+#   docker compose -f docker-compose.yml -f profiles/<nom>/compose.override.yml up -d
+# Les chemins relatifs (ici et dans l'override) partent de ce dossier.
+services:
+  steambox:
+    build:
+      context: .
+      dockerfile: Dockerfile.cachyos
+    image: ${STEAMBOX_IMAGE:-steambox:latest}
+    container_name: SteamBox
+    # Hostname stable : un changement invalide des verrous type Chrome
+    # SingletonLock stockés dans /config.
+    hostname: SteamBox
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Home persistant de l'utilisateur arcade (configs, Steam, Sunshine,
+      # sauvegardes Wine). /home/arcade est un lien vers /config.
+      - ${STEAMBOX_CONFIG:-./config}:/config
+      # Ludothèque : Steam/Heroic/wsquashfs + arborescence Batocera
+      # roms/ bios/ saves/ (chemins réglables par GAMES_DIR, GAMES_ROMS_DIR…
+      # dans l'env du profil, voir root-cachyos/scripts/steambox-env.sh).
+      # Ne jamais faire de chown -R dessus (voir init_system.sh).
+      - ${STEAMBOX_GAMES:-./games}:/config/games
+      # Bind du RÉPERTOIRE /dev/input entier (pas device par device) : les
+      # périphériques uinput que Sunshine crée à chaque connexion Moonlight
+      # apparaissent alors dynamiquement dans le conteneur. hidraw n'a pas
+      # d'équivalent — d'où la règle udev mknod de l'image
+      # (99-steambox-hidraw-fallback.rules) + la règle cgroup 242.
+      - /dev/input:/dev/input
+    network_mode: host                     # requis pour seatd/udev et la découverte LAN Sunshine
+    devices:
+      - /dev/fuse:/dev/fuse                # wsquashfs-launcher (squashfuse/fuse-overlayfs)
+      - /dev/uinput:/dev/uinput            # clavier/souris virtuels Sunshine
+      - /dev/uhid:/dev/uhid                # manettes virtuelles Sunshine (libvirtualhid :
+                                           # vibrations, tactile/gyro DualSense)
+    # GPU : dans l'override du profil (runtime nvidia, ou /dev/dri pour AMD/Intel).
+    device_cgroup_rules:
+      - 'c 13:* rmw'                       # /dev/input/*
+      - 'c 226:* rmw'                      # /dev/dri/*
+      - 'c 242:* rmw'                      # /dev/hidraw* — sans elle, Steam Input ne reçoit
+                                           # aucun bouton des manettes PlayStation virtuelles
+    ipc: host
+    cap_add:
+      - SYS_NICE                           # priorité temps réel audio/vidéo (sunshine, pipewire)
+      - SYS_ADMIN
+      - NET_ADMIN                          # udevd : rediffusion des uevents vers libudev
+                                           # (sinon boucle "Failed to broadcast event" en session)
+    security_opt:
+      - apparmor:unconfined
+      - seccomp:unconfined
+    # nice=40 : Sunshine vide ses capacités après son init, cap_sys_nice ne
+    # lui sert jamais — cette limite permet à tout process de descendre
+    # jusqu'à nice -20 (encodage prioritaire). Figé à la CRÉATION du conteneur.
+    ulimits:
+      nice: 40
+    shm_size: "2gb"
+    restart: unless-stopped

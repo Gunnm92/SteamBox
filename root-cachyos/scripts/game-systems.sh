@@ -6,6 +6,9 @@
 # changer un émulateur ici suffit, aucun fichier de la ludothèque à retoucher.
 # shellcheck disable=SC2034  # variables lues par les scripts qui sourcent
 
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+
 SCRIPTS="/usr/local/bin/scripts"
 # Dossier de cœurs UTILISATEUR (22/09), pas /usr/lib/libretro : il contient
 # des liens vers tous les cœurs pacman (repeuplé par init_retroarch.sh, lancé

@@ -14,3 +14,7 @@ Heroic Launcher/library.json
 
 # Clone de référence du dépôt source de l'image de base (pas un composant du projet)
 docker-webstation/
+
+# Choix du profil local (make), propre à chaque machine
+local.mk
+.env

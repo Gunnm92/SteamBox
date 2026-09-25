@@ -1,0 +1,27 @@
+# Profil d'exemple — copier ce dossier (profiles/<mon-profil>/), adapter, puis :
+#   make run PROFILE=<mon-profil>
+# Les chemins relatifs partent de la racine du dépôt.
+services:
+  steambox:
+    env_file:
+      - profiles/example/env
+    environment:
+      # UID/GID propriétaires de vos dossiers config/ et games/ sur l'hôte.
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+      # NVIDIA : GPU passé au conteneur (all, ou l'UUID donné par nvidia-smi -L).
+      # AMD / Intel : supprimer ces deux lignes.
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      - ./config:/config
+      - /chemin/vers/mes/jeux:/config/games
+
+    # ── GPU : garder UN des deux blocs ──────────────────────────────────────
+    # NVIDIA (nvidia-container-toolkit installé sur l'hôte) :
+    runtime: nvidia
+    # AMD / Intel (Mesa, encodage VA-API) : supprimer "runtime: nvidia" et
+    # décommenter :
+    # devices:
+    #   - /dev/dri:/dev/dri

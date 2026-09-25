@@ -14,7 +14,6 @@ set -uo pipefail
 # shellcheck source=game-systems.sh
 . /usr/local/bin/scripts/game-systems.sh
 
-ROMS_DIR="${GAMES_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
 LOG="${XDG_RUNTIME_DIR:-/tmp}/game-launch.log"
 rom="${1:-}"
 

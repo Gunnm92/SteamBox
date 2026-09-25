@@ -1,0 +1,30 @@
+# Variables d'installation (lues par root-cachyos/scripts/steambox-env.sh).
+# Toutes facultatives : la valeur par défaut est indiquée en commentaire.
+
+# ── Ludothèque ───────────────────────────────────────────────────────────────
+# Dossier racine au format Batocera : roms/<système>/, bios/, saves/.
+# GAMES_DIR=/config/games
+# Chacun peut être placé ailleurs :
+# GAMES_ROMS_DIR=/config/games/roms
+# GAMES_BIOS_DIR=/config/games/bios
+# GAMES_SAVES_DIR=/config/games/saves
+
+# ── Clavier (XKB) : bureau, clavier Moonlight, VNC ───────────────────────────
+# KEYBOARD_LAYOUT=us
+# KEYBOARD_VARIANT=
+# Ex. AZERTY : KEYBOARD_LAYOUT=fr ; AZERTY Mac : + KEYBOARD_VARIANT=mac
+
+# ── Langue ───────────────────────────────────────────────────────────────────
+# Locales disponibles dans l'image : en_US et EXTRA_LOCALES du Dockerfile
+# (fr_FR de_DE es_ES it_IT pt_BR par défaut).
+# LANG=en_US.UTF-8
+# LANGUAGE=en_US:en
+# Ex. français :
+# LANG=fr_FR.UTF-8
+# LANGUAGE=fr_FR:fr
+
+# ── GPU ──────────────────────────────────────────────────────────────────────
+# Détecté automatiquement (nvidia / amd / intel) ; à forcer si besoin.
+# GPU_VENDOR=auto
+# NVIDIA uniquement : pilote VA-API (décodage vidéo matériel des applis).
+LIBVA_DRIVER_NAME=nvidia

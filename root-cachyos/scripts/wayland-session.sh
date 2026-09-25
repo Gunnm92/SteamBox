@@ -11,6 +11,8 @@
 # root/runuser type Xorg.wrap.
 
 set -e
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
 
 ARCADE_UID="$(id -u arcade)"
 ARCADE_RUNTIME_DIR="/run/user/${ARCADE_UID}"
@@ -32,6 +34,8 @@ exec runuser -u arcade -- env \
     QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_TYPE=wayland \
     SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
     LIBSEAT_BACKEND=seatd SEATD_VTBOUND=0 \
+    KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT}" KEYBOARD_VARIANT="${KEYBOARD_VARIANT}" \
+    DRM_CARD="$(first_drm_card)" \
     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
     bash -c '
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
@@ -72,8 +76,8 @@ trap "kill \$(jobs -p) 2>/dev/null" EXIT
 # la variable passée via env/exec est purement et simplement ignorée.
 mkdir -p "${HOME}/.config/labwc"
 cat > "${HOME}/.config/labwc/environment" <<EOF
-XKB_DEFAULT_LAYOUT=fr
-XKB_DEFAULT_VARIANT=mac
+XKB_DEFAULT_LAYOUT=${KEYBOARD_LAYOUT}
+XKB_DEFAULT_VARIANT=${KEYBOARD_VARIANT}
 EOF
 
 # focus-follows-mouse (31/08) : le clavier virtuel Sunshine/evdev-bridge
@@ -189,9 +193,10 @@ rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null 
 # Xwayland interne automatiquement dès quun client X11 (Steam, Wine,
 # Chrome) en a besoin.
 #
-# WLR_DRM_DEVICES=/dev/dri/card0 : /sys/class/drm (lecture seule, vue non
+# WLR_DRM_DEVICES=DRM_CARD (premier /dev/dri/card* présent, calculé hors du
+# bash -c) : /sys/class/drm (lecture seule, vue non
 # isolée par conteneur) liste les GPU de lhôte multi-GPU (card0/1/2), mais
-# /dev/dri/ ne contient QUE celui réellement passé au conteneur (card0) —
+# /dev/dri/ ne contient QUE celui réellement passé au conteneur (card0 ici) —
 # sans ce forçage, wlroots énumère via /sys, essaie card1/card2, et échoue
 # ("Could not canonicalize path /dev/dri/cardN: No such file or directory")
 # avant même de tester card0. Confirmé en direct le 30/08.
@@ -212,7 +217,7 @@ rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null 
 # Retour au renderer par defaut (GLES2) tant que lincompatibilite
 # Vulkan-renderer/capture Sunshine nest pas comprise.
 unset WAYLAND_DISPLAY DISPLAY
-WLR_DRM_DEVICES=/dev/dri/card0 WLR_LIBINPUT_NO_DEVICES=1 labwc &
+WLR_DRM_DEVICES="${DRM_CARD}" WLR_LIBINPUT_NO_DEVICES=1 labwc &
 LABWC_PID=$!
 
 WAYLAND_SOCKET="${XDG_RUNTIME_DIR}/wayland-0"

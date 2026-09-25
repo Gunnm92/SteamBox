@@ -167,21 +167,23 @@ static int setup_keyboard(void) {
         return -1;
     }
 
-    /* layout "fr" (AZERTY) au lieu de "us" (30/08) : evdev-bridge définit et
-     * envoie sa PROPRE keymap au clavier virtuel Wayland — indépendant de
-     * tout réglage local labwc/XFCE (~/.config/labwc/environment), qui
-     * n'affecte que le clavier physique/local, pas ce chemin distant
-     * Sunshine/Moonlight. Codé en dur ici faute d'un moyen simple de le
-     * rendre configurable pour l'instant (pas de lecture de variable
-     * d'environnement dans ce binaire) — à revoir si un jour plusieurs
-     * dispositions doivent cohabiter. */
+    /* Disposition lue dans KEYBOARD_LAYOUT / KEYBOARD_VARIANT (25/09, même
+     * variables que labwc et wayvnc, voir scripts/steambox-env.sh) : repli
+     * "us" sans variante. evdev-bridge définit et envoie sa PROPRE keymap
+     * au clavier virtuel Wayland — indépendant de tout réglage local
+     * labwc/XFCE (~/.config/labwc/environment), qui n'affecte que le
+     * clavier physique/local, pas ce chemin distant Sunshine/Moonlight. */
+    const char *layout = getenv("KEYBOARD_LAYOUT");
+    const char *variant = getenv("KEYBOARD_VARIANT");
     struct xkb_rule_names names = {
         .rules = "evdev",
         .model = "pc105",
-        .layout = "fr",
-        .variant = "mac",
+        .layout = (layout && *layout) ? layout : "us",
+        .variant = (variant && *variant) ? variant : NULL,
         .options = NULL,
     };
+    fprintf(stderr, "[bridge] Clavier : %s%s%s\n", names.layout,
+            names.variant ? " / " : "", names.variant ? names.variant : "");
 
     struct xkb_keymap *keymap = xkb_keymap_new_from_names(ctx, &names,
         XKB_KEYMAP_COMPILE_NO_FLAGS);

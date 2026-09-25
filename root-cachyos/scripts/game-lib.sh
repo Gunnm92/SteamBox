@@ -14,10 +14,9 @@
 # lanceur (trap EXIT) — le lanceur doit donc attendre l'émulateur, pas
 # l'exec.
 
-# Variables lues par les lanceurs qui sourcent ce fichier (SC2034 à tort).
-# shellcheck disable=SC2034
-BIOS_DIR="/home/arcade/games/Batocera/bios"
-SAVES_DIR="/home/arcade/games/Batocera/saves"
+# BIOS_DIR / SAVES_DIR, lus par les lanceurs qui sourcent ce fichier.
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
 
 _GAME_MOUNTS=()
 _game_unmount_all() {

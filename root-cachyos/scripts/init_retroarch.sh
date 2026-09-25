@@ -29,15 +29,12 @@ set_cfg "video_vsync" "false"
 # confirmé en direct : la partie se fige immédiatement dans ce cas.
 set_cfg "pause_nonactive" "false"
 
-# system_directory : les BIOS de l'utilisateur vivent dans le dossier
-# partagé au format Batocera, pas dans le dossier par défaut de RetroArch
-# (~/.config/retroarch/system, toujours vide ici). Plus sous /userdata
-# (15/09, reliquat d'un ancien montage séparé — /mnt/user/Game/Batocera
-# était monté deux fois, une fois seul sur /userdata, une fois via le
-# parent /mnt/user/Game sur /config/games ; /home/arcade est un symlink
-# vers /config, donc /home/arcade/games/Batocera/bios pointe déjà sur les
-# mêmes données réelles sans ce second montage).
-set_cfg "system_directory" "/home/arcade/games/Batocera/bios"
+# system_directory : les BIOS de l'utilisateur vivent dans la ludothèque
+# au format Batocera (BIOS_DIR, voir steambox-env.sh), pas dans le dossier
+# par défaut de RetroArch (~/.config/retroarch/system, toujours vide ici).
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+set_cfg "system_directory" "${BIOS_DIR}"
 
 # Cœurs : hybride entre les ~30 cœurs installés par pacman (groupe
 # "libretro", voir Dockerfile — /usr/lib/libretro, propriété root, non

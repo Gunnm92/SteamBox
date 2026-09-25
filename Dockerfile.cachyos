@@ -549,14 +549,19 @@ RUN mkdir -p /etc/NetworkManager && \
 # n'a de vraie batterie à surveiller de toute façon.
 RUN rm -f /usr/share/dbus-1/system-services/org.freedesktop.UPower.service
 
-# ── 1a2. Locale française — absente du glibc CachyOS (build allégé, seuls les
-# locales en_* sont incluses ; fr_FR/*.fr manquent totalement). Le fichier de
-# définition est un format texte stable côté glibc upstream — recréé depuis
-# le miroir officiel plutôt que de basculer sur le paquet glibc standard
-# d'Arch (risqué : glibc est la libc système, pas question d'en changer).
-RUN curl -fsSL https://raw.githubusercontent.com/bminor/glibc/master/localedata/locales/fr_FR \
-      -o /usr/share/i18n/locales/fr_FR && \
-    localedef -i fr_FR -f UTF-8 fr_FR.UTF-8
+# ── 1a2. Locales supplémentaires — absentes du glibc CachyOS (build allégé,
+# seuls les locales en_* sont incluses ; fr_FR/*.fr manquent totalement). Le
+# fichier de définition est un format texte stable côté glibc upstream —
+# recréé depuis le miroir officiel plutôt que de basculer sur le paquet glibc
+# standard d'Arch (risqué : glibc est la libc système, pas question d'en
+# changer). EXTRA_LOCALES (25/09) : liste séparée par des espaces, choisie
+# ensuite au lancement par LANG (voir profiles/).
+ARG EXTRA_LOCALES="fr_FR de_DE es_ES it_IT pt_BR"
+RUN for loc in ${EXTRA_LOCALES}; do \
+      curl -fsSL "https://raw.githubusercontent.com/bminor/glibc/master/localedata/locales/${loc}" \
+        -o "/usr/share/i18n/locales/${loc}" && \
+      localedef -i "${loc}" -f UTF-8 "${loc}.UTF-8" || exit 1; \
+    done
 
 # ── 1a3. Schémas GSettings — non compilés au build (hook pacman bloqué par le
 # sandbox réseau de buildkit, cf. "could not isolate the network" pendant
@@ -841,7 +846,9 @@ RUN python3 /tmp/patch-theme.py && rm -f /tmp/patch-theme.py
 # CONTENU à chaque build — un RUN curl à la commande inchangée restait en
 # cache et figeait silencieusement une ancienne version du lanceur tant
 # qu'aucune couche antérieure ne bougeait.
-ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/main/wsquashfs-launcher \
+# WSQUASHFS_REF (25/09) : branche, tag ou commit du lanceur à embarquer.
+ARG WSQUASHFS_REF=main
+ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
     /usr/local/bin/wsquashfs-launcher
 
 # ── 1a9. Wine "classique" pour les prefixes win32 (23/09) — wine-staging
@@ -1305,7 +1312,7 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
     chown -R arcade:arcade /home/arcade
 
 # cap_sys_admin ajouté (29/08, pivot Wayland) : Sunshine tourne en arcade
-# (non-root) — avoir CAP_SYS_ADMIN dans le conteneur (docker-compose.cachyos.yml
+# (non-root) — avoir CAP_SYS_ADMIN dans le conteneur (docker-compose.yml
 # cap_add) ne suffit pas, un process non-root ne l'a dans son set effectif
 # que si le binaire la porte en capacité fichier. Sans ça, confirmé en
 # direct : Sunshine échoue son accès KMS ("Failed to gain CAP_SYS_ADMIN"),
@@ -1331,8 +1338,8 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 # effectif après son initialisation (CapEff=0 sur le process en cours) : ses
 # 18 threads tournaient tous en nice 0, et "setpriority failed for nice
 # -15/-10" apparaissait toujours dans sunshine.log. Le vrai correctif est
-# côté conteneur : --ulimit nice=40 (docker-compose.cachyos.yml ulimits,
-# template Unraid — voir docs/deploiement-unraid.md), qui autorise un
+# côté conteneur : --ulimit nice=40 (docker-compose.yml ulimits,
+# template Unraid — voir profiles/unraid-gunnm/deploiement-unraid.md), qui autorise un
 # process NON privilégié à descendre jusqu'à nice -20, sans capacité.
 # La capacité de fichier reste posée ici pour CAP_SYS_ADMIN (voir plus haut).
 #
@@ -1424,18 +1431,21 @@ RUN pacman -Q > /etc/steambox-packages.txt
 #
 # XDG_RUNTIME_DIR retirée d'ici (audit F2, 05/09) : cette ENV globale valait
 # "/run/user/1000", qui ne correspond JAMAIS à l'UID réel d'arcade en
-# production (99 côté Unraid/PUID, voir docker-compose.cachyos.yml) —
+# production (99 côté Unraid/PUID, voir docker-compose.yml) —
 # fausse pour tout ce qui l'hériterait sans la recalculer. Au moins trois
 # services de ce dépôt (svc-wayvnc, svc-evdev-bridge, svc-sunshine)
 # documentent déjà le bug exact que cette valeur causait et la
-# recalculent eux-mêmes via $(id -u arcade). init-system/run exporte
-# désormais la VRAIE valeur dans /run/s6/container_environment/ (lu par
-# with-contenv, l'en-tête de tous les scripts s6-rc.d de ce projet), avec
-# le bon PUID dès le premier service qui en a besoin.
+# recalculent eux-mêmes via $(id -u arcade) — et c'est ce calcul qui
+# compte : l'export de init-system/run vers /run/s6/container_environment/
+# n'est lu par AUCUN service (S6_KEEP_ENV=1 rend with-contenv no-op,
+# vérifié le 25/09). Tout nouveau service doit recalculer cette valeur.
 # LC_ALL absent volontairement (audit F5, 05/09) : primait auparavant sur
 # TOUTE variable LC_*, empêchant de passer un jeu/outil précis en anglais
-# sans le retirer globalement — LANG+LANGUAGE ci-dessous suffisent pour
-# une interface FR par défaut, sans ce verrou.
+# sans le retirer globalement.
+# LANG en_US par défaut et LIBVA_DRIVER_NAME retiré (25/09) : langue et
+# pilote VA-API NVIDIA se règlent au lancement (LANG/LANGUAGE,
+# LIBVA_DRIVER_NAME=nvidia dans l'env du profil, voir profiles/) — l'image
+# sert aussi aux GPU AMD/Intel, où libva trouve seule son pilote.
 ENV WAYLAND_DISPLAY=wayland-0 \
     SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
@@ -1444,10 +1454,8 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
     XDG_CURRENT_DESKTOP=XFCE \
     XDG_SESSION_TYPE=wayland \
-    LIBVA_DRIVER_NAME=nvidia \
     NVD_BACKEND=direct \
-    LANG=fr_FR.UTF-8 \
-    LANGUAGE=fr_FR:fr \
+    LANG=en_US.UTF-8 \
     DXVK_STATE_CACHE_PATH=/var/cache/steambox/dxvk \
     __GL_SHADER_DISK_CACHE_PATH=/var/cache/steambox/nv-shader \
     __GL_SHADER_DISK_CACHE_SIZE=1073741824 \

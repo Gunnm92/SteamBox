@@ -1,0 +1,28 @@
+# Profil unraid-gunnm — override compose du déploiement réel (Unraid, RTX 3090).
+# Le conteneur de production est créé par un template Unraid, pas par ce
+# fichier : il reste aligné sur deploiement-unraid.md (source de vérité),
+# toute divergence doit être résolue dans LES DEUX (audit C3, 31/08 — la règle
+# cgroup 226 avait déjà silencieusement disparu du template).
+services:
+  steambox:
+    image: registry.elfenn.eu/steambox:latest
+    runtime: nvidia
+    env_file:
+      - profiles/unraid-gunnm/env
+    environment:
+      - PUID=99                            # nobody:users, standard Unraid
+      - PGID=100
+      - TZ=Europe/Paris
+      - NVIDIA_VISIBLE_DEVICES=GPU-993ff90a-304b-da13-1287-c533c1073ab4
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # Dossier SÉPARÉ de l'appdata ArcadeBox historique — structure
+      # incompatible. Ne jamais pointer vers /mnt/user/appdata/arcadebox.
+      - /mnt/user/appdata/steambox:/config
+      - /mnt/user/Game:/config/games       # Steam, Epic, wsquashfs, Batocera/
+      - /mnt/user/Download:/config/Downloads
+    # /dev/dri : injecté par le runtime nvidia (NVIDIA_VISIBLE_DEVICES).
+    # GID 71 = "input" de l'hôte Unraid. init-system le détecte désormais seul
+    # sur /dev/input ; gardé pour parité avec le template.
+    group_add:
+      - "71"

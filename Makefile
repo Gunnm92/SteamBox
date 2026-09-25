@@ -1,15 +1,27 @@
-REGISTRY     ?= registry.elfenn.eu
+# Profil d'installation (25/09) : profiles/<PROFILE>/ porte tout ce qui est
+# propre à un déploiement — registre et commande docker (profile.mk),
+# override compose (GPU, volumes) et variables du conteneur (env). Choix du
+# profil : make <cible> PROFILE=<nom>, ou une fois pour toutes dans local.mk
+# (non versionné) : PROFILE = <nom>.
+-include local.mk
+PROFILE      ?= example
+-include profiles/$(PROFILE)/profile.mk
+
+REGISTRY     ?=
 IMAGE        ?= steambox
 TAG          ?= latest
 GITHUB_TOKEN ?=
-FULL_IMAGE   = $(REGISTRY)/$(IMAGE):$(TAG)
-DOCKER       = DOCKER_HOST=tcp://docker-socket-proxy:2375 DOCKER_TLS_VERIFY= docker
+FULL_IMAGE   = $(if $(REGISTRY),$(REGISTRY)/)$(IMAGE):$(TAG)
+DOCKER       ?= docker
+COMPOSE      = STEAMBOX_IMAGE=$(FULL_IMAGE) $(DOCKER) compose \
+                 --file docker-compose.yml \
+                 --file profiles/$(PROFILE)/compose.override.yml
 BUILDX       = $(DOCKER) buildx build \
                  --builder default \
                  --platform linux/amd64 \
                  --provenance=false --sbom=false
 
-BUILD_ARGS   = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
+BUILD_ARGS   += --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
 # GITHUB_TOKEN passé en secret BuildKit (audit C1, 05/09), plus en
 # --build-arg : un build-arg consommé par un RUN reste lisible en clair
 # dans l'historique de l'image pour toujours (confirmé en direct, token
@@ -43,6 +55,7 @@ build:
 		.
 
 push:
+	@test -n "$(REGISTRY)" || { echo "REGISTRY vide : à définir dans profiles/$(PROFILE)/profile.mk ou make push REGISTRY=..."; exit 1; }
 	$(BUILDX) $(BUILD_ARGS) \
 		--file Dockerfile.cachyos \
 		--tag $(FULL_IMAGE) \
@@ -50,16 +63,16 @@ push:
 		.
 
 run:
-	$(DOCKER) compose --file docker-compose.cachyos.yml up -d
+	$(COMPOSE) up -d
 
 stop:
-	$(DOCKER) compose --file docker-compose.cachyos.yml down
+	$(COMPOSE) down
 
 logs:
-	$(DOCKER) compose --file docker-compose.cachyos.yml logs -f
+	$(COMPOSE) logs -f
 
 clean:
-	$(DOCKER) compose --file docker-compose.cachyos.yml down --rmi local --volumes
+	$(COMPOSE) down --rmi local --volumes
 
 # Lint (audit 22/09) — shellcheck + hadolint via leurs images officielles,
 # rien à installer localement. Les fichiers passent par stdin (tar), pas par
@@ -94,6 +107,7 @@ help:
 	@echo "  clean    Arret + suppression image locale + volumes"
 	@echo ""
 	@echo "Variables (override avec make VAR=val):"
+	@echo "  PROFILE        $(PROFILE)  (profiles/$(PROFILE)/)"
 	@echo "  REGISTRY       $(REGISTRY)"
 	@echo "  IMAGE          $(IMAGE)"
 	@echo "  TAG            $(TAG)"

@@ -2,9 +2,9 @@
 
 **Source de vérité du déploiement réel** (audit C3, 31/08/2026). Le conteneur
 de production est créé par un template Unraid (onglet Docker), pas par
-`docker-compose.cachyos.yml` — ce dernier est maintenu aligné sur ce document
-pour le développement. **Toute modification du template doit être reportée
-ici et dans le compose**, et inversement : la dérive est réelle (la règle
+`docker-compose.yml` + `compose.override.yml` de ce profil — ces derniers sont
+maintenus alignés sur ce document pour le développement. **Toute modification
+du template doit être reportée ici et dans l'override du profil**, et inversement : la dérive est réelle (la règle
 cgroup 226 a disparu du template sans signal lors d'un ajout manuel le 31/08).
 
 Extrait de `docker inspect SteamBox` sur le conteneur en production le
@@ -36,6 +36,19 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 | `TZ` | `Europe/Paris` | |
 | `NVIDIA_VISIBLE_DEVICES` | `GPU-993ff90a-304b-da13-1287-c533c1073ab4` | UUID de la RTX 3090 dédiée |
 | `NVIDIA_DRIVER_CAPABILITIES` | `all` | NVENC + graphique + compute |
+| `GAMES_DIR` | `/home/arcade/games/Batocera` | Ludothèque Batocera (roms/, bios/, saves/) |
+| `GAMES_ROMS_DIR` | `/home/arcade/games/Batocera/roms` | Chemin des ROMs tel qu'écrit dans `es_systems.cfg` |
+| `KEYBOARD_LAYOUT` | `fr` | Clavier bureau / Moonlight / VNC |
+| `KEYBOARD_VARIANT` | `mac` | AZERTY Mac |
+| `LANG` | `fr_FR.UTF-8` | Langue du bureau, d'ES et de Sunshine |
+| `LANGUAGE` | `fr_FR:fr` | |
+| `LIBVA_DRIVER_NAME` | `nvidia` | VA-API via nvidia-vaapi-driver |
+
+**À ajouter au template avant de déployer une image postérieure au
+25/09/2026** : ces valeurs étaient figées dans l'image jusque-là. Sans elles,
+l'image générique démarre en QWERTY, en anglais, et cherche les ROMs sous
+`/config/games/roms` (EmulationStation vide). Même contenu que le fichier
+`env` de ce profil.
 
 ## Volumes
 

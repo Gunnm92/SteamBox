@@ -21,8 +21,22 @@ fi
 rm -rf /home/arcade
 ln -sfn /config /home/arcade
 
+# ── Variables d'installation (steambox-env.sh) ─────────────────────────────
+# GPU détecté une fois ici et exporté vers les scripts init_* lancés plus
+# bas (init_sunshine choisit l'encodeur d'après lui). Rien n'est écrit dans
+# container_environment pour les services : avec S6_KEEP_ENV=1, with-contenv
+# ne lit PAS ce dossier (no-op, vérifié le 25/09) — les services voient
+# directement l'environnement du conteneur (env_file du profil).
+# shellcheck source=../../../../scripts/steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+GPU_VENDOR="$(gpu_vendor)"
+export GPU_VENDOR
+echo "[init-system] GPU : ${GPU_VENDOR} · clavier : ${KEYBOARD_LAYOUT}${KEYBOARD_VARIANT:+ (${KEYBOARD_VARIANT})} · langue : ${STEAMBOX_LANG}"
+
 # ── Driver NVIDIA userspace (matché au host) ───────────────────────────────
-/usr/local/bin/install-nvidia-userspace.sh || echo "[init-system] Continuer sans match NVIDIA (voir logs ci-dessus)"
+if [ "${GPU_VENDOR}" = "nvidia" ]; then
+    /usr/local/bin/install-nvidia-userspace.sh || echo "[init-system] Continuer sans match NVIDIA (voir logs ci-dessus)"
+fi
 
 # ── ICD Vulkan NVIDIA aussi dans /usr/share (audit 29/08, Eden) ────────────
 # nvidia-container-toolkit injecte nvidia_icd.json UNIQUEMENT dans
@@ -47,13 +61,10 @@ mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
 chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
 
-# Exportée pour tous les services longrun via with-contenv (audit F2,
-# 05/09) — remplace l'ancienne ENV Dockerfile globale XDG_RUNTIME_DIR=
-# /run/user/1000, fausse dès que PUID != 1000 (le cas en production,
-# PUID=99). Plusieurs services de ce dépôt recalculaient déjà eux-mêmes
-# $(id -u arcade) pour contourner cette valeur héritée incorrecte —
-# laissés tels quels (inoffensifs), mais tout futur script bénéficie
-# maintenant directement de la bonne valeur sans avoir à le savoir.
+# Écrite dans container_environment (audit F2, 05/09), mais AUCUN service
+# ne la lit par là : S6_KEEP_ENV=1 rend with-contenv no-op (vérifié le
+# 25/09) — chaque service recalcule $(id -u arcade) lui-même, c'est ce
+# calcul qui fait foi. Gardé pour un éventuel passage à S6_KEEP_ENV=0.
 mkdir -p /run/s6/container_environment
 printf '%s' "${XDG_RUNTIME_DIR}" > /run/s6/container_environment/XDG_RUNTIME_DIR
 
@@ -73,7 +84,7 @@ printf '%s' "${XDG_RUNTIME_DIR}" > /run/s6/container_environment/XDG_RUNTIME_DIR
 # les autres devices ci-dessus.
 #
 # /dev/input/event* retiré de ce chmod (audit 22/09) : /dev/input est un bind
-# mount du répertoire de l'HÔTE (voir docker-compose.cachyos.yml) — ce chmod
+# mount du répertoire de l'HÔTE (voir docker-compose.yml) — ce chmod
 # passait donc les vrais claviers/souris de l'Unraid en 666 côté hôte, et
 # seulement ceux présents au boot (aucun effet sur les devices Sunshine,
 # créés plus tard). Inutile côté conteneur : ces nodes appartiennent au GID
@@ -94,9 +105,8 @@ chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* 2>/dev/null || 
 # faisait jusqu'ici que chmod 666 les devices présents au boot (ligne
 # ci-dessus), ce qui ne couvre ni le hotplug (manette branchée après coup)
 # ni les périphériques virtuels uinput que Sunshine crée à chaque connexion
-# Moonlight. group_add: ["71"] doit être présent côté docker-compose (voir
-# docker-compose.cachyos.yml et docs/deploiement-unraid.md) pour que ce bloc
-# ait un GID 71 à rejoindre.
+# Moonlight. (group_add côté docker n'est plus requis depuis la détection
+# du GID ci-dessous, 25/09 — gardé dans le profil unraid-gunnm, inoffensif.)
 # Ne pas supposer que le GID 71 existe déjà côté image/hôte (30/08) : sur ce
 # conteneur précis, `getent group 71` ne renvoie RIEN malgré `--group-add 71`
 # côté docker run — Docker injecte ce GID brut au niveau noyau pour le
@@ -108,16 +118,23 @@ chmod 666 /dev/uinput /dev/uhid /dev/dri/card* /dev/dri/renderD* 2>/dev/null || 
 # (appartenant au GID 71), resté bloqué indéfiniment sur "Waiting for
 # Sunshine devices...". On crée le groupe nous-mêmes si absent, plutôt que
 # d'espérer qu'il soit déjà là.
-if ! getent group 71 >/dev/null 2>&1; then
-    groupadd -g 71 steambox-input 2>/dev/null || true
-fi
-if getent group 71 >/dev/null 2>&1; then
-    HOSTINPUT_GROUP="$(getent group 71 | cut -d: -f1)"
-    if ! id -nG arcade 2>/dev/null | grep -qw "${HOSTINPUT_GROUP}"; then
-        usermod -aG "${HOSTINPUT_GROUP}" arcade
-        echo "[init-system] arcade ajouté au groupe GID 71 (${HOSTINPUT_GROUP})"
+# GID(s) lus sur les nœuds de /dev/input (25/09) au lieu de 71 en dur : 71
+# est le GID "input" d'Unraid, un autre hôte en a un autre (ex. 104 sur
+# Debian). Au démarrage, seuls les nœuds de l'hôte (bind mount) existent ;
+# le groupe "input" du conteneur (déjà celui d'arcade) est ignoré.
+for HOST_INPUT_GID in $(stat -c %g /dev/input/event* 2>/dev/null | sort -u); do
+    [ "${HOST_INPUT_GID}" = "0" ] && continue
+    if ! getent group "${HOST_INPUT_GID}" >/dev/null 2>&1; then
+        groupadd -g "${HOST_INPUT_GID}" "steambox-input-${HOST_INPUT_GID}" 2>/dev/null || true
     fi
-fi
+    if getent group "${HOST_INPUT_GID}" >/dev/null 2>&1; then
+        HOSTINPUT_GROUP="$(getent group "${HOST_INPUT_GID}" | cut -d: -f1)"
+        if ! id -nG arcade 2>/dev/null | grep -qw "${HOSTINPUT_GROUP}"; then
+            usermod -aG "${HOSTINPUT_GROUP}" arcade
+            echo "[init-system] arcade ajouté au groupe GID ${HOST_INPUT_GID} (${HOSTINPUT_GROUP})"
+        fi
+    fi
+done
 
 # || echo (audit H1, 05/09) : ce oneshot tourne sous set -e et TOUS les
 # services longrun (labwc, sunshine, wayvnc...) en dépendent — avant ce
