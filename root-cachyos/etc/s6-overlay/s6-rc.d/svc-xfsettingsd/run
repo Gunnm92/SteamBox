@@ -1,0 +1,7 @@
+#!/command/with-contenv bash
+# Démon de réglages XFCE du bureau visible : applique thème, icônes, police
+# et curseur (XSETTINGS) à la session. Réglages par défaut posés juste avant,
+# seulement s'ils sont absents (xfce-defaults.sh).
+# shellcheck source=../../../../scripts/desktop-env.sh
+. /usr/local/bin/scripts/desktop-env.sh
+desktop_exec /usr/local/bin/scripts/xfce-defaults.sh HDMI-A-1 -- xfsettingsd

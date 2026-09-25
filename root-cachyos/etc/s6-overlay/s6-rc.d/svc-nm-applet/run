@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# Icône réseau (NetworkManager) de la zone de notification du panneau.
+# shellcheck source=../../../../scripts/desktop-env.sh
+. /usr/local/bin/scripts/desktop-env.sh
+desktop_exec nm-applet

@@ -147,8 +147,13 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   cgroup `c 242:* rmw` (voir docker-compose.yml) et l'existence de
   `/dev/hidrawN` dans le conteneur.
 - **Clavier Moonlight muet après un changement de fenêtre** → réglé par le
-  focus-follows-mouse de labwc (rc.xml généré par wayland-session.sh) ;
+  focus-follows-mouse de labwc (rc.xml généré par labwc-session.sh) ;
   contournement : re-changer de fenêtre.
+- **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
+  bureau visible est un service s6 relancé automatiquement :
+  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`,
+  `svc-polkit-agent`. Relance manuelle :
+  `s6-svc -r /run/service/svc-xfce4-panel`.
 - **Chrome refuse de démarrer** (« profile in use by another computer ») →
   verrou `SingletonLock` d'un ancien hostname, nettoyé à chaque démarrage de
   session depuis le 31/08.

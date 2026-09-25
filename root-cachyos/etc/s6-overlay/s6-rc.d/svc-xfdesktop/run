@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# Fond d'écran et icônes du bureau visible (XFCE).
+# shellcheck source=../../../../scripts/desktop-env.sh
+. /usr/local/bin/scripts/desktop-env.sh
+desktop_exec xfdesktop

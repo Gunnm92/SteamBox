@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+# Agent polkit : fenêtres de demande de mot de passe administrateur.
+# shellcheck source=../../../../scripts/desktop-env.sh
+. /usr/local/bin/scripts/desktop-env.sh
+desktop_exec /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1

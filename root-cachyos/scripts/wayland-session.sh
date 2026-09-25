@@ -1,14 +1,20 @@
 #!/bin/bash
-# Bureau Wayland réel via labwc (compositeur wlroots) + panneau/bureau XFCE
-# — second pivot Waybox (29/08). Remplace la session KWin : ni wayvnc ni
-# evdev-bridge (input souris/clavier Sunshine) ne fonctionnent contre KWin,
-# qui n'implémente pas les protocoles wlroots dont ces deux outils dépendent
-# — voir point 6 de l'historique en tête de Dockerfile.cachyos. labwc est le
-# compositeur de l'ancien Dockerfile webstation, où wayvnc fonctionnait déjà.
+# Bureau Wayland réel via labwc (compositeur wlroots) — second pivot Waybox
+# (29/08). Remplace la session KWin : ni wayvnc ni evdev-bridge (input
+# souris/clavier Sunshine) ne fonctionnent contre KWin, qui n'implémente pas
+# les protocoles wlroots dont ces deux outils dépendent — voir point 6 de
+# l'historique en tête de Dockerfile.cachyos.
 #
-# labwc gère nativement son accès DRM/input via seatd (LIBSEAT_BACKEND=seatd,
-# voir ENV du Dockerfile) — tourne de bout en bout en arcade, pas de dance
-# root/runuser type Xorg.wrap.
+# Lancé par svc-labwc (root) : prépare le runtime puis passe la main, en
+# arcade, à labwc-session.sh, qui écrit la configuration de labwc et se
+# REMPLACE par labwc. Les composants XFCE (xfsettingsd, xfdesktop,
+# xfce4-panel, nm-applet, agent polkit) sont des services s6 séparés depuis
+# le 26/09 (voir desktop-env.sh) — ils étaient lancés en arrière-plan ici,
+# dans un "bash -c '…'" géant : non supervisés, et une seule apostrophe dans
+# un commentaire cassait toute la session (vécu le 31/08).
+#
+# labwc gère nativement son accès DRM/input via seatd — tourne de bout en
+# bout en arcade, pas de dance root/runuser type Xorg.wrap.
 
 set -e
 # shellcheck source=steambox-env.sh
@@ -20,302 +26,24 @@ mkdir -p "${ARCADE_RUNTIME_DIR}"
 chown arcade:arcade "${ARCADE_RUNTIME_DIR}"
 chmod 700 "${ARCADE_RUNTIME_DIR}"
 
-# exec (audit 22/09, reproduit en test) : sans lui, ce script restait le
-# process supervisé par s6 et runuser n'en était qu'un enfant. Un
-# s6-svc -r/-d envoie SIGTERM à CE script seul : il mourait, mais runuser, le
-# bash -c et toute la session (labwc, XFCE) survivaient en orphelins — le
-# trap EXIT plus bas ne se déclenchait jamais puisque son shell ne recevait
-# aucun signal. Le labwc orphelin gardait wayland-0, et le nouveau démarrait
-# sur un autre socket. Avec exec, s6 signale directement runuser, qui relaie
-# SIGTERM au bash -c : le trap tue alors proprement tous les processus
-# lancés en arrière-plan.
+# exec (audit 22/09) : s6 doit signaler directement la chaîne runuser →
+# labwc ; sans exec, un s6-svc -r ne tuait que ce script et laissait un
+# labwc orphelin garder wayland-0.
+#
+# WLR_DRM_DEVICES = premier /dev/dri/card* présent : /sys/class/drm liste les
+# GPU de l'hôte multi-GPU, mais /dev/dri/ ne contient que celui passé au
+# conteneur — sans ce forçage, wlroots essaie card1/card2 et échoue
+# ("Could not canonicalize path /dev/dri/cardN", 30/08).
+# WLR_LIBINPUT_NO_DEVICES=1 : aucun périphérique libinput au démarrage du
+# conteneur ; evdev-bridge et les manettes (SDL) n'en dépendent pas.
+# Renderer par défaut (GLES2) : WLR_RENDERER=vulkan casse la capture
+# Sunshine (écran noir sous Moonlight, 30/08).
 exec runuser -u arcade -- env \
     HOME=/home/arcade XDG_RUNTIME_DIR="${ARCADE_RUNTIME_DIR}" \
     QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_TYPE=wayland \
     SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
     LIBSEAT_BACKEND=seatd SEATD_VTBOUND=0 \
     KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT}" KEYBOARD_VARIANT="${KEYBOARD_VARIANT}" \
-    DRM_CARD="$(first_drm_card)" \
+    WLR_DRM_DEVICES="$(first_drm_card)" WLR_LIBINPUT_NO_DEVICES=1 \
     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
-    bash -c '
-mkdir -p "${HOME}/.config" "${HOME}/.local/share"
-
-# cd HOME explicite (01/09) : sans ca, ce script (et donc tout ce qui en
-# herite le CWD -- xfce4-panel, xfdesktop, et transitivement toute appli
-# lancee depuis le menu XFCE, ex Heroic) demarre avec pour repertoire de
-# travail le dossier de service s6 de svc-labwc lui-meme (s6-supervise
-# fait un chdir dedans avant d exec ./run) -- un chemin ephemere dont le
-# suffixe aleatoire change a chaque redemarrage du conteneur. Confirme en
-# direct : les raccourcis Steam crees par la fonction "Ajouter a Steam" de
-# Heroic captent ce CWD comme StartDir, y compris des references a
-# "svc-kde" (ancien nom de ce meme service avant le renommage vers labwc).
-# Sans impact fonctionnel connu (Heroic lance ses jeux par appName/runner,
-# pas par chemin relatif), mais pas de raison de laisser trainer un chemin
-# casse par design des le prochain boot.
-cd "${HOME}"
-
-# trap nettoyage (audit M2, 05/09) : labwc, xfsettingsd, xfdesktop,
-# xfce4-panel, nm-applet et lagent polkit sont tous lances en arriere-plan
-# plus bas dans ce script -- si s6 relance ce service (crash de labwc,
-# redemarrage manuel), ces processus orphelins survivaient jusquici,
-# confirme en direct (second panneau/xfdesktop apres un restart). Ne
-# couvre le redemarrage manuel que depuis le exec runuser du 22/09 (voir
-# en tete de fichier) : avant, ce shell ne recevait jamais le SIGTERM. Double
-# guillemets et $ echappe ici, PAS de simple guillemet -- tout ce bloc
-# tourne dans un bash -c entre apostrophes simples (ligne 27), un seul
-# guillemet simple ici casserait la chaine exactement comme une apostrophe
-# francaise (meme piege deja documente plus bas pour rc.xml). Lechappement
-# de $ retarde bien levaluation de jobs -p au moment reel de la sortie du
-# script, pas a la lecture de cette ligne.
-trap "kill \$(jobs -p) 2>/dev/null" EXIT
-
-# labwc ne lit PAS XKB_DEFAULT_LAYOUT depuis lenvironnement du process qui
-# le lance : il a son propre mécanisme, un fichier
-# ~/.config/labwc/environment quil charge lui-même au démarrage (doc
-# officielle labwc) — confirmé en direct le 30/08 : sans ce fichier précis,
-# la variable passée via env/exec est purement et simplement ignorée.
-mkdir -p "${HOME}/.config/labwc"
-cat > "${HOME}/.config/labwc/environment" <<EOF
-XKB_DEFAULT_LAYOUT=${KEYBOARD_LAYOUT}
-XKB_DEFAULT_VARIANT=${KEYBOARD_VARIANT}
-EOF
-
-# focus-follows-mouse (31/08) : le clavier virtuel Sunshine/evdev-bridge
-# perdait le focus après un changement de fenêtre côté client Moonlight
-# (overlay Steam, alt-tab, fermeture dun jeu...) — les touches partaient
-# dans le vide jusqua ce quun nouveau changement de fenêtre le redonne par
-# hasard, confirmé en direct. Le clavier virtuel Wayland na pas de notion
-# de clic pour redemander le focus lui-même, contrairement à une vraie
-# souris/clavier physiques ; followMouseRequiresMovement=no comble ça en
-# refocalisant sur la fenêtre sous le curseur à CHAQUE changement de
-# fenêtre (pas seulement au mouvement de souris) — le curseur virtuel étant
-# piloté en continu par evdev-bridge, le focus doit rester juste sans
-# action de lutilisateur. raiseOnFocus=yes retiré (17/09) : aucune
-# justification propre au moment de son ajout (juste accolé à followMouse
-# par défaut), et rendait le bureau injouable au clavier/souris physiques
-# -- une fenêtre passait au premier plan au moindre survol de la souris,
-# sans clic. Le focus clavier (followMouse seul) suffit au fix Sunshine
-# ci-dessus, la mise au premier plan ny est pour rien.
-# NOTE apostrophes bannies dans TOUT ce bloc :
-# tout ce script tourne dans un bash -c entre apostrophes simples (ligne
-# 27) — une seule apostrophe francaise dans un commentaire casse la chaine
-# en plein milieu et fait planter tout le reste du script au demarrage,
-# confirme en direct le 31/08 (labwc/wayvnc/Sunshine tous morts, "erreur
-# de syntaxe pres du symbole inattendu"). rc.xml ci-dessous, meme mecanisme
-# que environment plus haut : partage par les deux compositeurs labwc
-# (bureau visible wayland-0 et headless Sunshine wayland-1), meme HOME.
-#
-# xwaylandPersistence=yes (31/08, meme audit) : par defaut labwc lance
-# Xwayland en mode paresseux (tue le process ~10s apres le dernier client
-# X11 deconnecte). Sur le bureau visible (wayland-0), sans activite X11
-# continue (contrairement a la session headless wayland-1, occupee en
-# permanence par Steam), Xwayland meurt entre deux usages -- confirme en
-# direct : Steam ROM Manager (et tout le reste des apps DISPLAY=:0 du
-# menu -- Chrome, EmulationStation, Cemu, Dolphin, Ludusavi) echouait "Missing X
-# server or DISPLAY" des que le bureau restait quelques secondes sans
-# app X11 active, alors que le meme lancement reussissait juste apres un
-# autre test qui avait garde Xwayland chaud. Documente comme necessitant
-# un redemarrage de labwc pour prendre effet (man labwc-config).
-cat > "${HOME}/.config/labwc/rc.xml" <<EOF
-<?xml version="1.0"?>
-<labwc_config>
-  <core>
-    <xwaylandPersistence>yes</xwaylandPersistence>
-  </core>
-  <focus>
-    <followMouse>yes</followMouse>
-    <followMouseRequiresMovement>no</followMouseRequiresMovement>
-  </focus>
-</labwc_config>
-EOF
-
-# Bus D-Bus de session (audit M2, 05/09) : desormais un vrai service s6
-# supervise (svc-dbus-session), dont svc-labwc depend explicitement (voir
-# dependencies.d) -- ce script attend juste que le socket existe, il ne le
-# cree plus lui-meme. Remplace lancien "dbus-daemon --session --fork" ici,
-# jamais supervise individuellement -- si ce process mourait seul (labwc
-# restant vivant), rien ne le relancait, cassant wireplumber et
-# pressure-vessel/Proton (jeux Heroic) en silence jusquau prochain
-# redemarrage complet de la session.
-TIMEOUT=30
-while [ ! -S "${XDG_RUNTIME_DIR}/bus" ] && [ "${TIMEOUT}" -gt 0 ]; do
-    sleep 0.5
-    TIMEOUT=$((TIMEOUT - 1))
-done
-export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-
-# Thème sombre par défaut pour GTK3/4 — Mc-OS-CTLina-XFCE-Dark (macOS
-# Catalina, ajouté le 30/08) + Papirus pour les icônes.
-mkdir -p "${HOME}/.config/gtk-3.0" "${HOME}/.config/gtk-4.0"
-cat > "${HOME}/.config/gtk-3.0/settings.ini" <<EOF
-[Settings]
-gtk-theme-name=Mc-OS-CTLina-XFCE-Dark
-gtk-application-prefer-dark-theme=1
-gtk-icon-theme-name=Papirus-Dark
-gtk-font-name=Cantarell 10
-EOF
-cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
-
-xdg-mime default wine.desktop application/x-ms-dos-executable application/x-msi application/x-ms-shortcut application/x-bat 2>/dev/null || true
-
-# Verrou Chrome périmé (audit menu XFCE 31/08) : SingletonLock/-Cookie/
-# -Socket dans le profil persistant (/config, monté depuis lhôte) encodent
-# le hostname du conteneur au moment où Chrome a été lancé pour la dernière
-# fois. Un renommage de conteneur/image (ArcadeBox -> Waybox -> SteamBox)
-# laisse un lien SingletonLock pointant sur un hostname qui nexiste plus
-# ("WayBox-25845" trouvé en direct) — Chrome refuse alors de démarrer
-# ("profile appears to be in use by another Google Chrome process on
-# another computer"). Un seul processus Chrome à la fois sur cette session
-# arcade : sans risque de le nettoyer inconditionnellement à chaque boot.
-rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null || true
-
-# PipeWire/WirePlumber/pipewire-pulse (audit M2, 05/09) : ne sont plus
-# lances ici -- de vrais services s6 individuellement supervises desormais
-# (svc-pipewire, svc-wireplumber, svc-pipewire-pulse), independants de ce
-# script/compositeur puisque Sunshine capture laudio quel que soit le
-# labwc (visible ou headless) reellement actif. Avant ce correctif, un seul
-# `pgrep` gardait chaque process dun doublon au RELANCEMENT de CE script,
-# mais aucune supervision individuelle : la mort isolee de pipewire
-# (labwc restant vivant) faisait perdre a Sunshine son sink audio
-# (sink-sunshine-stereo) sans que rien ne le relance.
-
-# unset WAYLAND_DISPLAY avant de lancer labwc : cette variable est fixée
-# globalement dans le Dockerfile (ENV WAYLAND_DISPLAY=wayland-0, utile pour
-# Sunshine/evdev-bridge qui se connectent APRÈS coup) mais si labwc la voit
-# héritée AVANT davoir créé son propre socket, il tente de sy CONNECTER
-# comme client imbriqué au lieu de créer son propre backend DRM racine —
-# confirmé en direct : "Could not connect to remote display: No such file
-# or directory" / "unable to create backend". labwc recrée wayland-0 tout
-# seul une fois lancé correctement (premier compositeur du conteneur).
-#
-# labwc : compositeur racine directement sur le GPU via seatd/libinput, sans
-# Xorg. Pas de --xwayland explicite comme kwin_wayland : labwc démarre son
-# Xwayland interne automatiquement dès quun client X11 (Steam, Wine,
-# Chrome) en a besoin.
-#
-# WLR_DRM_DEVICES=DRM_CARD (premier /dev/dri/card* présent, calculé hors du
-# bash -c) : /sys/class/drm (lecture seule, vue non
-# isolée par conteneur) liste les GPU de lhôte multi-GPU (card0/1/2), mais
-# /dev/dri/ ne contient QUE celui réellement passé au conteneur (card0 ici) —
-# sans ce forçage, wlroots énumère via /sys, essaie card1/card2, et échoue
-# ("Could not canonicalize path /dev/dri/cardN: No such file or directory")
-# avant même de tester card0. Confirmé en direct le 30/08.
-#
-# WLR_LIBINPUT_NO_DEVICES=1 : aucun périphérique dinput réel nest visible
-# au démarrage du conteneur (rien de branché à cet instant) — wlroots
-# refuse de démarrer son backend libinput sans au moins un device par
-# défaut ("libinput initialization failed, no input devices"), suggestion
-# officielle du message derreur lui-même. evdev-bridge (souris/clavier
-# virtuels Sunshine) et les manettes réelles/virtuelles (SDL, pas libinput)
-# ne dépendent pas de ce backend, donc aucun impact fonctionnel ici.
-# WLR_RENDERER=vulkan essayé puis abandonné (30/08) : active bien le
-# support HDR (wp_color_manager_v1 confirmé exposé), MAIS casse
-# complètement Sunshine — écran noir et clavier/souris morts sous Moonlight,
-# confirmé en direct. La corruption verte/jaune qui avait motivé cet essai
-# venait en fait dun ancien prefix Wine reutilise (config figee de lere
-# X11), pas dun vrai manque de HDR — un prefix neuf suffit a la corriger.
-# Retour au renderer par defaut (GLES2) tant que lincompatibilite
-# Vulkan-renderer/capture Sunshine nest pas comprise.
-unset WAYLAND_DISPLAY DISPLAY
-WLR_DRM_DEVICES="${DRM_CARD}" WLR_LIBINPUT_NO_DEVICES=1 labwc &
-LABWC_PID=$!
-
-WAYLAND_SOCKET="${XDG_RUNTIME_DIR}/wayland-0"
-TIMEOUT=30
-while [ ! -S "${WAYLAND_SOCKET}" ] && [ "${TIMEOUT}" -gt 0 ]; do
-    sleep 0.5
-    TIMEOUT=$((TIMEOUT - 1))
-done
-
-# Exports explicites DISPLAY/WAYLAND_DISPLAY (18/09, "TeknoParrot/PPSSPP/
-# Flycast/Winetricks souvrent sur le VNC au lieu du stream Moonlight") :
-# symetrique a sunshine-desktop-xfce.sh (bureau headless wayland-1), qui
-# exporte deja WAYLAND_DISPLAY=wayland-1 et DISPLAY=:1 pour ses propres
-# apps AVANT de les lancer -- ce script-ci ne le faisait jamais cote
-# bureau visible : unset plus haut (ligne 203) avant labwc, puis jamais
-# reexporte ensuite. Plusieurs .desktop forcaient donc DISPLAY=:0 en dur
-# dans leur Exec= pour compenser -- mais ces memes .desktop sont aussi
-# utilises depuis lentree "Desktop" cote Moonlight (wayland-1), ou
-# DISPLAY=:0 en dur pointe alors sur le MAUVAIS Xwayland (bureau visible/
-# VNC au lieu du stream reellement regarde, confirme en direct). Export
-# ici une seule fois pour tout le bureau visible -- herite normalement
-# par xfsettingsd/xfdesktop/xfce4-panel/nm-applet juste en dessous et
-# tout ce quils lancent ensuite -- plutot que dupliquer wayland-0/:0 dans
-# chaque .desktop un par un.
-export WAYLAND_DISPLAY=wayland-0
-export DISPLAY=:0
-
-# Panneau/bureau XFCE par-dessus labwc — barre des tâches, menu
-# applications, gestionnaire de fichiers (Thunar) accessibles pour
-# ladministration. Steam reste linterface principale de la session,
-# lancée manuellement depuis ce panneau (pas dautostart, voir décision
-# utilisateur 29/08).
-#
-# xfsettingsd manquait ici (30/08) : cest le démon qui applique réellement
-# les changements faits dans xfce4-settings (thème, curseur, scaling...) à
-# la session en cours — sans lui les réglages senregistrent mais ne
-# sappliquent jamais tant que rien ne les relit. xfce4-panel/nm-applet
-# nont pas ce rôle.
-xfsettingsd &
-
-# xfconf, pas gtk-3.0/settings.ini (30/08) : une fois xfsettingsd démarré,
-# c est LUI l autorité sur le thème/les icônes/la police via sa propre base
-# (xfconf) et le protocole XSETTINGS — il écrase silencieusement le
-# settings.ini statique écrit plus haut. Attente explicite que xfsettingsd
-# soit prêt (xfconfd démarre avec lui) avant d écrire, sinon xfconf-query
-# échoue ou écrit dans le vide.
-for i in $(seq 1 20); do
-    xfconf-query -c xsettings -p /Net/ThemeName >/dev/null 2>&1 && break
-    sleep 0.5
-done
-xfconf-query -c xsettings -p /Net/ThemeName -n -t string -s "Mc-OS-CTLina-XFCE-Dark" 2>/dev/null || true
-xfconf-query -c xsettings -p /Net/IconThemeName -n -t string -s "Papirus-Dark" 2>/dev/null || true
-xfconf-query -c xsettings -p /Gtk/FontName -n -t string -s "Cantarell 10" 2>/dev/null || true
-
-# xfdesktop (30/08) : jamais lancé jusque-là — sans lui, aucun fond
-# décran/bureau nest géré du tout (canal xfconf xfce4-desktop vide,
-# confirmé en direct), do l impression de bureau "nu" malgré thème/icônes/
-# police correctement réglés par ailleurs. monitorHDMI-A-1 codé en dur
-# (nom de connecteur réel, cohérent avec le reste du projet) : le dialogue
-# graphique "Réglages du bureau" écrit lui sur "monitorUnknown" (mauvaise
-# détection de sortie sous Wayland, confirmé en direct) — un changement fait
-# depuis ce dialogue nest donc JAMAIS repris par le xfdesktop réellement
-# affiché tant quon ne le recopie pas à la main sur cette clé precise.
-# Fond par defaut SEULEMENT si aucun nest regle (26/09) : ecrit a chaque
-# demarrage, il ecrasait le choix de lutilisateur -- et avec le defilement
-# active, le dossier des images (celui de last-image) revenait a celui
-# des fonds XFCE, vu en direct.
-BACKDROP=/backdrop/screen0/monitorHDMI-A-1/workspace0
-if ! xfconf-query -c xfce4-desktop -p "${BACKDROP}/last-image" >/dev/null 2>&1; then
-    xfconf-query -c xfce4-desktop -p "${BACKDROP}/last-image" \
-        -n -t string -s "/usr/share/backgrounds/xfce/xfce-cp-dark.svg" 2>/dev/null || true
-    xfconf-query -c xfce4-desktop -p "${BACKDROP}/image-style" \
-        -n -t int -s 5 2>/dev/null || true
-fi
-xfdesktop &
-
-# Relance automatique du panneau et de nm-applet (25/09) : GTK3 arrete net
-# le programme (assertion fatale ensure_surface_for_gicon, "Bail out!") des
-# quune icone ne se charge pas -- vu en direct, xfce4-panel et nm-applet
-# tues a la meme seconde par un echec passager de glycin, le chargeur
-# dimages de gdk-pixbuf 2.44 ("zbus i/o error"), non reproductible ensuite.
-# Sans relance, le bureau restait sans barre jusquau redemarrage. Le trap
-# TERM transmet larret de session (trap EXIT plus haut) au programme.
-respawn() {
-    while kill -0 "${LABWC_PID}" 2>/dev/null; do
-        "$@" &
-        child=$!
-        trap "kill \$child 2>/dev/null; exit 0" TERM
-        wait "${child}"
-        echo "[session] $1 arrete (code $?), relance dans 2 s"
-        sleep 2 &
-        child=$!
-        wait "${child}"
-    done
-}
-respawn xfce4-panel &
-respawn nm-applet &
-/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
-
-wait "${LABWC_PID}"
-'
+    /usr/local/bin/scripts/labwc-session.sh

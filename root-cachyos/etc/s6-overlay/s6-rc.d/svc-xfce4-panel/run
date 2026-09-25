@@ -1,0 +1,7 @@
+#!/command/with-contenv bash
+# Panneau XFCE du bureau visible (menu, barre des tâches, zone de
+# notification). Service à part (26/09) : GTK3 arrête le panneau sur une
+# icône introuvable — s6 le relance au lieu de laisser le bureau sans barre.
+# shellcheck source=../../../../scripts/desktop-env.sh
+. /usr/local/bin/scripts/desktop-env.sh
+desktop_exec xfce4-panel

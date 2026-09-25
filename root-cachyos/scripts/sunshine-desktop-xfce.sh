@@ -44,25 +44,10 @@ cd "${HOME}" || exit 1
 
 exec dbus-run-session -- bash -c '
 xfsettingsd &
-
-# Attente xfconfd (bus-activé par le premier xfconf-query, voir
-# wayland-session.sh) avant décriture, sinon xfconf-query échoue ou écrit
-# dans le vide.
-for i in $(seq 1 20); do
-    xfconf-query -c xsettings -p /Net/ThemeName >/dev/null 2>&1 && break
-    sleep 0.5
-done
-xfconf-query -c xsettings -p /Net/ThemeName -n -t string -s "Mc-OS-CTLina-XFCE-Dark" 2>/dev/null || true
-xfconf-query -c xsettings -p /Net/IconThemeName -n -t string -s "Papirus-Dark" 2>/dev/null || true
-xfconf-query -c xsettings -p /Gtk/FontName -n -t string -s "Cantarell 10" 2>/dev/null || true
-
-# monitorHEADLESS-1 : nom réel de la sortie du labwc headless (confirmé via
-# wlr-randr --output HEADLESS-1 dans set-resolution.sh), pas HDMI-A-1
-# (connecteur réel utilisé côté wayland-0/bureau visible).
-xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitorHEADLESS-1/workspace0/last-image" \
-    -n -t string -s "/usr/share/backgrounds/xfce/xfce-cp-dark.svg" 2>/dev/null || true
-xfconf-query -c xfce4-desktop -p "/backdrop/screen0/monitorHEADLESS-1/workspace0/image-style" \
-    -n -t int -s 5 2>/dev/null || true
+# Réglages par défaut seulement si absents (26/09, xfce-defaults.sh) : les
+# forcer ici écrasait à chaque session Moonlight les choix de lutilisateur
+# (police, fond) faits sur lun ou lautre bureau (même xfconf, même HOME).
+/usr/local/bin/scripts/xfce-defaults.sh HEADLESS-1
 xfdesktop &
 xfce4-panel &
 nm-applet &
