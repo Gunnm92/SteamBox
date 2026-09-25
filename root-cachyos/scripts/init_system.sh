@@ -2,11 +2,10 @@
 # Préparation système one-shot, avant la boucle superviseur.
 set -e
 
-if [ ! -f /etc/locale.gen.done ]; then
-    printf 'fr_FR.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n' > /etc/locale.gen
-    locale-gen
-    touch /etc/locale.gen.done
-fi
+# Plus de locale-gen ici (25/09) : il réécrivait /etc/locale.gen avec
+# fr_FR + en_US seules et reconstruisait l'archive des locales au premier
+# démarrage, effaçant celles compilées dans l'image (EXTRA_LOCALES, voir
+# Dockerfile) — vérifié après déploiement : de_DE/es_ES/it_IT/pt_BR absentes.
 
 mkdir -p /config/.config/sunshine /config/.local/share/Steam
 
