@@ -281,10 +281,17 @@ xfconf-query -c xsettings -p /Gtk/FontName -n -t string -s "Cantarell 10" 2>/dev
 # détection de sortie sous Wayland, confirmé en direct) — un changement fait
 # depuis ce dialogue nest donc JAMAIS repris par le xfdesktop réellement
 # affiché tant quon ne le recopie pas à la main sur cette clé precise.
-xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorHDMI-A-1/workspace0/last-image \
-    -n -t string -s "/usr/share/backgrounds/xfce/xfce-cp-dark.svg" 2>/dev/null || true
-xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorHDMI-A-1/workspace0/image-style \
-    -n -t int -s 5 2>/dev/null || true
+# Fond par defaut SEULEMENT si aucun nest regle (26/09) : ecrit a chaque
+# demarrage, il ecrasait le choix de lutilisateur -- et avec le defilement
+# active, le dossier des images (celui de last-image) revenait a celui
+# des fonds XFCE, vu en direct.
+BACKDROP=/backdrop/screen0/monitorHDMI-A-1/workspace0
+if ! xfconf-query -c xfce4-desktop -p "${BACKDROP}/last-image" >/dev/null 2>&1; then
+    xfconf-query -c xfce4-desktop -p "${BACKDROP}/last-image" \
+        -n -t string -s "/usr/share/backgrounds/xfce/xfce-cp-dark.svg" 2>/dev/null || true
+    xfconf-query -c xfce4-desktop -p "${BACKDROP}/image-style" \
+        -n -t int -s 5 2>/dev/null || true
+fi
 xfdesktop &
 
 # Relance automatique du panneau et de nm-applet (25/09) : GTK3 arrete net
