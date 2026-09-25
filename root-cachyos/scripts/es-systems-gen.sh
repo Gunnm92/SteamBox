@@ -38,17 +38,19 @@ declare -A THEME_ALIAS=(
     [zxs]=zxspectrum
 )
 
-# Images du thème actif (ThemeSet d'es_settings.cfg), par nom sans
+# Logos du thème actif (ThemeSet d'es_settings.cfg), par nom sans
 # extension : les thèmes Batocera nomment leurs visuels d'après le système
-# (Carbon : art/consoles/sega.png, ckau-book : _inc/logos/segare.svg).
+# (Carbon : art/logos/sega.svg, ckau-book : _inc/logos/segare.svg). Logos
+# seulement : ckau-book a aussi des fonds jaguar.png/lynx.png hérités de
+# Retrobat, mais son logo et sa mise en page sont atarijaguar/atarilynx.
 ES_HOME="${ES_HOME:-${HOME}/.emulationstation}"
 theme_set=$(grep -o 'name="ThemeSet" value="[^"]*"' "${ES_HOME}/es_settings.cfg" 2>/dev/null | cut -d'"' -f4)
 declare -A THEME_NAMES=()
 for d in "${ES_HOME}/themes/${theme_set}" "/usr/share/emulationstation/themes/${theme_set}"; do
     [[ -n "$theme_set" && -d "$d" ]] || continue
     while IFS= read -r n; do THEME_NAMES[$n]=1; done < <(
-        find -L "$d" -type f \( -iname '*.png' -o -iname '*.svg' -o -iname '*.jpg' -o -iname '*.webp' \) \
-            -printf '%f\n' 2>/dev/null | sed 's/\.[^.]*$//' | sort -u)
+        find -L "$d" -type f -path '*/logos/*' -printf '%f\n' 2>/dev/null \
+            | sed 's/\.[^.]*$//' | sort -u)
     break
 done
 
