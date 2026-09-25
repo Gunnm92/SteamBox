@@ -1179,7 +1179,11 @@ RUN --mount=type=secret,id=github_token \
       > /usr/share/applications/melonds.desktop && \
     rm -f /tmp/melon.zip
 
-# DOSBox Staging — tarball officiel, pas d'AppImage.
+# DOSBox Staging — tarball officiel, pas d'AppImage. Icône cherchée dans
+# l'archive (26/09) : l'amont a renommé org.dosbox-staging.* en
+# org.dosbox_staging.* ; le chemin écrit en dur n'existait plus, et cette
+# icône manquante dans le menu des applications faisait planter
+# xfce4-panel au démarrage (voir vérification des icônes plus bas).
 ARG DSTAGING_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -1190,7 +1194,9 @@ RUN --mount=type=secret,id=github_token \
       "https://github.com/dosbox-staging/dosbox-staging/releases/download/${DSTAGING_VERSION}/dosbox-staging-linux-x86_64-${DSTAGING_VERSION}.tar.xz" && \
     mkdir -p /opt/dosbox && tar -xf /tmp/dosbox.tar.xz -C /opt/dosbox --strip-components=1 && \
     ln -sf /opt/dosbox/dosbox /usr/local/bin/dosbox && \
-    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=/opt/dosbox/icons/hicolor/256x256/apps/org.dosbox-staging.dosbox-staging.png\nTerminal=false\nCategories=Game;\n' \
+    DOSBOX_ICON=$(ls /opt/dosbox/icons/hicolor/256x256/apps/*.png 2>/dev/null | head -1) && \
+    [ -n "${DOSBOX_ICON}" ] || { echo "FATAL: icône DOSBox Staging introuvable"; exit 1; } && \
+    printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=%s\nTerminal=false\nCategories=Game;\n' "${DOSBOX_ICON}" \
       > /usr/share/applications/dosbox.desktop && \
     rm -f /tmp/dosbox.tar.xz
 
@@ -1487,6 +1493,17 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
+
+# Toute icône en chemin absolu d'un .desktop doit exister (26/09) : GTK3
+# se rabat sur image-missing pour une icône introuvable, et un échec de ce
+# second chargement (glycin, gdk-pixbuf 2.44) ARRÊTE le programme —
+# xfce4-panel plantait au démarrage à cause de l'icône DOSBox renommée.
+RUN missing=0; \
+    for f in /usr/share/applications/*.desktop; do \
+      icon=$(sed -n 's/^Icon=//p' "$f" | head -1); \
+      case "${icon}" in /*) [ -e "${icon}" ] || { echo "FATAL: icône absente ${icon} ($f)"; missing=1; } ;; esac; \
+    done; \
+    [ "${missing}" = 0 ]
 
 VOLUME /config
 # EXPOSE purement documentaire (audit B4, 31/08) : le conteneur tourne en
