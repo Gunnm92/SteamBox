@@ -14,6 +14,28 @@ set -uo pipefail
 ROMS_DIR="${GAMES_ROMS_DIR:-/home/arcade/games/Batocera/roms}"
 LAUNCH="/usr/local/bin/scripts/game-launch.sh"
 
+# Nom de thème/plateforme Batocera pour les dossiers de roms nommés
+# autrement (convention RomM, renommages : "win" au lieu de "windows"...).
+# Sans correspondance, le thème (Carbon) n'a pas de visuel pour le système :
+# 34 systèmes s'affichaient sans logo ni image, dont Windows (confirmé le
+# 25/09 en comparant es_systems.cfg aux art/logos de Carbon). Systèmes
+# arcade sans visuel propre : famille du constructeur, sinon "arcade".
+declare -A THEME_ALIAS=(
+    [win]=windows            [type-x]=typex           [arcadepc]=arcade
+    [rawthrills]=arcade      [unis]=arcade            [nesicax]=taito
+    [nesicax2]=taito         [segaalls]=sega          [segaer]=sega
+    [seganu]=sega            [segare]=sega            [segarw]=sega
+    [namcoes3]=namco         [konamipc]=konami        [konamilcd]=konami
+    [igspgm]=igs             [stv]=segastv            [dc]=dreamcast
+    [ngc]=gc                 [sms]=mastersystem       [sfam]=sfc
+    [sega32]=sega32x         [acpc]=amstradcpc        [atari-st]=atarist
+    [jaguar]=atarijaguar     [lynx]=atarilynx         [neogeoaes]=neogeo
+    [neo-geo-pocket]=ngp     [neo-geo-pocket-color]=ngpc
+    [pc-fx]=pcfx             [turbografx-cd]=pcenginecd
+    [vic-20]=vic20           [wonderswan-color]=wonderswancolor
+    [zxs]=zxspectrum
+)
+
 xml_escape() {
     local s="$1"
     s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"
@@ -45,8 +67,8 @@ while IFS= read -r sys; do
     <path>${ROMS_DIR}/${sys}</path>
     <extension>${exts% }</extension>
     <command>${LAUNCH} %ROM%</command>
-    <platform>${sys}</platform>
-    <theme>${sys}</theme>
+    <platform>${THEME_ALIAS[$sys]:-$sys}</platform>
+    <theme>${THEME_ALIAS[$sys]:-$sys}</theme>
   </system>
 EOF
 done < <(printf '%s\n' "${!SYSTEMS[@]}" | sort)
