@@ -798,54 +798,47 @@ RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Steam Link)\nExec=/us
 RUN printf '[Desktop Entry]\nType=Application\nName=Retour au bureau\nExec=/usr/local/bin/scripts/exit-to-desktop.sh\nIcon=go-home\nTerminal=false\nCategories=System;\n' \
       > /usr/share/applications/exit-to-desktop.desktop
 
-# ── 1a7c. Thème GTK "Mc-OS-CTLina-XFCE-Dark" (macOS Catalina, sombre) —
-# fourni par l'utilisateur (gnome-look.org, page bloquée par anti-bot Anubis,
-# récupéré manuellement), vendored à la racine du dépôt comme evdev-bridge.
-# Pas d'index.theme dans l'archive (contient juste gtk-2.0/ + gtk-3.0/,
-# aucun xfwm4/ — sans importance, labwc gère les décorations de fenêtre, pas
-# xfwm4) : on en génère un minimal pour qu'il apparaisse correctement dans
-# le sélecteur de thème xfce4-appearance-settings.
-COPY Mc-OS-CTLina-XFCE-Dark.tar.xz /tmp/theme.tar.xz
-RUN mkdir -p /usr/share/themes && \
-    tar -xJf /tmp/theme.tar.xz -C /usr/share/themes && \
-    printf '[Desktop Entry]\nType=X-GNOME-Metatheme\nName=Mc-OS-CTLina-XFCE-Dark\nComment=macOS Catalina, sombre\n' \
-      > /usr/share/themes/Mc-OS-CTLina-XFCE-Dark/index.theme && \
-    rm -f /tmp/theme.tar.xz
-
-# gtk.css du thème corrigé (audit 31/08) : 4 erreurs de syntaxe CSS réelles
-# dans le fichier fourni, provoquant les "Theme parsing error" au démarrage
-# de CHAQUE appli GTK3 du conteneur (RetroArch, Dolphin, Steam ROM Manager,
-# Eden, xfce4-terminal...), toujours aux mêmes numéros de ligne — confirmé
-# en isolant chaque erreur dans le fichier extrait :
-#   - url"linear-gradient(...) : un "url" parasite devant un gradient, pas
-#     une URL — probablement un artefact de recherche/remplacement en amont
-#   - bloc .nautilus-window .path-bar button (styles Nautilus/GNOME Files,
-#     jamais utilisés ici — ce projet utilise Thunar) : tentative de
-#     commenter tout le bloc en éparpillant des /* */ ligne par ligne au
-#     lieu d'un seul bloc propre — CSS ne supporte pas les commentaires
-#     imbriqués, le premier */ rencontré referme prématurément, et le reste
-#     du bloc est ensuite lu comme du vrai CSS invalide. Supprimé entièrement
-#     plutôt que réparé : déjà mort/désactivé dans l'intention d'origine.
-#   - "text-shadow: text-shadow: ..." : propriété dupliquée par erreur
-#   - "color:ffffff" : # manquant devant le hex
-COPY <<'PATCH_THEME_EOF' /tmp/patch-theme.py
-p = '/usr/share/themes/Mc-OS-CTLina-XFCE-Dark/gtk-3.0/gtk.css'
-lines = open(p, encoding='utf-8').read().splitlines(keepends=True)
-assert 'url"linear-gradient' in lines[7852], 'ligne 7853 inattendue'
-lines[7852] = lines[7852].replace('url"linear-gradient', 'linear-gradient')
-assert lines[11632].startswith('/*.nautilus-window .path-bar button {'), 'ligne 11633 inattendue'
-assert lines[11679].rstrip() == '}', 'ligne 11680 inattendue'
-del lines[11632:11680]
-c = ''.join(lines)
-assert 'text-shadow: text-shadow:' in c
-c = c.replace('text-shadow: text-shadow:', 'text-shadow:')
-assert 'color:ffffff;' in c
-c = c.replace('color:ffffff;', 'color:#ffffff;')
-open(p, 'w', encoding='utf-8').write(c)
-print('gtk.css theme patche avec succes')
-PATCH_THEME_EOF
-
-RUN python3 /tmp/patch-theme.py && rm -f /tmp/patch-theme.py
+# ── 1a7c. Thème WhiteSur-Dark (vinceliuice, MIT) — style macOS, choisi le
+# 26/09 à la place de Mc-OS-CTLina-XFCE-Dark (GTK 2/3 seulement, 2017, 4
+# erreurs CSS à corriger à la main et des "Theme parsing error" à chaque
+# lancement d'appli GTK). WhiteSur couvre GTK 2/3/4, libadwaita, xfwm4 et
+# labwc (bordures de fenêtres). Compilé depuis les sources (sassc) : le
+# paquet AUR retarde (avril 2025). Figé sur un commit testé.
+# libadwaita : les applis GNOME récentes ignorent le thème GTK choisi et ne
+# lisent que ~/.config/gtk-4.0/gtk.css — généré ici (install.sh -l) puis
+# déplacé dans /usr/share/themes/WhiteSur-Dark/libadwaita, relié par
+# labwc-session.sh si l'utilisateur n'a pas le sien. Pièges de
+# l'installateur, tous vécus le 26/09 :
+#   - -l refusé en root ("Do not run '--libadwaita' option with sudo!") :
+#     généré par un utilisateur temporaire (wsbuild), supprimé ensuite ;
+#   - compte déduit de SUDO_USER, logname puis USER, vides pendant un build
+#     (arrêt silencieux sinon) : USER explicite ;
+#   - setterm/tput sans TERM : arrêt silencieux, d'où TERM=xterm ;
+#   - -d refusé s'il COMMENCE par le chemin des sources ("Can't install in
+#     the source directory" pour /tmp/whitesur-dest) : autre nom.
+ARG WHITESUR_REF=d5782652d412137e26fb8ff55b55a5572e4c6995
+RUN pacman -S --noconfirm --needed sassc && \
+    useradd -m wsbuild && \
+    git clone -q https://github.com/vinceliuice/WhiteSur-gtk-theme.git /tmp/whitesur && \
+    cd /tmp/whitesur && git checkout -q "${WHITESUR_REF}" && chown -R wsbuild /tmp/whitesur && \
+    runuser -u wsbuild -- env USER=wsbuild HOME=/home/wsbuild TERM=xterm \
+      ./install.sh -d /tmp/ws-libadwaita-dest -c dark -l && \
+    [ -f /home/wsbuild/.config/gtk-4.0/gtk-Dark.css ] \
+      || { echo "FATAL: CSS libadwaita de WhiteSur non généré"; exit 1; } && \
+    USER=root TERM=xterm ./install.sh -d /usr/share/themes -c dark && \
+    [ -f /usr/share/themes/WhiteSur-Dark/gtk-4.0/gtk.css ] \
+      || { echo "FATAL: WhiteSur-Dark non installé"; exit 1; } && \
+    mkdir -p /usr/share/themes/WhiteSur-Dark/libadwaita && \
+    cp -a /home/wsbuild/.config/gtk-4.0/gtk-Dark.css /home/wsbuild/.config/gtk-4.0/assets \
+      /usr/share/themes/WhiteSur-Dark/libadwaita/ && \
+    { [ ! -d /home/wsbuild/.config/gtk-4.0/windows-assets ] \
+      || cp -a /home/wsbuild/.config/gtk-4.0/windows-assets /usr/share/themes/WhiteSur-Dark/libadwaita/; } && \
+    chown -R root:root /usr/share/themes/WhiteSur-Dark/libadwaita && \
+    cd / && userdel -r wsbuild 2>/dev/null; \
+    rm -rf /tmp/whitesur /tmp/ws-libadwaita-dest /tmp/WhiteSur.lock /home/wsbuild \
+      /root/.local/bin/gnome-theme-switcher /root/.local/share/applications/org.gnome.GTK4ThemeSwitcher.desktop && \
+    [ -f /usr/share/themes/WhiteSur-Dark/libadwaita/gtk-Dark.css ] && \
+    pacman -Rns --noconfirm sassc && pacman -Scc --noconfirm
 
 # ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
 # novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau

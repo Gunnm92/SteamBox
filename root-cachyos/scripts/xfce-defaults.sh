@@ -32,7 +32,7 @@ set_default() {
     xfconf-query -c "$1" -p "$2" -n -t "$3" -s "$4" 2>/dev/null || true
 }
 
-set_default xsettings /Net/ThemeName string "Mc-OS-CTLina-XFCE-Dark"
+set_default xsettings /Net/ThemeName string "WhiteSur-Dark"
 set_default xsettings /Net/IconThemeName string "Papirus-Dark"
 set_default xsettings /Gtk/FontName string "Cantarell 10"
 set_default xsettings /Gtk/MonospaceFontName string "JetBrainsMono Nerd Font Mono 10"
