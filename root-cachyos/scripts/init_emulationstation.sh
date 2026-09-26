@@ -63,7 +63,7 @@ grep -q '^system.language=' "${CONF}" || echo "system.language=${STEAMBOX_LANG}"
 # plateforme créé dans la ludothèque apparaît au redémarrage suivant.
 if [ -d "${ROMS_DIR}" ]; then
     tmp="${ES_HOME}/es_systems.cfg.new"
-    /usr/local/bin/scripts/es-systems-gen.sh > "${tmp}"
+    ES_HOME="${ES_HOME}" /usr/local/bin/scripts/es-systems-gen.sh > "${tmp}"
     mv -f "${tmp}" "${ES_HOME}/es_systems.cfg"
     echo "[emulationstation] es_systems.cfg : $(grep -c '<system>' "${ES_HOME}/es_systems.cfg") systèmes"
 else

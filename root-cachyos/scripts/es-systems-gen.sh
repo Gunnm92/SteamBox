@@ -42,16 +42,24 @@ declare -A THEME_ALIAS=(
 # (Carbon : art/logos/sega.svg, ckau-book : _inc/logos/segare.svg). Logos
 # seulement : ckau-book a aussi des fonds jaguar.png/lynx.png hérités de
 # Retrobat, mais son logo et sa mise en page sont atarijaguar/atarilynx.
-ES_HOME="${ES_HOME:-${HOME}/.emulationstation}"
+# Dossier ES d'arcade par défaut, PAS ${HOME} : init_emulationstation tourne
+# en root au démarrage — ${HOME}=/root, thème actif introuvable, et tous les
+# alias s'appliquaient (visuels segare/namcoes3/konamipc… perdus, 26/09).
+ES_HOME="${ES_HOME:-/home/arcade/.emulationstation}"
 theme_set=$(grep -o 'name="ThemeSet" value="[^"]*"' "${ES_HOME}/es_settings.cfg" 2>/dev/null | cut -d'"' -f4)
 declare -A THEME_NAMES=()
+theme_found=""
 for d in "${ES_HOME}/themes/${theme_set}" "/usr/share/emulationstation/themes/${theme_set}"; do
     [[ -n "$theme_set" && -d "$d" ]] || continue
     while IFS= read -r n; do THEME_NAMES[$n]=1; done < <(
         find -L "$d" -type f -path '*/logos/*' -printf '%f\n' 2>/dev/null \
             | sed 's/\.[^.]*$//' | sort -u)
+    theme_found="$d"
     break
 done
+if [[ -z "${theme_found}" ]]; then
+    echo "es-systems-gen: thème actif '${theme_set:-?}' introuvable (${ES_HOME}), alias appliqués partout" >&2
+fi
 
 theme_name() {
     local sys="$1"
