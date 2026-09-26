@@ -20,10 +20,17 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 # Clavier : labwc ne lit PAS XKB_DEFAULT_LAYOUT dans son environnement, mais
 # dans ~/.config/labwc/environment (doc labwc, confirmé le 30/08).
 # Disposition : KEYBOARD_LAYOUT/VARIANT (steambox-env.sh).
+# Curseur : celui réglé dans XFCE (xfconf), sinon WhiteSur — labwc le
+# transmet à Xwayland et aux applis qu'il lance ; sans lui, le curseur par
+# défaut s'affichait sur le fond et les bordures de fenêtres.
+cursor_theme=$(xfconf-query -c xsettings -p /Gtk/CursorThemeName 2>/dev/null || true)
+cursor_size=$(xfconf-query -c xsettings -p /Gtk/CursorSize 2>/dev/null || true)
 mkdir -p "${HOME}/.config/labwc"
 cat > "${HOME}/.config/labwc/environment" <<EOF
 XKB_DEFAULT_LAYOUT=${KEYBOARD_LAYOUT:-us}
 XKB_DEFAULT_VARIANT=${KEYBOARD_VARIANT:-}
+XCURSOR_THEME=${cursor_theme:-WhiteSur-cursors}
+XCURSOR_SIZE=${cursor_size:-24}
 EOF
 
 # Thème des bordures de fenêtres : celui du thème GTK choisi (xfconf) s'il
@@ -61,7 +68,7 @@ ${labwc_theme}
 </labwc_config>
 EOF
 
-# Fallbacks GTK3/4 (WhiteSur-Dark + Papirus) pour les applis lancées avant
+# Fallbacks GTK3/4 (thème, icônes et curseur WhiteSur) pour les applis lancées avant
 # xfsettingsd — ensuite c'est xfconf/XSETTINGS qui fait foi
 # (xfce-defaults.sh).
 mkdir -p "${HOME}/.config/gtk-3.0" "${HOME}/.config/gtk-4.0"
@@ -69,7 +76,8 @@ cat > "${HOME}/.config/gtk-3.0/settings.ini" <<EOF
 [Settings]
 gtk-theme-name=WhiteSur-Dark
 gtk-application-prefer-dark-theme=1
-gtk-icon-theme-name=Papirus-Dark
+gtk-icon-theme-name=WhiteSur-dark
+gtk-cursor-theme-name=WhiteSur-cursors
 gtk-font-name=Cantarell 10
 EOF
 cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"

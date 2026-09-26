@@ -33,7 +33,9 @@ set_default() {
 }
 
 set_default xsettings /Net/ThemeName string "WhiteSur-Dark"
-set_default xsettings /Net/IconThemeName string "Papirus-Dark"
+set_default xsettings /Net/IconThemeName string "WhiteSur-dark"
+set_default xsettings /Gtk/CursorThemeName string "WhiteSur-cursors"
+set_default xsettings /Gtk/CursorSize int 24
 set_default xsettings /Gtk/FontName string "Cantarell 10"
 set_default xsettings /Gtk/MonospaceFontName string "JetBrainsMono Nerd Font Mono 10"
 

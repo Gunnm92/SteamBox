@@ -70,7 +70,7 @@ Chaque app applique la résolution du client à la connexion et revient à
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
-- **Bureau** : XFCE (panel, Thunar, terminal), thème WhiteSur sombre (style macOS, GTK 2/3/4 et libadwaita),
+- **Bureau** : XFCE (panel, Thunar, terminal), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
   même disposition clavier partout (local, VNC, Moonlight — `KEYBOARD_LAYOUT`).
 - **Divers** : Steam ROM Manager, Flips, Google Chrome, flatpak (+ Flathub).
 

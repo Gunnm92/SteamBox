@@ -840,6 +840,24 @@ RUN pacman -S --noconfirm --needed sassc && \
     [ -f /usr/share/themes/WhiteSur-Dark/libadwaita/gtk-Dark.css ] && \
     pacman -Rns --noconfirm sassc && pacman -Scc --noconfirm
 
+# Icônes et curseur WhiteSur (26/09, demande utilisateur) : assortis au
+# thème GTK ci-dessus, remplacent Papirus / le curseur par défaut. Icônes :
+# variantes WhiteSur, WhiteSur-dark, WhiteSur-light ; une appli absente du
+# thème garde son icône officielle (héritage hicolor). Figés sur un commit.
+ARG WHITESUR_ICONS_REF=73d8040da51a9ed74e47c7366e7e9ff437601a5c
+ARG WHITESUR_CURSORS_REF=e190baf618ed95ee217d2fd45589bd309b37672b
+RUN git clone -q https://github.com/vinceliuice/WhiteSur-icon-theme.git /tmp/wsi && \
+    cd /tmp/wsi && git checkout -q "${WHITESUR_ICONS_REF}" && \
+    ./install.sh -d /usr/share/icons && \
+    [ -f /usr/share/icons/WhiteSur-dark/index.theme ] \
+      || { echo "FATAL: icônes WhiteSur-dark non installées"; exit 1; } && \
+    git clone -q https://github.com/vinceliuice/WhiteSur-cursors.git /tmp/wsc && \
+    cd /tmp/wsc && git checkout -q "${WHITESUR_CURSORS_REF}" && \
+    cp -a dist /usr/share/icons/WhiteSur-cursors && \
+    [ -f /usr/share/icons/WhiteSur-cursors/index.theme ] \
+      || { echo "FATAL: curseur WhiteSur non installé"; exit 1; } && \
+    cd / && rm -rf /tmp/wsi /tmp/wsc
+
 # ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
 # novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau
 # (GPL-2), ni paquet Arch ni AUR, compilé depuis les sources avec son
