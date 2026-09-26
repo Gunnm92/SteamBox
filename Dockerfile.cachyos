@@ -1494,6 +1494,16 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
 
+# Cache de polices système complet, APRÈS la dernière police installée
+# (26/09) : incomplet, il faisait planter le panneau. Le chargeur SVG de
+# glycin (gdk-pixbuf 2.44) reconstruit alors son propre cache dans son bac
+# à sable, et seccomp le tue pendant l'écriture (SIGSYS) — tout SVG avec du
+# texte échouait (icône de Xemu), et l'icône de repli chargée ensuite sur
+# ce chargeur mort arrêtait xfce4-panel (GTK3 "Bail out!"). Reproduit à
+# coup sûr le 26/09 en vidant /var/cache/fontconfig.
+RUN fc-cache -s && \
+    ! fc-cache -s -v 2>&1 | grep -qi 'new cache'
+
 # Comptes et groupes système des paquets (26/09) : le hook pacman qui les
 # crée (systemd-sysusers) ne tourne pas pendant le build — polkitd,
 # gamemode, seat, avahi, colord, flatpak… manquaient (vu le 26/09 :

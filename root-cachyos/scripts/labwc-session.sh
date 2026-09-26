@@ -61,6 +61,13 @@ gtk-font-name=Cantarell 10
 EOF
 cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
 
+# Cache de polices de l'utilisateur à jour AVANT tout composant graphique
+# (26/09) : pour les polices ajoutées dans ~/.local/share/fonts. Sinon le
+# chargeur SVG de glycin reconstruit son cache dans son bac à sable, et
+# seccomp le tue (voir fc-cache -s en fin de Dockerfile). Instantané quand
+# rien n'a changé.
+fc-cache 2>/dev/null || true
+
 xdg-mime default wine.desktop application/x-ms-dos-executable application/x-msi \
     application/x-ms-shortcut application/x-bat 2>/dev/null || true
 
