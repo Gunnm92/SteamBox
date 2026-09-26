@@ -151,8 +151,8 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   contournement : re-changer de fenêtre.
 - **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
-  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`,
-  `svc-polkit-agent`. Relance manuelle :
+  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+  Relance manuelle :
   `s6-svc -r /run/service/svc-xfce4-panel`.
 - **Chrome refuse de démarrer** (« profile in use by another computer ») →
   verrou `SingletonLock` d'un ancien hostname, nettoyé à chaque démarrage de

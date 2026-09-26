@@ -8,7 +8,7 @@
 # Lancé par svc-labwc (root) : prépare le runtime puis passe la main, en
 # arcade, à labwc-session.sh, qui écrit la configuration de labwc et se
 # REMPLACE par labwc. Les composants XFCE (xfsettingsd, xfdesktop,
-# xfce4-panel, nm-applet, agent polkit) sont des services s6 séparés depuis
+# xfce4-panel, nm-applet) sont des services s6 séparés depuis
 # le 26/09 (voir desktop-env.sh) — ils étaient lancés en arrière-plan ici,
 # dans un "bash -c '…'" géant : non supervisés, et une seule apostrophe dans
 # un commentaire cassait toute la session (vécu le 31/08).

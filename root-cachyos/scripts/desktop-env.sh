@@ -1,7 +1,7 @@
 #!/bin/bash
 # Lancement d'un programme du bureau visible (labwc wayland-0) comme service
 # s6, à sourcer depuis un run (26/09). Chaque composant du bureau XFCE
-# (xfsettingsd, xfdesktop, xfce4-panel, nm-applet, agent polkit) est son
+# (xfsettingsd, xfdesktop, xfce4-panel, nm-applet) est son
 # propre service : s6 le relance s'il plante — xfce4-panel mourait sur une
 # icône introuvable (GTK3, "Bail out!") et restait absent jusqu'au
 # redémarrage — et `s6-svc -r /run/service/<svc>` le relance proprement.

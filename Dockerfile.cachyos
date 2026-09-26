@@ -228,7 +228,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
-      network-manager-applet polkit-gnome \
+      network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
       wayvnc python-pip wlr-randr \
       gtk3 \
@@ -1493,6 +1493,15 @@ ENV WAYLAND_DISPLAY=wayland-0 \
     S6_KEEP_ENV=1 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     S6_VERBOSITY=2
+
+# Comptes et groupes système des paquets (26/09) : le hook pacman qui les
+# crée (systemd-sysusers) ne tourne pas pendant le build — polkitd,
+# gamemode, seat, avahi, colord, flatpak… manquaient (vu le 26/09 :
+# polkitd ne démarrait pas, "Unknown username polkitd" côté D-Bus). Pas
+# d'agent polkit graphique : il exige une session logind, absente sous s6
+# ("No session for pid"), et arcade a sudo sans mot de passe.
+RUN systemd-sysusers && \
+    [ -z "$(systemd-sysusers --dry-run 2>&1 | grep -i creating)" ]
 
 # Toute icône en chemin absolu d'un .desktop doit exister (26/09) : GTK3
 # se rabat sur image-missing pour une icône introuvable, et un échec de ce
