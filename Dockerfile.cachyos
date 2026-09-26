@@ -248,7 +248,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       xdg-desktop-portal \
       gamescope \
       libretro \
-      wine-staging winetricks dxvk-mingw-git vkd3d-proton-git \
+      wine-staging winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \
       ark unrar zip \
@@ -315,7 +315,7 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 # github.com/elFarto/nvidia-vaapi-driver) — "nvidia-vaapi-driver" tout court
 # clone un dépôt AUR vide (aucune erreur git, juste 0 commit). Buildé via
 # makepkg (git/gcc/make/fakeroot déjà présents dans l'image — voir
-# dxvk-mingw-git/vkd3d-proton-git plus haut, déjà des paquets -git) plutôt
+# dxvk-mingw-git/vkd3d-proton-mingw-git plus haut, déjà des paquets -git) plutôt
 # qu'extrait binaire comme Chrome : projet C minuscule, build de quelques
 # secondes, pas la même échelle qu'un navigateur. meson/ninja/libva/
 # ffnvcodec-headers = makedepends du PKGBUILD AUR, supprimés après coup
