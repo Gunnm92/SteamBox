@@ -224,6 +224,11 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # servait une signature périmée pour une base pourtant identique aux autres
 # miroirs, trois essais d'affilée sur le même miroir ne pouvaient
 # qu'échouer. Le premier miroir de chaque liste CachyOS passe en dernier.
+# umu-launcher + proton-cachyos-slr (27/09) : wsquashfs-launcher lance les
+# prefixes créés par Proton (Heroic, Steam) via umu-run et le script proton,
+# comme Heroic — le seul binaire wine de Proton donnait écran noir puis
+# plantage sur Kingdom Hearts III. proton-cachyos sert quand la version
+# exacte du prefix (GE-Proton de Heroic...) n'est pas installée.
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
@@ -249,6 +254,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       gamescope \
       libretro \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
+      umu-launcher proton-cachyos-slr \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \
       ark unrar zip \
