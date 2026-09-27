@@ -245,6 +245,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       pipewire pipewire-pulse pipewire-alsa wireplumber \
       lib32-pipewire lib32-libpulse \
       lib32-libxrandr lib32-libxi lib32-libxcursor lib32-libxcomposite lib32-libxrender \
+      lib32-libxkbcommon \
       ffmpeg \
       steam \
       sunshine \
@@ -907,7 +908,10 @@ ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${W
 # (Heroic, Steam) restent sur leur Proton (find_proton_runner).
 # Dépendances 32 bits : couvertes par les lib32-* déjà présents (Steam,
 # Mesa, PipeWire) + lib32-libxrandr/xi/xcursor/xcomposite/xrender ajoutés
-# plus haut (changements de résolution, curseur). Pas de lib32-sdl2 dans
+# plus haut (changements de résolution, curseur) + lib32-libxkbcommon
+# (27/09) : sans lui, winewayland.drv 32 bits ne se charge pas, et un jeu
+# 32 bits n'a aucun pilote d'affichage quand explorer.exe (64 bits) a pris
+# Wayland — "no driver could be loaded" (Virtua Tennis 4). Pas de lib32-sdl2 dans
 # multilib : manettes via le backend udev/hidraw de winebus dans ce cas.
 ARG WINE32_TAG=""
 RUN --mount=type=secret,id=github_token \
