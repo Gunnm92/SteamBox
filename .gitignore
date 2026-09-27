@@ -18,3 +18,6 @@ docker-webstation/
 # Choix du profil local (make), propre à chaque machine
 local.mk
 .env
+
+# Cache Python (vérification locale des scripts)
+__pycache__/

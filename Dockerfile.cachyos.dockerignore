@@ -6,3 +6,6 @@
 *
 !root-cachyos/
 !evdev-bridge/
+
+# Cache Python des scripts, jamais dans l'image
+**/__pycache__
