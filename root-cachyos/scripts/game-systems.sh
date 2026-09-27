@@ -18,18 +18,13 @@ SCRIPTS="/usr/local/bin/scripts"
 CORES="/config/.config/retroarch/cores"
 # -f : plein écran (lancé depuis EmulationStation/Moonlight, jamais en fenêtre).
 RA="retroarch -f -L"
-# Les .wsquashfs viennent de Batocera, qui tourne intégralement en root (pas
-# d'utilisateur non-root chez eux) : les fichiers à l'intérieur sont packagés
-# root:root avec des permissions parfois restrictives (ex: rw-r-----). Notre
-# session bureau/wine tourne en tant qu'"arcade" (non-root) — squashfuse monte le
-# paquet en préservant ces UID/permissions d'origine, donc "arcade" se voit
-# refuser la lecture (confirmé en direct : erreurs "Permission denied" sur
-# autorun.cmd, jeu qui ne démarre pas). Confirmé aussi que les fichiers ne
-# sont PAS corrompus : le même paquet non modifié se lance sans erreur une
-# fois élevé en root. sudo -E (accès NOPASSWD déjà configuré pour arcade)
-# élève le montage/lancement en root tout en gardant DISPLAY/XDG_RUNTIME_DIR
-# d'arcade, donc la session graphique et l'audio (PipeWire) restent accessibles.
-WSQUASHFS="sudo -E /usr/local/bin/wsquashfs-launcher"
+# wsquashfs-launcher en utilisateur, sans sudo (27/09) : squashfuse et
+# fuse-overlayfs montent l'image en arcade, et les fichiers root:root
+# restrictifs des paquets Batocera (rw-r-----) se lisent tels quels —
+# vérifié sur Blade Strangers. Avant, tout passait par "sudo -E" (montage en
+# root, Wine relancé en arcade), ce qui laissait des fichiers root dans les
+# sauvegardes et les dossiers de cache.
+WSQUASHFS="/usr/local/bin/wsquashfs-launcher"
 
 # ── Mapping systèmes ──────────────────────────────────────────────────────────
 # Format : "Nom affiché|extensions (sans point)|commande de lancement"

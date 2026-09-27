@@ -152,6 +152,9 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
   `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+- **PS / Xbox + Start ne ferme pas le jeu** → service `svc-pad-hotkeys`
+  (journal dans `docker logs`, préfixe `[pad-hotkeys]`) ; le jeu en cours
+  est décrit dans `$XDG_RUNTIME_DIR/steambox-game` par `game-launch.sh`.
   Relance manuelle :
   `s6-svc -r /run/service/svc-xfce4-panel`.
 - **Chrome refuse de démarrer** (« profile in use by another computer ») →

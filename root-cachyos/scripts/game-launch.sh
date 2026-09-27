@@ -75,19 +75,21 @@ fi
 exec > "${XDG_RUNTIME_DIR:-/tmp}/game-launch-last.log" 2>&1
 # Hotkey (PS / Xbox) + Start = quitter le jeu, comme evmapy sous Batocera,
 # pour tout ce qui n'est pas RetroArch (qui a ses propres raccourcis) :
-# surveillant lancé sur NOTRE pid, que le jeu reprend via exec ci-dessous.
-# Jeu Wine : le lanceur tourne en root (sudo), il ne peut pas être signalé
-# par arcade — le surveillant arrête alors le wineserver du prefix du jeu
-# (même chemin que wsquashfs-launcher : $HOME/.cache/wsquashfs/wine/<jeu>).
-if [[ "${cmd}" != retroarch* ]] && command -v python3 >/dev/null 2>&1; then
+# géré par le service s6 svc-pad-hotkeys (pad-exit-watcher.py, 27/09), qui
+# lit ici le jeu en cours. pid = NOTRE pid, que le jeu reprend via exec
+# ci-dessous. Jeu Wine : signaler le lanceur ne suffit pas à fermer Wine —
+# le service arrête le wineserver du prefix du jeu (même chemin que
+# wsquashfs-launcher : $HOME/.cache/wsquashfs/wine/<jeu>), puis le lanceur
+# démonte normalement. Fichier périmé (jeu terminé) ignoré par le service.
+state="${XDG_RUNTIME_DIR:-/tmp}/steambox-game"
+if [[ "${cmd}" != retroarch* ]]; then
     wine_prefix=""
     if [[ "${cmd}" == *wsquashfs-launcher* ]]; then
         wine_prefix="${WSQUASHFS_CACHE:-${HOME}/.cache/wsquashfs}/wine/$(basename "${rom_real}" .wsquashfs)"
     fi
-    # setsid + fermeture des descripteurs hérités : ES lance le jeu dans un
-    # pipeline shell (fd 3 vers `read xs`, stdout vers `head -300`) — le
-    # surveillant ne doit ni en hériter ni partager son groupe de processus.
-    setsid /usr/local/bin/scripts/pad-exit-watcher.py "$$" ${wine_prefix:+--wine-prefix "${wine_prefix}"} \
-        </dev/null >/dev/null 2>&1 3>&- 4>&- 5>&- &
+    printf 'pid=%s\nprefix=%s\nrom=%s\n' "$$" "${wine_prefix}" "${rom_real}" > "${state}.tmp" \
+        && mv -f "${state}.tmp" "${state}"
+else
+    rm -f "${state}"
 fi
 eval "exec ${cmd}"

@@ -1,0 +1,20 @@
+#!/command/with-contenv bash
+# Raccourcis manette pendant les parties (27/09) : Hotkey (PS / Xbox) + Start
+# ferme le jeu en cours, comme evmapy sous Batocera — voir
+# scripts/pad-exit-watcher.py. Service permanent (plutôt qu'un surveillant
+# lancé à chaque partie par game-launch.sh) : supervisé, SDL initialisé une
+# fois, et sans jeu en cours il ne lit pas les manettes. En arcade, comme les
+# jeux : il doit pouvoir arrêter leur wineserver.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+for _ in $(seq 1 60); do
+    [ -d "${XDG_RUNTIME_DIR}" ] && break
+    sleep 0.5
+done
+cd /home/arcade || exit 1
+# SDL_JOYSTICK_DISABLE_UDEV=1 : même réglage que la session (manettes
+# virtuelles Sunshine vues par inotify sur /dev/input).
+exec runuser -u arcade -- env \
+    HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    SDL_JOYSTICK_DISABLE_UDEV=1 PYTHONUNBUFFERED=1 \
+    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    /usr/local/bin/scripts/pad-exit-watcher.py
