@@ -887,16 +887,18 @@ ARG WSQUASHFS_REF=main
 ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
     /usr/local/bin/wsquashfs-launcher
 
-# ── 1a9. Wine "classique" pour les prefixes win32 (23/09) — wine-staging
-# d'Arch est WoW64 seul (pas de lib/wine/i386-unix) et refuse les prefixes
-# 32 bits : "... is a 32-bit installation, it cannot support 64-bit
-# applications". 8 jeux wsquashfs sur 312 sont dans ce cas (konamipc,
-# rawthrills, namcoes3) — confirmé en direct, Lethal Enforcers 3 et
-# MachStorm démarrent avec ce build. Build Kron4ek staging NON-wow64
-# (i386-unix + x86_64-unix). Installé dans /opt/wine-win32, nom SANS
-# "tkg"/"ge" : find_wine_binary() de wsquashfs-launcher ne le prend donc pas
-# par défaut — il n'est choisi que pour un prefix win32 (voir
-# wine_supports_win32), les 301 autres jeux restent sur wine-staging.
+# ── 1a9. wine-tkg — Wine par défaut des jeux wsquashfs non Proton (arcade
+# Batocera), comme le runner par défaut de Batocera (27/09). Build Kron4ek
+# staging-tkg NON-wow64 (i386-unix + x86_64-unix) : il lance aussi les
+# prefixes win32, que wine-staging d'Arch (WoW64 seul) refuse — "... is a
+# 32-bit installation, it cannot support 64-bit applications", 8 jeux
+# (konamipc, rawthrills, namcoes3 ; Lethal Enforcers 3 et MachStorm testés
+# le 23/09 avec le build staging non-wow64 qui était ici avant). Installé
+# dans /opt/wine-tkg : find_wine_binary() de wsquashfs-launcher le prend en
+# premier grâce au "tkg" du chemin. Avant le 27/09, ce build était le staging
+# simple (/opt/wine-win32), jamais choisi par défaut : les jeux arcade
+# tournaient sur le wine-staging d'Arch. Les prefixes créés par Proton
+# (Heroic, Steam) restent sur leur Proton (find_proton_runner).
 # Dépendances 32 bits : couvertes par les lib32-* déjà présents (Steam,
 # Mesa, PipeWire) + lib32-libxrandr/xi/xcursor/xcomposite/xrender ajoutés
 # plus haut (changements de résolution, curseur). Pas de lib32-sdl2 dans
@@ -908,12 +910,12 @@ RUN --mount=type=secret,id=github_token \
       | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
     [ -n "${WINE32_VERSION}" ] || { echo "FATAL: WINE32_VERSION vide"; exit 1; } && \
     curl -fSL --retry 3 -o /tmp/wine32.tar.xz \
-      "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE32_VERSION}/wine-${WINE32_VERSION}-staging-amd64.tar.xz" && \
-    mkdir -p /opt/wine-win32 && \
-    tar -xf /tmp/wine32.tar.xz -C /opt/wine-win32 --strip-components=1 && \
+      "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE32_VERSION}/wine-${WINE32_VERSION}-staging-tkg-amd64.tar.xz" && \
+    mkdir -p /opt/wine-tkg && \
+    tar -xf /tmp/wine32.tar.xz -C /opt/wine-tkg --strip-components=1 && \
     rm -f /tmp/wine32.tar.xz && \
-    [ -d /opt/wine-win32/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
-    /opt/wine-win32/bin/wine --version
+    [ -d /opt/wine-tkg/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
+    /opt/wine-tkg/bin/wine --version
 
 # ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
 # non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
