@@ -109,6 +109,10 @@ def quit_game(pid, prefix):
 def main():
     sdl = ctypes.CDLL("libSDL2-2.0.so.0")
     sdl.SDL_SetHint(b"SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", b"1")
+    # Sans lui, SDL capte SIGTERM/SIGINT (transformés en événement SDL_QUIT
+    # jamais lu ici) : s6-svc -d/-r ne pouvait plus arrêter le service
+    # (vérifié le 27/09, SIGTERM sans effet).
+    sdl.SDL_SetHint(b"SDL_NO_SIGNAL_HANDLERS", b"1")
     if sdl.SDL_Init(0x200 | 0x2000) != 0:          # JOYSTICK | GAMECONTROLLER
         sdl.SDL_GetError.restype = ctypes.c_char_p
         log(f"SDL_Init a échoué : {sdl.SDL_GetError().decode(errors='replace')}")
