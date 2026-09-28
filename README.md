@@ -108,8 +108,7 @@ make lint                  # shellcheck + hadolint (via Docker, rien à installe
 ## Modèle de sécurité
 
 **Le conteneur n'est pas une frontière de sécurité.** C'est une console de
-salon : l'utilisateur `arcade` a `sudo NOPASSWD` (montages wsquashfs élevés
-en root), les devices d'entrée sont en `666`, le binaire Sunshine porte
+salon : les devices d'entrée sont en `666`, le binaire Sunshine porte
 `cap_sys_admin` (capture KMS), et noVNC n'a pas de mot de passe. `/dev/input`
 est un bind mount du répertoire de l'**hôte** : les règles udev du conteneur
 (permissions des manettes virtuelles Sunshine) s'appliquent donc aussi aux

@@ -133,5 +133,5 @@ en général. `init_sunshine.sh` ne les pose jamais automatiquement.
   la **création** du conteneur — un simple restart ne suffit pas après une
   modification des Extra Parameters, il faut appliquer/recréer.
 - **Modèle de sécurité** : le conteneur n'est pas une frontière de sécurité
-  (sudo NOPASSWD, devices en 666, cap SYS_ADMIN) — voir README, section
+  (devices en 666, cap SYS_ADMIN) — voir README, section
   « Modèle de sécurité ». Ne jamais exposer ses ports hors du LAN.
