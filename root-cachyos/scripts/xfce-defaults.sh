@@ -37,7 +37,14 @@ set_default xsettings /Net/IconThemeName string "WhiteSur-dark"
 set_default xsettings /Gtk/CursorThemeName string "WhiteSur-cursors"
 set_default xsettings /Gtk/CursorSize int 24
 set_default xsettings /Gtk/FontName string "Cantarell 10"
-set_default xsettings /Gtk/MonospaceFontName string "JetBrainsMono Nerd Font Mono 10"
+set_default xsettings /Gtk/MonospaceFontName string "JetBrains Mono 10"
+# Police Nerd retirée de l'image (29/09, ttf-jetbrains-mono-nerd → 232 Mo) :
+# un réglage déjà enregistré sur l'ancienne police est basculé sur la
+# nouvelle, sans toucher à un autre choix de l'utilisateur.
+case "$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName 2>/dev/null)" in
+    "JetBrainsMono Nerd Font"*)
+        xfconf-query -c xsettings -p /Gtk/MonospaceFontName -s "JetBrains Mono 10" 2>/dev/null || true ;;
+esac
 
 # Fond : clé du moniteur réel, celle que lit xfdesktop (le dialogue
 # "Réglages du bureau" a parfois écrit sous monitorUnknown, vu le 30/08).
