@@ -249,7 +249,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       ffmpeg \
       steam \
       sunshine \
-      gamemode mangohud \
+      gamemode mangohud lib32-gamemode lib32-mangohud \
       dbus polkit networkmanager \
       xdg-desktop-portal \
       gamescope \
