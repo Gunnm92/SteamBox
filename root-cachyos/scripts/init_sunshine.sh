@@ -139,7 +139,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
   "apps": [
     { "name": "Desktop", "image-path": "desktop.png",
       "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
-      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop-xfce.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
@@ -161,7 +161,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=8
+CURRENT_VERSION=9
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -311,6 +311,28 @@ if [ "${INSTALLED_VERSION}" -lt 8 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v8 : logo EmulationStation ajouté (sauvegarde .bak-migration-v8)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 9 ]; then
+    # v8 -> v9 (29/09) : l'entrée "Desktop" ne fermait jamais sa session XFCE
+    # à la fin (undo = reset-resolution.sh seul) ; lancer ensuite « Steam
+    # Big Picture » affichait le bureau resté ouvert. stop-desktop-xfce.sh
+    # fait le même reset de résolution PUIS arrête cette session (même
+    # motif que v6 pour Steam). Ne remplace QUE l'undo exact d'origine.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_UNDO="/usr/local/bin/scripts/reset-resolution.sh"
+        NEW_UNDO="/usr/local/bin/scripts/stop-desktop-xfce.sh"
+        if jq -e --arg old "${OLD_UNDO}" \
+            '.apps[] | select(.name == "Desktop") | select(.["prep-cmd"][0].undo? == $old)' \
+            "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v9"
+            jq --arg old "${OLD_UNDO}" --arg new "${NEW_UNDO}" \
+                '{env, apps: [.apps[] | if .name == "Desktop" and .["prep-cmd"][0].undo? == $old then .["prep-cmd"][0].undo = $new else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v9 : session XFCE arrêtée à la fin de l'entrée Desktop (sauvegarde .bak-migration-v9)"
         fi
     fi
 fi
