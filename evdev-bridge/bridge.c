@@ -265,9 +265,70 @@ static int32_t scroll_accum_v = 0;
 static int32_t scroll_accum_h = 0;
 static int scroll_pending = 0;
 
+/* SYN_DROPPED (29/09) : le buffer evdev du noyau a débordé et des
+ * événements sont perdus — un relâchement perdu laissait une touche, un
+ * modificateur ou un bouton enfoncé côté Wayland. Comme libevdev : tout est
+ * ignoré jusqu'au SYN_REPORT suivant (paquet incomplet), puis l'état réel
+ * est relu dans le noyau (EVIOCGKEY/EVIOCGABS) et seules les différences
+ * avec ce qui a été envoyé au compositeur sont réémises. */
+#define BITS_LEN(n) (((n) + 7) / 8)
+#define BIT_IS_SET(bits, i) (((bits)[(i) / 8] >> ((i) % 8)) & 1)
+
+/* Touches/boutons actuellement enfoncés d'un périphérique. En cas d'échec
+ * de l'ioctl, tout est considéré relâché : mieux vaut relâcher une touche
+ * réellement tenue (elle se represse) que la laisser bloquée. */
+static void read_key_state(int fd, unsigned char *bits, size_t len, const char *what) {
+    memset(bits, 0, len);
+    if (ioctl(fd, EVIOCGKEY(len), bits) < 0) {
+        fprintf(stderr, "[bridge] EVIOCGKEY failed on %s: %s, releasing everything\n",
+                what, strerror(errno));
+        memset(bits, 0, len);
+    }
+}
+
+/* Boutons souris BTN_LEFT..BTN_TASK envoyés enfoncés au compositeur */
+#define POINTER_BUTTONS (BTN_TASK - BTN_LEFT + 1)
+
+static void pointer_resync(int fd, unsigned char *sent, const char *what) {
+    unsigned char state[BITS_LEN(KEY_CNT)];
+    uint32_t t = get_time_ms();
+    int fixed = 0;
+    read_key_state(fd, state, sizeof(state), what);
+    for (int i = 0; i < POINTER_BUTTONS; i++) {
+        unsigned char down = BIT_IS_SET(state, BTN_LEFT + i);
+        if (down == sent[i]) continue;
+        zwlr_virtual_pointer_v1_button(vpointer, t, BTN_LEFT + i,
+            down ? WL_POINTER_BUTTON_STATE_PRESSED :
+                   WL_POINTER_BUTTON_STATE_RELEASED);
+        sent[i] = down;
+        fixed++;
+    }
+    zwlr_virtual_pointer_v1_frame(vpointer);
+    fprintf(stderr, "[bridge] SYN_DROPPED on %s: resynced, %d button(s) corrected\n",
+            what, fixed);
+}
+
+static unsigned char rel_buttons_sent[POINTER_BUTTONS];
+static int rel_dropped = 0;
+
 /* Process mouse events */
 static void handle_mouse_event(struct input_event *ev) {
     uint32_t t = get_time_ms();
+
+    if (ev->type == EV_SYN && ev->code == SYN_DROPPED) {
+        rel_dropped = 1;
+        return;
+    }
+    if (rel_dropped) {
+        if (ev->type == EV_SYN && ev->code == SYN_REPORT) {
+            rel_dropped = 0;
+            /* Défilement à moitié accumulé : incomplet, abandonné */
+            scroll_accum_v = scroll_accum_h = 0;
+            scroll_pending = 0;
+            pointer_resync(rel_mouse_fd, rel_buttons_sent, "mouse");
+        }
+        return;
+    }
 
     switch (ev->type) {
     case EV_REL:
@@ -323,6 +384,7 @@ static void handle_mouse_event(struct input_event *ev) {
             zwlr_virtual_pointer_v1_button(vpointer, t, button,
                 ev->value ? WL_POINTER_BUTTON_STATE_PRESSED :
                            WL_POINTER_BUTTON_STATE_RELEASED);
+            rel_buttons_sent[ev->code - BTN_LEFT] = ev->value ? 1 : 0;
         }
         break;
 
@@ -390,7 +452,31 @@ static void handle_abs_mouse_event(struct input_event *ev) {
      * envoyant toujours la position complète (dernière connue) des deux. */
     static int32_t ax = 0, ay = 0;
     static int dirty = 0;
+    static unsigned char buttons_sent[POINTER_BUTTONS];
+    static int dropped = 0;
     uint32_t t = get_time_ms();
+
+    if (ev->type == EV_SYN && ev->code == SYN_DROPPED) {
+        dropped = 1;
+        return;
+    }
+    if (dropped) {
+        if (ev->type == EV_SYN && ev->code == SYN_REPORT) {
+            struct input_absinfo abs;
+            dropped = 0;
+            /* Position perdue : relue dans le noyau, envoyée avec la
+             * trame de resynchronisation des boutons. */
+            if (ioctl(abs_mouse_fd, EVIOCGABS(ABS_X), &abs) == 0) { ax = abs.value; dirty = 1; }
+            if (ioctl(abs_mouse_fd, EVIOCGABS(ABS_Y), &abs) == 0) { ay = abs.value; dirty = 1; }
+            if (dirty) {
+                zwlr_virtual_pointer_v1_motion_absolute(vpointer, t,
+                    (uint32_t)ax, (uint32_t)ay, 65535, 65535);
+                dirty = 0;
+            }
+            pointer_resync(abs_mouse_fd, buttons_sent, "abs mouse");
+        }
+        return;
+    }
 
     switch (ev->type) {
     case EV_ABS:
@@ -418,6 +504,7 @@ static void handle_abs_mouse_event(struct input_event *ev) {
             zwlr_virtual_pointer_v1_button(vpointer, t, button,
                 ev->value ? WL_POINTER_BUTTON_STATE_PRESSED :
                            WL_POINTER_BUTTON_STATE_RELEASED);
+            buttons_sent[ev->code - BTN_LEFT] = ev->value ? 1 : 0;
         }
         break;
 
@@ -484,8 +571,49 @@ static uint32_t evdev_to_mod_bit(uint32_t code) {
 static uint32_t key_last_press_time[MAX_KEYS]; /* timestamp of last press in ms */
 #define KEY_DEBOUNCE_MS 20 /* ignore re-press within this window */
 
+/* Touches envoyées enfoncées au compositeur (voir SYN_DROPPED plus haut) */
+static unsigned char kbd_sent[KEY_CNT];
+static int kbd_dropped = 0;
+
+/* Après SYN_DROPPED : relâche/presse ce qui diffère de l'état réel du
+ * clavier et reconstruit les modificateurs à partir des touches tenues. */
+static void keyboard_resync(void) {
+    unsigned char state[BITS_LEN(KEY_CNT)];
+    uint32_t t = get_time_ms();
+    int fixed = 0;
+    read_key_state(kbd_fd, state, sizeof(state), "keyboard");
+    mod_depressed = 0;
+    for (uint32_t code = 0; code < KEY_CNT; code++) {
+        unsigned char down = BIT_IS_SET(state, code);
+        if (down != kbd_sent[code]) {
+            zwp_virtual_keyboard_v1_key(vkeyboard, t, code,
+                down ? WL_KEYBOARD_KEY_STATE_PRESSED :
+                       WL_KEYBOARD_KEY_STATE_RELEASED);
+            kbd_sent[code] = down;
+            if (down && code < MAX_KEYS) key_last_press_time[code] = t;
+            fixed++;
+        }
+        if (down) mod_depressed |= evdev_to_mod_bit(code);
+    }
+    zwp_virtual_keyboard_v1_modifiers(vkeyboard, mod_depressed, 0, 0, 0);
+    fprintf(stderr, "[bridge] SYN_DROPPED on keyboard: resynced, %d key(s) corrected\n",
+            fixed);
+}
+
 /* Process keyboard events */
 static void handle_keyboard_event(struct input_event *ev) {
+    if (ev->type == EV_SYN && ev->code == SYN_DROPPED) {
+        kbd_dropped = 1;
+        return;
+    }
+    if (kbd_dropped) {
+        if (ev->type == EV_SYN && ev->code == SYN_REPORT) {
+            kbd_dropped = 0;
+            keyboard_resync();
+        }
+        return;
+    }
+
     if (ev->type == EV_KEY) {
         uint32_t t = get_time_ms();
         /* ev->value: 0=release, 1=press, 2=repeat */
@@ -510,6 +638,7 @@ static void handle_keyboard_event(struct input_event *ev) {
         zwp_virtual_keyboard_v1_key(vkeyboard, t, ev->code,
             ev->value ? WL_KEYBOARD_KEY_STATE_PRESSED :
                        WL_KEYBOARD_KEY_STATE_RELEASED);
+        if (ev->code < KEY_CNT) kbd_sent[ev->code] = ev->value ? 1 : 0;
 
         /* Update modifier state and send modifiers event */
         uint32_t mod_bit = evdev_to_mod_bit(ev->code);
