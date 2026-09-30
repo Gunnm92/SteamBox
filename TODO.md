@@ -5,7 +5,6 @@ Petits chantiers à reprendre, à compléter au fur et à mesure.
 ## Affichage
 
 - [ ] **HDR dans la session Steam** : mettre en place le support HDR (gamescope, Sunshine/Moonlight).
-- [ ] **Icônes Sunshine** : corriger les icônes des entrées XFCE, Steam Gamescope et Steam.
 
 ## Manettes
 

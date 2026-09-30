@@ -57,7 +57,8 @@ Définies dans `apps.json` (généré/migré par
 | **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope 2560×1440@120 (scaling FSR, changement de résolution in-game) |
 
 Chaque app applique la résolution du client à la connexion et revient à
-1920×1080 à la déconnexion.
+1920×1080 à la déconnexion. Jaquettes Moonlight dans le style de Wolf
+(Games on Whales, MIT) : `/usr/share/steambox/sunshine/`.
 
 ## Contenu de l'image
 

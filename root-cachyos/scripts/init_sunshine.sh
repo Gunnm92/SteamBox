@@ -137,14 +137,14 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
 {
   "env": {},
   "apps": [
-    { "name": "Desktop", "image-path": "desktop.png",
+    { "name": "Desktop", "image-path": "/usr/share/steambox/sunshine/desktop-xfce.png",
       "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop-xfce.sh" } ] },
-    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "steam.png",
+    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "/usr/share/steambox/sunshine/steam-bigpicture.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
-    { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "steam.png",
+    { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-gamescope.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "image-path": "/opt/batocera-es/resources/window_icon_256.png",
+    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "image-path": "/usr/share/steambox/sunshine/emulationstation.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -161,7 +161,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=9
+CURRENT_VERSION=10
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -333,6 +333,34 @@ if [ "${INSTALLED_VERSION}" -lt 9 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v9 : session XFCE arrêtée à la fin de l'entrée Desktop (sauvegarde .bak-migration-v9)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 10 ]; then
+    # v9 -> v10 (30/09) : jaquettes style Wolf (Games on Whales, MIT) —
+    # Desktop n'affichait aucune image dans Moonlight (Linux) et les deux
+    # entrées Steam partageaient la même ; ES passe au même style. Ne
+    # remplace QUE les images posées jusqu'ici (desktop.png / steam.png de
+    # Sunshine, logo d'ES de la v8), jamais une image choisie à la main. L'identifiant Sunshine d'une app dépend du contenu de son
+    # image : Moonlight recharge donc ces jaquettes.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        ICONS=/usr/share/steambox/sunshine
+        OLD_ES=/opt/batocera-es/resources/window_icon_256.png
+        if jq -e --arg oe "${OLD_ES}" '.apps[] | select((.name == "Desktop" and .["image-path"] == "desktop.png") or ((.name == "Steam Big Picture" or .name == "Mode SteamOS (Gamescope)") and .["image-path"] == "steam.png") or (.name == "EmulationStation" and .["image-path"] == $oe))' \
+            "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v10"
+            jq --arg d "${ICONS}/desktop-xfce.png" --arg b "${ICONS}/steam-bigpicture.png" --arg g "${ICONS}/steam-gamescope.png" \
+               --arg e "${ICONS}/emulationstation.png" --arg oe "${OLD_ES}" \
+                '{env, apps: [.apps[]
+                  | if .name == "Desktop" and .["image-path"] == "desktop.png" then .["image-path"] = $d
+                    elif .name == "Steam Big Picture" and .["image-path"] == "steam.png" then .["image-path"] = $b
+                    elif .name == "Mode SteamOS (Gamescope)" and .["image-path"] == "steam.png" then .["image-path"] = $g
+                    elif .name == "EmulationStation" and .["image-path"] == $oe then .["image-path"] = $e
+                    else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v10 : jaquettes Desktop / Steam / ES (sauvegarde .bak-migration-v10)"
         fi
     fi
 fi

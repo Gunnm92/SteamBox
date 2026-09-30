@@ -1472,6 +1472,9 @@ RUN gtk-update-icon-cache -f /usr/share/icons/Papirus 2>/dev/null || true && \
 # l'ancien entrypoint.sh (boucle bash artisanale) entièrement.
 COPY root-cachyos/etc/ /etc/
 COPY root-cachyos/scripts/ /usr/local/bin/scripts/
+# Jaquettes Moonlight des apps Sunshine (30/09, style Wolf) : chemins absolus
+# dans apps.json (voir init_sunshine.sh, migration v10).
+COPY root-cachyos/usr/share/steambox/ /usr/share/steambox/
 RUN chmod +x /usr/local/bin/scripts/*.sh && \
     find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \; && \
     ln -sf /usr/local/bin/scripts/steamos-session-select.sh /usr/bin/steamos-session-select && \
