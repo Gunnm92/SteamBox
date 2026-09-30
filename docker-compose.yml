@@ -61,5 +61,9 @@ services:
     # jusqu'à nice -20 (encodage prioritaire). Figé à la CRÉATION du conteneur.
     ulimits:
       nice: 40
+      # Pile 8 Mo (30/09) : illimitée, Linux passe à la disposition mémoire
+      # « legacy » — proton-cachyos ne démarre plus (wineboot tué par son
+      # filtre seccomp), jeux 32 bits sans leurs grosses réservations.
+      stack: 8388608
     shm_size: "2gb"
     restart: unless-stopped

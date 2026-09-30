@@ -239,12 +239,14 @@ RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr
 # question "supprimer TOUS les fichiers du cache ? [o/N]" a "non" pour
 # réponse par défaut, et --noconfirm la choisit. 1,8 Go de paquets restaient
 # dans l'image ; rm -rf à la place, dans chaque RUN qui installe.
-# umu-launcher (27/09) : wsquashfs-launcher lance les prefixes créés par
-# Proton (Heroic, Steam) via umu-run et le script proton, comme Heroic — le
-# seul binaire wine de Proton donnait écran noir puis plantage sur Kingdom
-# Hearts III. Proton fourni : UMU-Proton (section 1a9b). proton-cachyos-slr
-# retiré le 30/09 : son émulation des appels système (seccomp) échoue ici,
-# wineboot ne démarre pas (variante native testée aussi, même échec).
+# umu-launcher + proton-cachyos-slr (27/09) : wsquashfs-launcher lance les
+# prefixes créés par Proton (Heroic, Steam) via umu-run et le script proton,
+# comme Heroic — le seul binaire wine de Proton donnait écran noir puis
+# plantage sur Kingdom Hearts III. proton-cachyos = Proton par défaut des
+# nouveaux prefixes (30/09) : optimisé CachyOS, sa SDL gère la DualSense en
+# XInput avec la vibration. Il exige une pile limitée (8 Mo, posée dans les
+# services de session) : pile illimitée, son émulation seccomp tuait wineboot.
+# UMU-Proton en secours (section 1a9b).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
@@ -271,7 +273,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       gamescope \
       libretro \
       wine-staging winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
-      umu-launcher \
+      umu-launcher proton-cachyos-slr \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \
       ark unrar zip \
@@ -945,13 +947,12 @@ RUN --mount=type=secret,id=github_token \
     [ -d /opt/wine-tkg/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
     /opt/wine-tkg/bin/wine --version
 
-# ── 1a9b. UMU-Proton — Proton de Valve préparé pour umu (30/09), Proton par
-# défaut de wsquashfs-launcher pour les nouveaux prefixes : sa SDL gère la
-# DualSense en manette XInput avec la vibration (evdev, hid-playstation du
-# noyau), là où GE-Proton la force en hidraw sans vibration. Avant, il
-# n'existait que dans /config, téléchargé un jour par umu : une installation
-# neuve retombait sur proton-cachyos, inutilisable. Dernière version à chaque
-# build, empreinte SHA-512 vérifiée ; UMU_PROTON_TAG pour en figer une.
+# ── 1a9b. UMU-Proton — Proton de Valve préparé pour umu (30/09), second choix
+# de wsquashfs-launcher après proton-cachyos : sa SDL gère aussi la DualSense
+# en manette XInput avec la vibration (evdev, hid-playstation du noyau), là
+# où GE-Proton la force en hidraw sans vibration. Avant, il n'existait que
+# dans /config, téléchargé un jour par umu. Dernière version à chaque build,
+# empreinte SHA-512 vérifiée ; UMU_PROTON_TAG pour en figer une.
 ARG UMU_PROTON_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \

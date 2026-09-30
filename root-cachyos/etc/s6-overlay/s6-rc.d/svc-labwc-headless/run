@@ -55,6 +55,13 @@ if [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
     exit 1
 fi
 
+# Pile limitée à 8 Mo (30/09) : Docker sur Unraid hérite d'une pile
+# ILLIMITÉE, et Linux passe alors à la disposition mémoire « legacy » (libs
+# vers 0x14…). proton-cachyos (émulation seccomp) tuait ses processus enfants
+# chargés sous 0x7001_0000_0000 (wineboot : SIGSYS), et les jeux 32 bits
+# sous wine-tkg n'obtenaient plus leurs grosses réservations (GTI Club,
+# 450 Mo). Hérité par tout ce que lance ce service (Steam, Heroic, ES, jeux).
+ulimit -S -s 8192 2>/dev/null || true
 exec runuser -u arcade -- \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
         LIBSEAT_BACKEND=noop WLR_BACKENDS=headless \

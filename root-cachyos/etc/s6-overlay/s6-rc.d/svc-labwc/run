@@ -5,4 +5,11 @@
 # souris/clavier Sunshine) et wayvnc — voir point 6 de l'historique en tête
 # de Dockerfile.cachyos. Tourne de bout en bout en arcade via seatd, comme
 # la session KWin précédente (pas de dance root/runuser type Xorg.wrap).
+# Pile limitée à 8 Mo (30/09) : Docker sur Unraid hérite d'une pile
+# ILLIMITÉE, et Linux passe alors à la disposition mémoire « legacy » (libs
+# vers 0x14…). proton-cachyos (émulation seccomp) tuait ses processus enfants
+# chargés sous 0x7001_0000_0000 (wineboot : SIGSYS), et les jeux 32 bits
+# sous wine-tkg n'obtenaient plus leurs grosses réservations (GTI Club,
+# 450 Mo). Hérité par tout ce que lance ce service (Steam, Heroic, ES, jeux).
+ulimit -S -s 8192 2>/dev/null || true
 exec /usr/local/bin/scripts/wayland-session.sh

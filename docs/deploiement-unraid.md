@@ -74,7 +74,7 @@ l'image générique démarre en QWERTY, en anglais, et cherche les ROMs sous
 ```
 --runtime=nvidia --ipc=host --shm-size=2g
 --cap-add=SYS_NICE --cap-add=SYS_ADMIN --cap-add=NET_ADMIN
---ulimit nice=40
+--ulimit nice=40 --ulimit stack=8388608
 --group-add=71
 --device-cgroup-rule='c 13:* rmw'
 --device-cgroup-rule='c 226:* rmw'
@@ -92,6 +92,18 @@ virtuelle tant qu'un client Moonlight reste connecté — consomme des cycles
 CPU en continu sans jamais aboutir. N'affecte pas la création des devices
 elle-même (mknod/permissions, déjà traitée par udevd avant cette étape),
 mais mérite d'être ajoutée à la prochaine recréation du conteneur.
+
+**`--ulimit stack=8388608` (30/09, à ajouter au template)** — Docker sur
+Unraid donne aux conteneurs une pile **illimitée** ; Linux passe alors à la
+disposition mémoire « legacy » (bibliothèques vers `0x14…` au lieu de
+`0x7f…`). Conséquences constatées : proton-cachyos ne démarre pas (son
+émulation seccomp tue les processus enfants chargés sous
+`0x7001_0000_0000` : `wineboot` en SIGSYS), et les jeux 32 bits sous
+wine-tkg n'obtiennent plus leurs grosses réservations mémoire (GTI Club,
+450 Mo). Les services de session (labwc, Sunshine) et wsquashfs-launcher
+ramènent déjà la pile à 8 Mo ; ce paramètre l'applique à tout le conteneur.
+Vérification : `docker exec SteamBox bash -c 'ulimit -s'` doit afficher
+`8192`.
 
 **`--ulimit nice=40` (audit 22/09, à ajouter au template)** — sans elle,
 les threads d'encodage de Sunshine tournent en priorité normale : Sunshine
