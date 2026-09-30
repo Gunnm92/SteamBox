@@ -96,6 +96,10 @@ make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
 make lint                  # shellcheck + hadolint (via Docker, rien à installer)
 ```
 
+Le build embarque `wsquashfs-launcher` au **dernier commit** de sa branche
+`main` (résolu par `git ls-remote`, jamais la version en cache de GitHub) ;
+`make push WSQUASHFS_REF=<branche|tag|commit>` pour en imposer un autre.
+
 ## Accès
 
 | Service | Port | Authentification |
@@ -121,7 +125,7 @@ passer par un VPN ou un reverse proxy authentifié en amont.
 
 ```
 Dockerfile.cachyos          # l'image — historique des architectures en tête
-Makefile                    # build/push/run (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN)
+Makefile                    # build/push/run (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN/WSQUASHFS_REF)
 docker-compose.yml          # compose générique, complété par l'override du profil
 docs/                       # configuration (profils, variables), déploiement Unraid
 profiles/

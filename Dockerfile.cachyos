@@ -905,6 +905,8 @@ RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl &&
 # cache et figeait silencieusement une ancienne version du lanceur tant
 # qu'aucune couche antérieure ne bougeait.
 # WSQUASHFS_REF (25/09) : branche, tag ou commit du lanceur à embarquer.
+# Le Makefile passe le commit exact de main (30/09, git ls-remote) : l'URL
+# de branche est servie en cache par GitHub quelques minutes après un push.
 ARG WSQUASHFS_REF=main
 ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
     /usr/local/bin/wsquashfs-launcher

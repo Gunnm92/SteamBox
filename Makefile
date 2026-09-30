@@ -22,6 +22,22 @@ BUILDX       = $(DOCKER) buildx build \
                  --provenance=false --sbom=false
 
 BUILD_ARGS   += --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# WSQUASHFS_REF (30/09) : commit exact du lanceur (dernier commit de main),
+# plutôt que la branche — raw.githubusercontent sert une version en cache
+# quelques minutes après un push (image du 28/09 : 2bbeac0 embarqué au lieu
+# de ba2becd). Une URL par commit n'est jamais servie périmée, et change à
+# chaque nouveau commit (cache de l'ADD invalidé). Surcharge possible :
+# make build WSQUASHFS_REF=<branche|tag|commit>. GitHub injoignable : main.
+WSQUASHFS_REPO ?= https://github.com/Gunnm92/wsquashfs-launcher.git
+ifeq ($(origin WSQUASHFS_REF),undefined)
+WSQUASHFS_REF := $(shell git ls-remote $(WSQUASHFS_REPO) refs/heads/main 2>/dev/null | cut -f1)
+endif
+ifneq ($(WSQUASHFS_REF),)
+BUILD_ARGS   += --build-arg WSQUASHFS_REF=$(WSQUASHFS_REF)
+else
+$(warning WSQUASHFS_REF introuvable (GitHub injoignable ?) : lanceur pris sur main)
+endif
 # GITHUB_TOKEN passé en secret BuildKit (audit C1, 05/09), plus en
 # --build-arg : un build-arg consommé par un RUN reste lisible en clair
 # dans l'historique de l'image pour toujours (confirmé en direct, token
@@ -112,3 +128,4 @@ help:
 	@echo "  IMAGE          $(IMAGE)"
 	@echo "  TAG            $(TAG)"
 	@echo "  GITHUB_TOKEN   (non defini si vide)"
+	@echo "  WSQUASHFS_REF  $(WSQUASHFS_REF)  (commit du lanceur embarque)"
