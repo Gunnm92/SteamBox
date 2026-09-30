@@ -63,7 +63,8 @@ Chaque app applique la résolution du client à la connexion et revient à
 ## Contenu de l'image
 
 - **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon), Wine-staging +
-  DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera).
+  DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera) avec wine-tkg
+  (arcade) et umu + UMU-Proton (jeux PC ; DualSense et vibration).
 - **Émulateurs standalone** : Cemu (Wii U), PCSX2, RPCS3, DuckStation, Xemu,
   Xenia, melonDS, PPSSPP, Flycast, Vita3K (PS Vita), DOSBox Staging, ShadPS4,
   Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3),
