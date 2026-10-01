@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Images de jeux .wsquashfs (format Batocera, wsquashfs-launcher).
+     Reconnues par leur extension : sans ce type, la détection par contenu
+     prend parfois un PDF stocké tel quel au début de l'image pour le type du
+     fichier (Starship Troopers - Terran Command : « %PDF » à l'octet 111,
+     01/10/2026) — et un « Ouvrir avec » sur ce jeu associait alors TOUS les
+     PDF au lanceur. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-wsquashfs">
+    <comment>Windows game image (wsquashfs)</comment>
+    <comment xml:lang="fr">Jeu Windows empaqueté (wsquashfs)</comment>
+    <sub-class-of type="application/vnd.squashfs"/>
+    <generic-icon name="applications-games"/>
+    <glob pattern="*.wsquashfs" weight="100"/>
+  </mime-type>
+</mime-info>

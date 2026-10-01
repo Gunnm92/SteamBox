@@ -914,6 +914,17 @@ ARG WSQUASHFS_REF=main
 ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
     /usr/local/bin/wsquashfs-launcher
 
+# Type MIME des .wsquashfs + association au lanceur (01/10) : reconnus par
+# leur extension (application/x-wsquashfs, sous-type de squashfs). Sans lui,
+# Thunar/XFCE devinait le type d'après le contenu — Starship Troopers était vu
+# comme un PDF (PDF stocké tel quel au début de l'image), et un « Ouvrir
+# avec » associait alors tous les PDF au lanceur. Seul le lanceur déclare ce
+# type : il est l'application par défaut sans mimeapps.list.
+COPY root-cachyos/usr/share/mime/packages/wsquashfs.xml /usr/share/mime/packages/wsquashfs.xml
+COPY root-cachyos/usr/share/applications/wsquashfs-launcher.desktop /usr/share/applications/wsquashfs-launcher.desktop
+RUN update-mime-database /usr/share/mime && \
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+
 # ── 1a9. wine-tkg — Wine par défaut des jeux wsquashfs non Proton (arcade
 # Batocera), comme le runner par défaut de Batocera (27/09). Build Kron4ek
 # staging-tkg NON-wow64 (i386-unix + x86_64-unix) : il lance aussi les

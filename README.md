@@ -102,6 +102,8 @@ make lint                  # shellcheck + hadolint (via Docker, rien à installe
 Le build embarque `wsquashfs-launcher` au **dernier commit** de sa branche
 `main` (résolu par `git ls-remote`, jamais la version en cache de GitHub) ;
 `make push WSQUASHFS_REF=<branche|tag|commit>` pour en imposer un autre.
+Les `.wsquashfs` sont reconnus par leur extension sous XFCE (type
+`application/x-wsquashfs`) : un double-clic les ouvre avec le lanceur.
 
 ## Accès
 

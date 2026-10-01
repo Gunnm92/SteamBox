@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=wsquashfs-launcher
+Name[fr]=Lanceur wsquashfs
+Comment=Launch a Windows game packaged as .wsquashfs
+Comment[fr]=Lance un jeu Windows empaqueté en .wsquashfs
+Exec=/usr/local/bin/wsquashfs-launcher %f
+Icon=applications-games
+Terminal=false
+NoDisplay=true
+MimeType=application/x-wsquashfs;
+Categories=Game;
