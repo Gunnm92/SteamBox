@@ -44,6 +44,10 @@ bureau d'administration du flux de jeu :
   par les devices virtuels uinput/uhid de Sunshine, lus par SDL et par Steam
   Input (hidraw — voir la règle udev
   [99-steambox-hidraw-fallback.rules](root-cachyos/etc/udev/rules.d/99-steambox-hidraw-fallback.rules)).
+  La DualSense virtuelle est en **USB** et non en Bluetooth comme dans le
+  Sunshine d'origine : l'image compile Sunshine avec ce seul changement
+  (étape `sunshine-usb` du Dockerfile), sans quoi les jeux à `libScePad` de
+  2022 (F1 22…) ignorent la manette.
 
 ## Applications Sunshine
 

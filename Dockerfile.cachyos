@@ -136,7 +136,47 @@
 # réussi et testé en production) ; pour bumper délibérément la base,
 # relancer `docker pull cachyos/cachyos-v3:latest` et copier le nouveau
 # digest ici, dans un commit dédié ("bump: base cachyos-v3").
-FROM cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
+# ARG global : même base pour l'étape sunshine-usb ci-dessous.
+ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
+
+# ── Étape sunshine-usb (02/10) : Sunshine à la version exacte du paquet
+# CachyOS, avec sa DualSense virtuelle en USB au lieu de Bluetooth. Les
+# libScePad de 2022 (F1 22, The Devil in Me, KOF XV) refusent la DualSense
+# Bluetooth : énumérée, jamais ouverte, aucune touche reçue. libvirtualhid
+# a les deux profils, mais Sunshine code "ds5" en dur sur dualsense()
+# (= Bluetooth) : sous Linux, SDL2 HIDAPI ignore une DualSense hidraw USB
+# sans vrai parent USB, ce qu'est un périphérique uhid. Ici, les jeux
+# passent par Wine/Proton (hidraw direct) et Steam gère la manette :
+# validé le 02/10 sur les jeux DualSense, XInput et ES. Compilée en
+# parallèle de l'image principale (BuildKit), refaite à chaque build
+# (BUILD_DATE) pour suivre le paquet ; l'image principale vérifie que les
+# versions concordent. CUDA comme le paquet CachyOS (capture NvFBC). Le
+# paquet sunshine est installé ici pour ses dépendances (Qt6, libva…) et sa
+# version, la seule compilée.
+FROM ${CACHYOS_BASE} AS sunshine-usb
+ARG BUILD_DATE
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    echo "build ${BUILD_DATE}" && \
+    pacman -Syu --needed --noconfirm --noprogressbar base-devel git cmake boost boost-libs \
+      nodejs npm shaderc appstream appstream-glib desktop-file-utils python-jinja cuda sunshine && \
+    ver=$(pacman -Q sunshine | cut -d' ' -f2) && \
+    tag="v${ver%-*}" && echo "Sunshine ${tag} (paquet ${ver})" && \
+    git clone --quiet --depth 1 --branch "${tag}" --recurse-submodules --shallow-submodules \
+      https://github.com/LizardByte/Sunshine.git /src && \
+    f=/src/src/platform/virtualhid_input.cpp && \
+    sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
+    { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
+    export BRANCH=master BUILD_VERSION="${ver%-*}" COMMIT="$(git -C /src rev-parse HEAD)" \
+           CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
+    cmake -S /src -B /build -Wno-dev -D BUILD_DOCS=OFF -D BUILD_WERROR=OFF -D BUILD_TESTS=OFF \
+      -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr \
+      -D SUNSHINE_EXECUTABLE_PATH=/usr/bin/sunshine -D SUNSHINE_ASSETS_DIR=share/sunshine \
+      -D SUNSHINE_PUBLISHER_NAME=LizardByte -D SUNSHINE_PUBLISHER_WEBSITE=https://app.lizardbyte.dev \
+      -D SUNSHINE_PUBLISHER_ISSUE_URL=https://app.lizardbyte.dev/support && \
+    cmake --build /build -j "$(nproc)" && \
+    mkdir -p /out && install -m 755 -s /build/sunshine /out/sunshine && echo "${ver}" > /out/version
+
+FROM ${CACHYOS_BASE}
 
 # github_token (audit C1, 05/09) : le build fait ~18 appels à l'API GitHub
 # (releases "latest" des émulateurs) — non authentifié, la limite est de
@@ -899,6 +939,19 @@ RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl &&
       echo "FATAL: bibliothèque manquante pour libxfce-launcher.so"; exit 1; \
     fi
 
+# ── 1a7e. Sunshine en DualSense USB (02/10) — binaire de l'étape
+# sunshine-usb à la place de celui du paquet (gardé pour ses dépendances,
+# sa web UI et ses fichiers). Versions comparées : un paquet monté entre-temps
+# donnerait une web UI d'une autre version que le binaire. Avant le setcap
+# de /usr/bin/sunshine (plus bas), qu'une copie après effacerait.
+COPY --from=sunshine-usb /out/ /tmp/sunshine-usb/
+RUN pkg=$(pacman -Q sunshine | cut -d' ' -f2) && built=$(cat /tmp/sunshine-usb/version) && \
+    { [ "$pkg" = "$built" ] || { echo "FATAL: Sunshine USB compilé en ${built}, paquet installé en ${pkg}"; exit 1; }; } && \
+    install -m 755 /tmp/sunshine-usb/sunshine /usr/bin/sunshine && rm -rf /tmp/sunshine-usb && \
+    if ldd /usr/bin/sunshine | grep -q "not found"; then \
+      echo "FATAL: bibliothèque manquante pour sunshine"; exit 1; \
+    fi
+
 # ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
 # Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
 # le script wsquashfs-batocera embarqué dans l'image webstation — plus
@@ -913,6 +966,12 @@ RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl &&
 ARG WSQUASHFS_REF=main
 ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
     /usr/local/bin/wsquashfs-launcher
+# Pont DualSense Bluetooth → USB (02/10) : en HIDRAW=1, le lanceur présente
+# une DualSense Bluetooth en DualSense USB — les libScePad de 2022 (F1 22)
+# refusent la Bluetooth. Inactif ici (Sunshine en USB, étape sunshine-usb),
+# gardé pour le lanceur tel qu'il est distribué et pour revenir en arrière.
+ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/tools/dualsense-usb-bridge/dualsense-usb-bridge \
+    /usr/local/bin/dualsense-usb-bridge
 
 # Type MIME des .wsquashfs + association au lanceur (01/10) : reconnus par
 # leur extension (application/x-wsquashfs, sous-type de squashfs). Sans lui,
