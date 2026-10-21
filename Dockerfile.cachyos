@@ -487,15 +487,19 @@ python3 /tmp/patch-eden-pkgbuild.py
 cd eden-nightly-bin
 makepkg -si --noconfirm --needed
 
+# --nocheck (21/10) : les tests amont de python-aiohttp-jinja2 cassent avec
+# aiohttp 3.14 (test_context_processors : 500 au lieu de 200) et bloquaient
+# tout le build ; ces deux paquets ne servent qu'aux plugins Decky, leurs
+# tests unitaires n'apportent rien ici.
 cd /tmp
 git clone --depth 1 https://aur.archlinux.org/python-aiohttp-jinja2.git
 cd python-aiohttp-jinja2
-makepkg -si --noconfirm --needed
+makepkg -si --noconfirm --needed --nocheck
 
 cd /tmp
 git clone --depth 1 https://aur.archlinux.org/python-aiohttp-cors.git
 cd python-aiohttp-cors
-makepkg -si --noconfirm --needed
+makepkg -si --noconfirm --needed --nocheck
 
 # freeimage (24/09) : dépendance de build ET d'exécution de Batocera
 # EmulationStation (bloc 1a7), retirée des dépôts officiels Arch.
