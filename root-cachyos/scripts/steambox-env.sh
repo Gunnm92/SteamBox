@@ -18,6 +18,9 @@ SAVES_DIR="${GAMES_SAVES_DIR:-${GAMES_DIR}/saves}"
 # VNC (wayvnc). Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-us}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
+# VNC_MAC_ISO_KEYS=1 : noVNC depuis un Mac à clavier ISO (« @ » et « < »
+# inversés) — échange ces deux touches pour wayvnc seul (svc-wayvnc).
+VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-0}"
 
 # Langue : variable standard LANG du conteneur (ex. fr_FR.UTF-8, avec
 # LANGUAGE=fr_FR:fr), lue telle quelle par le bureau et les applis ;

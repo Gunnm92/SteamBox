@@ -39,6 +39,7 @@ Publiée par `make push` depuis ce dépôt (voir Makefile).
 | `GAMES_DIR` | `/home/arcade/games/Batocera` | Ludothèque Batocera (roms/, bios/, saves/ s'en déduisent) — variable seule, aucun montage en plus |
 | `KEYBOARD_LAYOUT` | `fr` | Clavier bureau / Moonlight / VNC |
 | `KEYBOARD_VARIANT` | `mac` | AZERTY Mac |
+| `VNC_MAC_ISO_KEYS` | `1` | noVNC depuis le Mac : « @ » et « < » à leur place |
 | `LANG` | `fr_FR.UTF-8` | Langue du bureau, d'ES et de Sunshine |
 | `LANGUAGE` | `fr_FR:fr` | |
 | `LIBVA_DRIVER_NAME` | `nvidia` | VA-API via nvidia-vaapi-driver |

@@ -1,0 +1,9 @@
+// steambox:isoswap (22/10) : échange <TLDE> (à gauche du 1) et <LSGT> (à côté
+// du Maj gauche). Un navigateur sur Mac à clavier ISO annonce ces deux touches
+// inversées ; noVNC transmet cette position (QEMU Extended Key Event) et
+// wayvnc s'en sert, d'où « @ » et « < » échangés en AZERTY Mac. Activée
+// pour wayvnc seul par VNC_MAC_ISO_KEYS=1 (svc-wayvnc).
+xkb_keycodes "isoswap" {
+    <TLDE> = 94;
+    <LSGT> = 49;
+};

@@ -13,6 +13,8 @@
 # KEYBOARD_LAYOUT=us
 # KEYBOARD_VARIANT=
 # Ex. AZERTY : KEYBOARD_LAYOUT=fr ; AZERTY Mac : + KEYBOARD_VARIANT=mac
+# noVNC depuis un Mac à clavier ISO, « @ » et « < » inversés : 1
+# VNC_MAC_ISO_KEYS=0
 
 # ── Langue ───────────────────────────────────────────────────────────────────
 # Locales disponibles dans l'image : en_US et EXTRA_LOCALES du Dockerfile

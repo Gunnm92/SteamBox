@@ -1,0 +1,7 @@
+// Règles XKB locales (22/10), lues par libxkbcommon avant celles du système
+// (/etc/xkb est dans son chemin de recherche) : reprennent toutes les règles
+// evdev et ajoutent l'option steambox:isoswap (voir keycodes/steambox).
+! include %S/evdev
+
+! option = keycodes
+  steambox:isoswap = +steambox(isoswap)
