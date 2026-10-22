@@ -404,23 +404,7 @@ RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flath
 # hicolor-icon-theme, libgcc) ajoutés aux paquets normaux car ce sont des
 # dépendances RUNTIME (pas des makedepends) — elles doivent rester après
 # le nettoyage, contrairement à meson/ninja plus bas.
-# eden-nightly-bin (29/08) — build nightly de l'émulateur Switch Eden (fork
-# de yuzu), ajouté dans la même session AUR. Variante "-bin" (AppImage
-# précompilée par le CI du projet, juste extraite/installée) plutôt que
-# "eden-nightly" source : évite d'ajouter Qt/LLVM/boost et une compilation
-# C++ énorme à l'image pour un émulateur qui sort déjà un binaire tout fait.
-# Dépendance runtime unique : hicolor-icon-theme (déjà installé plus haut).
-#
-# PKGBUILD upstream patché (bloc package(), via un petit script Python plutôt
-# qu'un sed en ligne : trop d'imbrication de guillemets Dockerfile+shell+sed
-# pour un remplacement multi-lignes propre) pour extraire l'AppImage
-# (squashfs-root, déjà produit par prepare()/build() du PKGBUILD via
-# --appimage-extract) et l'installer sous /opt/eden avec un wrapper shell
-# exécutant AppRun — au lieu de copier le .AppImage brut sous
-# /opt/${pkgname} (nécessite FUSE à chaque lancement). Exactement le
-# comportement de l'ancien install manuel retiré plus haut : pas de FUSE
-# requis au runtime, et des raccourcis/scripts existants pointent sur ce
-# chemin /opt/eden précis.
+# Eden (Switch) : sorti de l'AUR le 22/10, voir le bloc « Eden (Nintendo Switch) » plus bas.
 # decky-loader (31/08, demande utilisateur) — chargeur de plugins Steam
 # Deck (SteamDeckHomebrew/decky-loader). PAS installé via AUR (revu le
 # 01/09) : le paquet AUR construit un wheel Python (via poetry) lancé comme
@@ -450,31 +434,6 @@ RUN pacman -S --noconfirm --needed \
     useradd -m -s /bin/bash aur-builder && \
     echo 'aur-builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aur-builder
 
-COPY <<'PATCH_EDEN_EOF' /tmp/patch-eden-pkgbuild.py
-import pathlib
-p = pathlib.Path("/tmp/eden-nightly-bin/PKGBUILD")
-c = p.read_text()
-old = (
-    'package() {\n'
-    '    install -Dm755 "${_appimage}" "${pkgdir}/opt/${pkgname}/${pkgname}.AppImage"\n'
-)
-new = (
-    'package() {\n'
-    '    install -dm755 "${pkgdir}/opt/eden"\n'
-    '    cp -a squashfs-root/. "${pkgdir}/opt/eden/"\n'
-    '    install -dm755 "${pkgdir}/usr/bin"\n'
-    '    printf \'#!/bin/sh\\ncd /opt/eden && exec ./AppRun "$@"\\n\' > "${pkgdir}/usr/bin/eden"\n'
-    '    chmod +x "${pkgdir}/usr/bin/eden"\n'
-)
-assert old in c, "bloc install introuvable dans PKGBUILD"
-c = c.replace(old, new)
-old2 = '    install -dm755 "${pkgdir}/usr/bin"\n    ln -s "/opt/${pkgname}/${pkgname}.AppImage" "${pkgdir}/usr/bin/eden"\n'
-assert old2 in c, "bloc ln -s introuvable dans PKGBUILD"
-c = c.replace(old2, "")
-p.write_text(c)
-print("PKGBUILD eden patche avec succes")
-PATCH_EDEN_EOF
-
 COPY <<'BUILD_AUR_EOF' /tmp/build-aur.sh
 #!/bin/bash
 set -e
@@ -486,12 +445,6 @@ makepkg -si --noconfirm --needed
 cd /tmp
 git clone --depth 1 https://aur.archlinux.org/ludusavi-bin.git
 cd ludusavi-bin
-makepkg -si --noconfirm --needed
-
-cd /tmp
-git clone --depth 1 https://aur.archlinux.org/eden-nightly-bin.git
-python3 /tmp/patch-eden-pkgbuild.py
-cd eden-nightly-bin
 makepkg -si --noconfirm --needed
 
 # --nocheck (21/10) : les tests amont de python-aiohttp-jinja2 cassent avec
@@ -516,12 +469,12 @@ cd freeimage
 makepkg -si --noconfirm --needed
 BUILD_AUR_EOF
 
-RUN chown aur-builder:aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
+RUN chown aur-builder:aur-builder /tmp/build-aur.sh && \
     chmod +x /tmp/build-aur.sh && \
     su aur-builder -c /tmp/build-aur.sh && \
-    rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh /tmp/patch-eden-pkgbuild.py && \
+    rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh && \
     userdel -r aur-builder && \
-    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin /tmp/eden-nightly-bin \
+    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin \
            /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/freeimage && \
     pacman -Rns --noconfirm meson ninja && \
     rm -rf /var/cache/pacman/pkg/*
@@ -1197,11 +1150,17 @@ RUN curl -fSL --retry 3 -o /tmp/xbox_hdd.zip \
 # juste fait au build plutôt qu'à la main une fois le conteneur démarré)
 # et installée dans un chemin système (pas ~/.config, qui reste la donnée
 # utilisateur) — init_retroarch.sh pointe content_database_path dessus.
-RUN mkdir -p /usr/share/retroarch/database/rdb && \
-    curl -fsSL --retry 3 -o /tmp/database-rdb.zip \
-      "https://buildbot.libretro.com/assets/frontend/database-rdb.zip" && \
-    unzip -q /tmp/database-rdb.zip -d /usr/share/retroarch/database/rdb && \
-    rm -f /tmp/database-rdb.zip
+# Source GitHub (22/10) : le zip du buildbot descendait à ~300 Ko/s (2 min 46
+# au build) ; le dossier rdb/ du dépôt libretro-database contient les mêmes
+# 146 .rdb (comparé) et un clone partiel limité à ce dossier prend ~10 s.
+RUN git clone -q --depth 1 --filter=blob:none --sparse \
+      https://github.com/libretro/libretro-database.git /tmp/libretro-database && \
+    git -C /tmp/libretro-database sparse-checkout set rdb && \
+    n=$(ls /tmp/libretro-database/rdb/*.rdb | wc -l) && \
+    { [ "${n}" -gt 100 ] || { echo "FATAL: base RetroArch incomplète (${n} .rdb)"; exit 1; }; } && \
+    mkdir -p /usr/share/retroarch/database && \
+    mv /tmp/libretro-database/rdb /usr/share/retroarch/database/rdb && \
+    rm -rf /tmp/libretro-database
 
 # Profils de manettes RetroArch (24/09) — même origine que "Mettre à jour
 # les profils de manettes" du menu RetroArch (buildbot officiel), un dossier
@@ -1361,12 +1320,44 @@ RUN --mount=type=secret,id=github_token \
     /usr/local/lib/steambox-build/install-appimage shadps4 "ShadPS4" "${APPIMAGE}" && \
     rm -rf /tmp/shadps4.zip /tmp/shadps4
 
-# Eden (Nintendo Switch) — remplacé par le paquet AUR eden-nightly-bin
-# (voir plus haut, section AUR avec libva-nvidia-driver-git/ludusavi-bin) :
-# gardait ici un doublon de build "stable" téléchargé à la main depuis
-# stable.eden-emu.dev (audit 29/08) — deux entrées "Eden" dans le menu, deux
-# binaires potentiellement différents. Nightly seule conservée, plus simple
-# à tenir à jour (juste rebuild l'image) qu'un script curl+extraction ad hoc.
+# Eden (Nintendo Switch) — AppImage nightly officielle (22/10), installée
+# comme les autres émulateurs par install-appimage. Remplace le paquet AUR
+# eden-nightly-bin, qui faisait la même chose (AppImage extraite dans
+# /opt/eden) au prix d'un patch du PKGBUILD, et avait souvent une nightly de
+# retard. Le serveur du projet est lent (~200 Ko/s, 5 min par build pour
+# 70 Mo, stable comme nightly ; GitHub inutilisable, dépôts retirés en 451) :
+# l'AppImage est gardée dans un cache BuildKit et n'est retéléchargée que
+# quand une nouvelle nightly sort. Dernière nightly lue sur l'API de la forge
+# (tag v<horodatage>.<commit>, fichier Eden-Linux-<commit>-amd64-clang-pgo).
+# /usr/bin/eden conservé (game-systems.sh, raccourcis existants) et types
+# MIME Switch repris du paquet AUR (ouverture des .nsp/.xci par Eden).
+ARG EDEN_TAG=""
+RUN --mount=type=cache,id=steambox-eden,target=/var/cache/eden \
+    TAG="${EDEN_TAG}" && \
+    if [ -z "${TAG}" ]; then \
+      TAG=$(curl -fsSL --retry 3 "https://git.eden-emu.dev/api/v1/repos/eden-ci/nightly/releases?limit=1" | jq -r '.[0].tag_name'); \
+    fi && \
+    case "${TAG}" in v*.*) ;; *) echo "FATAL: tag nightly Eden invalide (${TAG})"; exit 1 ;; esac && \
+    F="Eden-Linux-${TAG##*.}-amd64-clang-pgo.AppImage" && \
+    if [ -s "/var/cache/eden/${F}" ]; then \
+      echo "Eden ${TAG} : AppImage en cache"; \
+    else \
+      rm -f /var/cache/eden/*.AppImage /var/cache/eden/*.part && \
+      curl -fSL --retry 3 -o "/var/cache/eden/${F}.part" "https://nightly.eden-emu.dev/${TAG}/${F}" && \
+      mv "/var/cache/eden/${F}.part" "/var/cache/eden/${F}"; \
+    fi && \
+    /usr/local/lib/steambox-build/install-appimage eden "Eden" "/var/cache/eden/${F}" && \
+    ln -sf /usr/local/bin/eden /usr/bin/eden && \
+    printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+      '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">' \
+      '  <mime-type type="application/x-nx-nro"><glob pattern="*.nro"/></mime-type>' \
+      '  <mime-type type="application/x-nx-nso"><glob pattern="*.nso"/></mime-type>' \
+      '  <mime-type type="application/x-nx-nsp"><glob pattern="*.nsp"/></mime-type>' \
+      '  <mime-type type="application/x-nx-xci"><glob pattern="*.xci"/></mime-type>' \
+      '</mime-info>' > /usr/share/mime/packages/eden.xml && \
+    echo 'MimeType=application/x-nx-nro;application/x-nx-nso;application/x-nx-nsp;application/x-nx-xci;' \
+      >> /usr/share/applications/eden.desktop && \
+    update-mime-database /usr/share/mime
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
 ARG FLIPS_TAG=""
@@ -1547,15 +1538,13 @@ RUN setcap 'cap_sys_nice+ep' "$(readlink -f /usr/bin/pipewire)"
 # alors qu'il est déjà dans "Jeux" via Game seul (confirmé en direct,
 # capture d'écran utilisateur). Nos .desktop générés par ce Dockerfile ont
 # déjà été corrigés (Categories=Game; seul, voir plus haut) — ceux-ci
-# viennent de paquets pacman/AUR upstream (dolphin-emu, retroarch,
-# eden-nightly-bin) et gardent leur catégorie d'origine tant qu'on ne la
-# patch pas ici (fichier upstream gardé intact à part ce qu'on doit
+# viennent de paquets pacman upstream (dolphin-emu, retroarch) et gardent
+# leur catégorie d'origine tant qu'on ne la patch pas ici (fichier upstream gardé intact à part ce qu'on doit
 # changer) — même logique que pour DISPLAY sur dolphin-emu.desktop plus
 # haut, même si ce dernier ne nécessite plus aucun sed depuis que DISPLAY
 # est ambiant via wayland-session.sh.
 RUN for f in /usr/share/applications/dolphin-emu.desktop \
-             /usr/share/applications/com.libretro.RetroArch.desktop \
-             /usr/share/applications/eden-nightly.desktop; do \
+             /usr/share/applications/com.libretro.RetroArch.desktop; do \
         [ -f "$f" ] && sed -i 's/^Categories=Game;Emulator;/Categories=Game;/' "$f" || true; \
     done
 
