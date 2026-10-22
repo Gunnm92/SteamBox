@@ -37,7 +37,7 @@ facultatives :
 | `GAMES_DIR` | `/config/games` | Ludothèque au format Batocera : `roms/<système>/`, `bios/`, `saves/` |
 | `GAMES_ROMS_DIR`, `GAMES_BIOS_DIR`, `GAMES_SAVES_DIR` | `$GAMES_DIR/…` | Chaque dossier séparément |
 | `KEYBOARD_LAYOUT`, `KEYBOARD_VARIANT` | `us`, vide | Disposition XKB (ex. `fr` + `mac`) |
-| `VNC_MAC_ISO_KEYS` | `0` | `1` : noVNC depuis un Mac à clavier ISO, remet « @ » et « < » à leur place (VNC seul) |
+| `VNC_MAC_ISO_KEYS` | `1` si variante `mac`, sinon `0` | noVNC depuis un Mac à clavier ISO : remet « @ » et « < » à leur place (VNC seul) |
 | `LANG`, `LANGUAGE` | `en_US.UTF-8` | Langue du bureau, d'EmulationStation et de Sunshine |
 | `GPU_VENDOR` | `auto` | `nvidia` / `amd` / `intel` — choisit l'encodeur Sunshine (nvenc / vaapi) |
 | `LIBVA_DRIVER_NAME` | vide | `nvidia` sur GPU NVIDIA (AMD/Intel : détection libva) |

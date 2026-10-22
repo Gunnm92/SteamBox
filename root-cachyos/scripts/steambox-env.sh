@@ -20,7 +20,13 @@ KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-us}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
 # VNC_MAC_ISO_KEYS=1 : noVNC depuis un Mac à clavier ISO (« @ » et « < »
 # inversés) — échange ces deux touches pour wayvnc seul (svc-wayvnc).
-VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-0}"
+# Activé par défaut avec la variante mac : qui choisit un AZERTY Mac tape
+# depuis un Mac ; 0 pour le forcer à l'arrêt.
+if [ "${KEYBOARD_VARIANT}" = mac ]; then
+    VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-1}"
+else
+    VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-0}"
+fi
 
 # Langue : variable standard LANG du conteneur (ex. fr_FR.UTF-8, avec
 # LANGUAGE=fr_FR:fr), lue telle quelle par le bureau et les applis ;

@@ -9,8 +9,6 @@ GAMES_DIR=/home/arcade/games/Batocera
 # AZERTY Mac (bureau labwc, clavier Moonlight via evdev-bridge, VNC).
 KEYBOARD_LAYOUT=fr
 KEYBOARD_VARIANT=mac
-# noVNC depuis le Mac (clavier ISO) : « @ » et « < » remis à leur place.
-VNC_MAC_ISO_KEYS=1
 
 # Interface en français.
 LANG=fr_FR.UTF-8
