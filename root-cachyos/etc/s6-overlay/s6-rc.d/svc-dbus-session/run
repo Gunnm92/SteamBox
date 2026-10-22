@@ -13,8 +13,13 @@
 # --nofork (pas --fork comme l'ancien code inline) : un service s6 longrun
 # doit rester au premier plan pour être supervisé/relancé — même pattern
 # que svc-dbus-system/run (dbus-daemon --system --nofork).
+#
+# XDG_RUNTIME_DIR exporté (22/10) : les services activés par ce bus (gvfsd,
+# gvfsd-fuse…) héritent de son environnement. Sans lui, gvfs montait ses
+# partages réseau dans ~/.gvfs au lieu de $XDG_RUNTIME_DIR/gvfs et chaque
+# client avertissait "peer-to-peer connection failed".
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 rm -f "${XDG_RUNTIME_DIR}/bus"
 
-exec runuser -u arcade -- \
+exec runuser -u arcade -- env XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
     dbus-daemon --session --nofork --address="unix:path=${XDG_RUNTIME_DIR}/bus"

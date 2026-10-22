@@ -287,10 +287,16 @@ RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr
 # XInput avec la vibration. Il exige une pile limitée (8 Mo, posée dans les
 # services de session) : pile illimitée, son émulation seccomp tuait wineboot.
 # UMU-Proton en secours (section 1a9b).
+# gvfs + gvfs-smb (22/10) : partages réseau smb:// dans Thunar (« Parcourir le
+# réseau »), aussi exposés aux autres programmes via FUSE dans
+# $XDG_RUNTIME_DIR/gvfs ; smbclient pour tester un partage en ligne de
+# commande. smb.conf minimal créé après : Arch n'en livre pas et smbclient
+# râle à chaque appel sans lui.
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
+      gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
       wayvnc python-pip wlr-randr \
@@ -335,7 +341,8 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       echo "pacman : miroirs CachyOS décalés, nouveau premier : $(grep -m1 '^Server' /etc/pacman.d/cachyos-mirrorlist)"; \
       sleep 60; \
     done && \
-    rm -rf /var/cache/pacman/pkg/*
+    rm -rf /var/cache/pacman/pkg/* && \
+    mkdir -p /etc/samba && printf '[global]\n' > /etc/samba/smb.conf
 
 # qt6-multimedia (audit menu XFCE 31/08) : melonDS a besoin de
 # libQt6Multimedia.so.6 au runtime mais ne l'embarque pas dans son zip
