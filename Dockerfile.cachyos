@@ -318,19 +318,17 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       xdg-desktop-portal \
       gamescope \
       libretro \
-      wine-staging winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
+      winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
       umu-launcher proton-cachyos-slr \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \
       ark unrar zip \
       sdl2_image sdl2_mixer sdl2_ttf sdl2_gfx \
-      dolphin-emu scummvm \
       papirus-icon-theme hicolor-icon-theme adwaita-icon-theme \
       ttf-jetbrains-mono cantarell-fonts noto-fonts ttf-dejavu \
       libva-utils \
       qt6-multimedia \
-      gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav \
-      flatpak" && \
+      gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav" && \
     for i in 1 2 3; do \
       pacman -Syyu --noconfirm && pacman -S --noconfirm --needed ${PKGS} && break; \
       [ "${i}" = 3 ] && { echo "FATAL: pacman en échec après 3 essais (miroirs CachyOS)"; exit 1; }; \
@@ -341,6 +339,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       echo "pacman : miroirs CachyOS décalés, nouveau premier : $(grep -m1 '^Server' /etc/pacman.d/cachyos-mirrorlist)"; \
       sleep 60; \
     done && \
+    pacman -Rdd --noconfirm retroarch && \
     rm -rf /var/cache/pacman/pkg/* && \
     mkdir -p /etc/samba && printf '[global]\n' > /etc/samba/smb.conf
 
@@ -370,13 +369,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
 # decoder: Advanced Streaming Format"), confirmé en direct : BlazBlue Central
 # Fiction (nesicax) quittait au lancement.
 #
-# flatpak (demandé 31/08) — xdg-desktop-portal(-gtk/-wlr) déjà installés
-# ci-dessus couvrent les besoins runtime des apps Flatpak (permissions,
-# ouverture de fichiers). Flathub ajouté comme remote système juste
-# en dessous pour que le paquet soit utilisable dès le premier lancement,
-# sans étape manuelle côté utilisateur.
-RUN flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-
 # nvidia-vaapi-driver — pont VA-API→NVDEC/NVENC pour NVIDIA (projet
 # elFarto/nvidia-vaapi-driver), porté depuis le fix Dockerfile.ubuntu (audit
 # 2026-08-26, "steam link fait crasher steam" : Steam Remote Play encode
@@ -511,31 +503,8 @@ RUN chmod +x /usr/local/bin/systemctl
 COPY root-cachyos/build/ /usr/local/lib/steambox-build/
 RUN chmod +x /usr/local/lib/steambox-build/*
 
-# Heroic (Epic/GOG/Amazon) — paquet Arch officiel publié par le projet à
-# chaque release GitHub (Heroic-x.y.z-linux-x64.pacman), plus le
-# heroic-games-launcher-bin du dépôt cachyos (22/09) : ce dernier suit
-# l'amont avec retard (2.22.1 dans l'image alors que la 2.22.3 était sortie,
-# AUR compris, depuis le 16/09) — incompatible avec la règle "chaque rebuild
-# prend la dernière version". Même nom de dossier (/opt/Heroic) que le
-# paquet cachyos : prefixes, config (~/.config/heroic) et raccourcis Steam
-# existants restent valides. Dépendances résolues par pacman depuis les
-# dépôts (toutes présentes, vérifié le 22/09 ; libappindicator-gtk3 est
-# fournie par libappindicator).
-# Le scriptlet post_install du paquet ne s'exécute PAS ici (pacman refuse
-# les scriptlets sous le sandbox réseau de BuildKit, voir "could not isolate
-# the network" plus haut) : ses deux effets utiles sont reproduits à la main
-# — lien /usr/bin/heroic, et chrome-sandbox en 0755 (état identique au
-# paquet cachyos, fonctionnel en prod).
-ARG HEROIC_TAG=""
-RUN --mount=type=secret,id=github_token \
-    HEROIC_URL=$(/usr/local/lib/steambox-build/gh-asset-url Heroic-Games-Launcher/HeroicGamesLauncher "${HEROIC_TAG}" 'linux-x64\.pacman$') && \
-    curl -fSL --retry 3 -o /tmp/heroic.pkg.tar.xz "${HEROIC_URL}" && \
-    pacman -U --noconfirm --needed /tmp/heroic.pkg.tar.xz && \
-    ln -sf /opt/Heroic/heroic /usr/bin/heroic && \
-    chmod 0755 /opt/Heroic/chrome-sandbox && \
-    rm -f /tmp/heroic.pkg.tar.xz && \
-    rm -rf /var/cache/pacman/pkg/*
-
+# Heroic (Epic/GOG/Amazon) : retiré de l'image (25/10). Installé comme AppImage
+# par AppManager dans ~/Applications ; lancé par /usr/local/bin/heroic.
 # DISPLAY sur Ludusavi, Dolphin et Winetricks (audit menu XFCE 31/08 puis
 # 18/09) : ces apps nécessitaient un sed sur leur .desktop upstream pour
 # forcer DISPLAY=:0 (Ludusavi : "neither WAYLAND_DISPLAY nor
@@ -979,7 +948,10 @@ RUN --mount=type=secret,id=github_token \
     tar -xf /tmp/wine32.tar.xz -C /opt/wine-tkg --strip-components=1 && \
     rm -f /tmp/wine32.tar.xz && \
     [ -d /opt/wine-tkg/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
-    /opt/wine-tkg/bin/wine --version
+    /opt/wine-tkg/bin/wine --version && \
+    ln -sf /opt/wine-tkg/bin/wine /usr/bin/wine
+# wine-staging (Arch) n'est plus installé : /usr/bin/wine pointe sur wine-tkg,
+# pour winetricks et les outils qui appellent « wine » sans chemin.
 
 # ── 1a9b. UMU-Proton — Proton de Valve préparé pour umu (30/09), second choix
 # de wsquashfs-launcher après proton-cachyos : sa SDL gère aussi la DualSense
@@ -1003,18 +975,14 @@ RUN --mount=type=secret,id=github_token \
     [ -x "/usr/share/steam/compatibilitytools.d/${UMU_PROTON_VERSION}/proton" ] \
       || { echo "FATAL: UMU-Proton incomplet"; exit 1; }
 
-# ── 1a9. Steam ROM Manager — génère des raccourcis Steam pour les ROMs/jeux
-# non-Steam (AppImage officielle, pas de paquet Arch/CachyOS).
-ARG SRM_TAG=""
+# ── 1a8b. AppManager — gestion des AppImage (25/10). Gear Lever n'a pas
+# d'AppImage (releases GitHub : .flatpak seulement ; AUR : compilation
+# Python/GTK4), donc on ne le garde pas. AppManager publie une AppImage
+# x86_64 sur GitHub, extraite par install-appimage comme les autres.
+ARG APPMANAGER_TAG=""
 RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url SteamGridDB/steam-rom-manager "${SRM_TAG}" '[0-9]\.AppImage$' arm64) && \
-    WRAPPER_ENV='export APPDIR=/opt/steam-rom-manager' DESKTOP_ARGS='--no-sandbox' \
-      /usr/local/lib/steambox-build/install-appimage steam-rom-manager "Steam ROM Manager" "${URL}"
-
-# ── 1a10. Lindbergh Loader (arcade Sega Lindbergh) — AppImage officielle,
-# version figée (pas de résolution "latest" pour ce projet).
-RUN /usr/local/lib/steambox-build/install-appimage lindbergh "Lindbergh Loader" \
-      "https://github.com/lindbergh-loader/lindbergh-loader/releases/download/v2.1.4/lindbergh-loader.AppImage"
+    URL=$(/usr/local/lib/steambox-build/gh-asset-url kem-a/AppManager "${APPMANAGER_TAG}" 'x86_64\.AppImage$') && \
+    /usr/local/lib/steambox-build/install-appimage appmanager "AppManager" "${URL}"
 
 # ── 1a11. Supermodel (arcade Sega Model 3) — tarball Linux officiel.
 # Échec franc (22/09) au lieu du "skip" silencieux : game-systems.sh lance
@@ -1029,9 +997,12 @@ RUN --mount=type=secret,id=github_token \
     curl -fSL --retry 3 -o /tmp/supermodel.tar.gz "${SUPERMODEL_URL}" && \
     mkdir -p /opt/supermodel && \
     tar -xzf /tmp/supermodel.tar.gz -C /opt/supermodel --strip-components=1 && \
-    [ -x /opt/supermodel/supermodel ] || { echo "FATAL: binaire supermodel absent de l'archive"; exit 1; } && \
-    ln -sf /opt/supermodel/supermodel /usr/local/bin/supermodel && \
-    rm -f /tmp/supermodel.tar.gz
+    [ -f /opt/supermodel/Config/Games.xml ] || { echo "FATAL: Config/Games.xml absent de l'archive"; exit 1; } && \
+    [ -d /opt/supermodel/Assets ] || { echo "FATAL: Assets absent de l'archive"; exit 1; } && \
+    rm -f /opt/supermodel/supermodel /tmp/supermodel.tar.gz
+# Seules les données de l'archive restent ici (Config/Games.xml, Music.xml,
+# Assets) : le binaire vient de l'AppImage installée par AppManager, via le
+# lanceur commun (voir plus bas).
 
 # ── 1a12. Wine Gecko + Mono — sans ça, tout préfixe Wine invite au
 # téléchargement (popup bloquant) au premier lancement d'un installeur/jeu qui
@@ -1079,52 +1050,6 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
     printf '[Desktop Entry]\nType=Application\nName=Google Chrome\nExec=/opt/google/chrome/google-chrome --ozone-platform=x11 %%U\nIcon=/opt/google/chrome/product_logo_256.png\nTerminal=false\nCategories=Network;WebBrowser;\n' \
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
-
-# ── 1a14. Émulateurs supplémentaires — parité avec la suite bundlée dans
-# l'ancienne image de base lscr.io/linuxserver/webstation (dolphin-emu et
-# scummvm ci-dessus sont déjà des paquets Arch officiels ; le reste n'a pas
-# de paquet Arch/AUR-free, mais chaque projet publie une AppImage/archive
-# Linux officielle — pas de build depuis les sources.
-#
-# Toutes les AppImage passent par install-appimage (22/09, voir ce script
-# pour le détail : extraction, cas squashfs-root -> AppDir, lanceur
-# "exec /opt/X/AppRun" plutôt qu'un ln -sf). Avant, chaque bloc portait sa
-# propre copie de cette logique, et les correctifs n'avaient été reportés
-# que sur une partie d'entre eux (PCSX2/DuckStation/Xemu/Xenia/SRM/Flycast
-# sans gestion du lien AppDir, lanceurs mixtes ln -sf/wrapper). Pas de
-# DISPLAY dans les Exec= : ambiant dans les deux bureaux depuis le 18/09
-# (wayland-session.sh / sunshine-desktop-xfce.sh).
-ARG PCSX2_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url PCSX2/pcsx2 "${PCSX2_TAG}" 'linux-appimage-x64-Qt\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage pcsx2 "PCSX2" "${URL}"
-
-# PCSX2X6 (22/09) — fork arcade de PCSX2 pour Namco System 246/256
-# (PS2Homebrew-arcade/pcsx2x6), l'émulateur qu'utilise Batocera pour le
-# système namco2x6. AppImage Linux officielle publiée à chaque release ;
-# "latest" = dernière release stable (les préversions sont ignorées par
-# /releases/latest). Lancé depuis EmulationStation par game-launch-namco2x6.sh.
-ARG PCSX2X6_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url PS2Homebrew-arcade/pcsx2x6 "${PCSX2X6_TAG}" 'linux-appimage-x64-Qt\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage pcsx2x6 "PCSX2X6 (Namco 246/256)" "${URL}"
-
-ARG RPCS3_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url RPCS3/rpcs3-binaries-linux "${RPCS3_TAG}" '_linux64\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage rpcs3 "RPCS3" "${URL}"
-
-ARG DUCKSTATION_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url stenzek/duckstation "${DUCKSTATION_TAG}" 'DuckStation-x64\.AppImage$') && \
-    BIN=duckstation-qt /usr/local/lib/steambox-build/install-appimage duckstation "DuckStation" "${URL}"
-
-# Xemu : la release publie aussi une variante -dbg (symboles de debug) au
-# même suffixe x86_64.AppImage — exclue explicitement.
-ARG XEMU_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url xemu-project/xemu "${XEMU_TAG}" 'x86_64\.AppImage$' dbg) && \
-    /usr/local/lib/steambox-build/install-appimage xemu "Xemu" "${URL}"
 
 # Disque dur virtuel Xbox vierge (22/09) — xemu exige un hdd_path ; même
 # image que Batocera (release publique mborgerson/xemu-hdd-image 1.0, déjà
@@ -1175,115 +1100,6 @@ RUN mkdir -p /usr/share/libretro/autoconfig && \
     [ -f "/usr/share/libretro/autoconfig/udev/Sony Interactive Entertainment DualSense Wireless Controller.cfg" ] \
       || { echo "FATAL: profil DualSense absent de autoconfig.zip"; exit 1; }
 
-# PPSSPP standalone (18/09) — en plus du core libretro-ppsspp (groupe
-# "libretro") : la version standalone (Qt/SDL, pas juste le core RetroArch)
-# a son propre frontend avec plus d'options de compatibilité par jeu,
-# utile pour les .iso/.cso qui posent problème sous le core seul.
-ARG PPSSPP_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url hrydgard/ppsspp "${PPSSPP_TAG}" 'anylinux-x86_64\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage ppsspp "PPSSPP" "${URL}"
-
-# Flycast standalone (18/09) — même logique que PPSSPP ci-dessus : en plus
-# du core libretro-flycast (groupe "libretro"), la version standalone
-# (flyinghead/flycast) a son propre frontend avec le support Naomi/
-# Atomiswave complet et le netplay, pas juste le cœur Dreamcast.
-ARG FLYCAST_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url flyinghead/flycast "${FLYCAST_TAG}" 'x86_64-[0-9.]+\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage flycast "Flycast" "${URL}"
-
-# Cemu (20/09, ré-ajouté) — seul émulateur Wii U du conteneur, retiré à tort
-# le 18/09 en même temps qu'Azahar/GZDoom (nettoyage qui n'aurait pas dû
-# l'inclure).
-ARG CEMU_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url cemu-project/Cemu "${CEMU_TAG}" 'x86_64\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage cemu "Cemu" "${URL}"
-
-# Vita3K (20/09) — seul émulateur PS Vita disponible sur Linux. Release
-# "continuous" (builds CI en continu) : c'est déjà ce que "latest" résout
-# côté API GitHub pour ce dépôt. Nom complet Vita3K-x86_64.AppImage (le
-# dépôt publie aussi une variante aarch64). Lanceur enrichi (20/09, "vita3k
-# est bien présent mais il ne se lance pas") : son AppRun.wrapped (généré
-# par linuxdeploy-plugin-qt) ne lance le vrai binaire QUE si APPIMAGE est
-# non vide — sinon il sort silencieusement, confirmé en direct. APPIMAGE/
-# APPDIR n'existent normalement que sous le vrai runtime squashfs, jamais
-# pour un AppDir extrait. QT_QPA_PLATFORM=xcb en plus (confirmé en direct) :
-# seul le plugin Qt xcb est embarqué dans cet AppImage.
-ARG VITA3K_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url Vita3K/Vita3K "${VITA3K_TAG}" 'Vita3K-x86_64\.AppImage$') && \
-    WRAPPER_ENV='export APPDIR=/opt/vita3k APPIMAGE=/opt/vita3k/AppRun QT_QPA_PLATFORM=xcb' /usr/local/lib/steambox-build/install-appimage vita3k "Vita3K" "${URL}"
-
-# TeknoParrotUI (18/09) — build .NET 8 natif Linux (teknogods/TeknoParrotUI,
-# release "TeknoParrotUI-net8"), PAS la release GitHub "latest" de ce dépôt :
-# confirmé en direct que /releases/latest renvoie encore l'ancienne release
-# 2019 Windows-only (TeknoParrotUi.zip) — le mainteneur n'a jamais remarqué
-# la release net8 comme "latest" côté GitHub. Tag figé en dur plutôt que
-# de suivre "latest" pour cette raison précise.
-# ~60 jeux de la collection wsquashfs (namcoes3, rawthrills, konamipc,
-# arcadepc, segaalls/er/nu/re/rw, adrenaline, unis, nesicax2) utilisent déjà
-# TeknoParrotUi.exe comme CMD dans leur autorun.cmd, lancé sous Wine jusqu'ici.
-# Ce build natif remplace uniquement la coquille TeknoParrotUi.exe/launcher —
-# OpenParrot (la bibliothèque de hooks par jeu : anti-dongle JVS, entrées
-# clavier) n'a pas été mise à jour depuis 2019 et reste Windows-only
-# (confirmé sur teknogods/OpenParrot, aucune release Linux) : le jeu lui-même
-# tourne donc probablement toujours sous Wine derrière ce launcher natif,
-# pipehelper.exe (présent dans le zip) restant un binaire Windows pour le
-# pont IPC avec le process du jeu. Pas encore basculé les autorun.cmd des
-# 60 jeux dessus (à valider un par un, cf. audit KOF XIV Arcade/NESiCA_Unlocker
-# — ces procédures de lancement sont fragiles et spécifiques par jeu) :
-# seul l'outil est installé ici, l'intégration par jeu est un chantier séparé.
-# Règle udev "uaccess" fournie dans le zip (setup/) volontairement PAS
-# installée : mécanisme systemd-logind absent de ce conteneur, sans effet
-# ici — l'accès /dev/input passe déjà par le groupe "input" (arcade y est
-# déjà, voir plus bas useradd) et le bind mount complet /dev/input du
-# docker-compose, mécanisme différent mais qui couvre déjà ce besoin.
-# chmod -R a+rwX (18/09, confirmé en direct) : TeknoParrotUi écrit sa
-# config (ParrotData.xml, joystick) directement dans son propre dossier
-# dinstallation plutôt que dans un dossier XDG — hérité de son
-# fonctionnement portable sous Windows (à côté de lexe). Sans ça,
-# UnauthorizedAccessException au démarrage (root:root par défaut après
-# unzip). Le symlink TeknoParrotUi -> /usr/local/bin/teknoparrot lui-même
-# est sans risque contrairement à PPSSPP/Flycast plus haut : binaire .NET
-# natif, résout son propre dossier via AppContext.BaseDirectory (API
-# système), pas un script shell lisant $0 à la main.
-ARG TEKNOPARROT_TAG="TeknoParrotUI-net8"
-RUN --mount=type=secret,id=github_token \
-    TEKNOPARROT_URL=$(/usr/local/lib/steambox-build/gh-asset-url teknogods/TeknoParrotUI "${TEKNOPARROT_TAG}" 'linux-x64\.zip$') && \
-    curl -fSL --retry 3 -o /tmp/teknoparrot.zip "${TEKNOPARROT_URL}" && \
-    mkdir -p /opt/teknoparrot && \
-    unzip -q /tmp/teknoparrot.zip -d /opt/teknoparrot && \
-    chmod +x /opt/teknoparrot/TeknoParrotUi /opt/teknoparrot/ParrotPatcher && \
-    chmod -R a+rwX /opt/teknoparrot && \
-    ln -sf /opt/teknoparrot/TeknoParrotUi /usr/local/bin/teknoparrot && \
-    printf '[Desktop Entry]\nType=Application\nName=TeknoParrotUI\nExec=/usr/local/bin/teknoparrot\nIcon=/opt/teknoparrot/Icons/TeknoVegas.png\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/teknoparrot.desktop && \
-    rm -f /tmp/teknoparrot.zip
-
-ARG XENIA_TAG=""
-RUN --mount=type=secret,id=github_token \
-    URL=$(/usr/local/lib/steambox-build/gh-asset-url has207/xenia-edge "${XENIA_TAG}" 'linux\.AppImage$') && \
-    /usr/local/lib/steambox-build/install-appimage xenia "Xenia (Xbox 360)" "${URL}"
-
-# melonDS (Nintendo DS) — zip, pas d'AppImage.
-ARG MELONDS_TAG=""
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    MELONDS_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/melonDS-emu/melonDS/releases/${MELONDS_TAG:+tags/}${MELONDS_TAG:-latest}" \
-      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
-    [ -n "${MELONDS_VERSION}" ] || { echo "FATAL: MELONDS_VERSION vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/melon.zip \
-      "https://github.com/melonDS-emu/melonDS/releases/download/${MELONDS_VERSION}/melonDS-${MELONDS_VERSION}-ubuntu-x86_64.zip" && \
-    mkdir -p /opt/melonds && unzip -q /tmp/melon.zip -d /opt/melonds && \
-    ln -sf /opt/melonds/melonDS /usr/local/bin/melonDS && \
-    curl -fSL --retry 3 -o /opt/melonds/melon.png \
-      "https://raw.githubusercontent.com/melonDS-emu/melonDS/master/res/melon512.png" && \
-    printf '[Desktop Entry]\nType=Application\nName=melonDS\nExec=/usr/local/bin/melonDS\nIcon=/opt/melonds/melon.png\nTerminal=false\nCategories=Game;\n' \
-      > /usr/share/applications/melonds.desktop && \
-    rm -f /tmp/melon.zip
-
 # DOSBox Staging — tarball officiel, pas d'AppImage. Icône cherchée dans
 # l'archive (26/09) : l'amont a renommé org.dosbox-staging.* en
 # org.dosbox_staging.* ; le chemin écrit en dur n'existait plus, et cette
@@ -1304,60 +1120,6 @@ RUN --mount=type=secret,id=github_token \
     printf '[Desktop Entry]\nType=Application\nName=DOSBox Staging\nExec=/usr/local/bin/dosbox\nIcon=%s\nTerminal=false\nCategories=Game;\n' "${DOSBOX_ICON}" \
       > /usr/share/applications/dosbox.desktop && \
     rm -f /tmp/dosbox.tar.xz
-
-# ShadPS4 (PS4, expérimental) — zip officiel (AppImage empaqueté dedans).
-# Liste /releases complète (pas /releases/latest) pour capter les
-# prereleases — d'où l'appel direct à l'API plutôt que gh-asset-url.
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    SHADPS4_URL=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "https://api.github.com/repos/shadps4-emu/shadps4-qtlauncher/releases" \
-      | grep -oE '"browser_download_url": *"[^"]*linux-qt[^"]*\.zip"' | head -1 | cut -d'"' -f4) && \
-    [ -n "${SHADPS4_URL}" ] || { echo "FATAL: SHADPS4_URL vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/shadps4.zip "${SHADPS4_URL}" && \
-    mkdir -p /tmp/shadps4 && unzip -q /tmp/shadps4.zip -d /tmp/shadps4 && \
-    APPIMAGE=$(find /tmp/shadps4 -name "*.AppImage" | head -1) && \
-    [ -n "${APPIMAGE}" ] || { echo "FATAL: aucune AppImage dans le zip ShadPS4"; exit 1; } && \
-    /usr/local/lib/steambox-build/install-appimage shadps4 "ShadPS4" "${APPIMAGE}" && \
-    rm -rf /tmp/shadps4.zip /tmp/shadps4
-
-# Eden (Nintendo Switch) — AppImage nightly officielle (22/10), installée
-# comme les autres émulateurs par install-appimage. Remplace le paquet AUR
-# eden-nightly-bin, qui faisait la même chose (AppImage extraite dans
-# /opt/eden) au prix d'un patch du PKGBUILD, et avait souvent une nightly de
-# retard. Le serveur du projet est lent (~200 Ko/s, 5 min par build pour
-# 70 Mo, stable comme nightly ; GitHub inutilisable, dépôts retirés en 451) :
-# l'AppImage est gardée dans un cache BuildKit et n'est retéléchargée que
-# quand une nouvelle nightly sort. Dernière nightly lue sur l'API de la forge
-# (tag v<horodatage>.<commit>, fichier Eden-Linux-<commit>-amd64-clang-pgo).
-# /usr/bin/eden conservé (game-systems.sh, raccourcis existants) et types
-# MIME Switch repris du paquet AUR (ouverture des .nsp/.xci par Eden).
-ARG EDEN_TAG=""
-RUN --mount=type=cache,id=steambox-eden,target=/var/cache/eden \
-    TAG="${EDEN_TAG}" && \
-    if [ -z "${TAG}" ]; then \
-      TAG=$(curl -fsSL --retry 3 "https://git.eden-emu.dev/api/v1/repos/eden-ci/nightly/releases?limit=1" | jq -r '.[0].tag_name'); \
-    fi && \
-    case "${TAG}" in v*.*) ;; *) echo "FATAL: tag nightly Eden invalide (${TAG})"; exit 1 ;; esac && \
-    F="Eden-Linux-${TAG##*.}-amd64-clang-pgo.AppImage" && \
-    if [ -s "/var/cache/eden/${F}" ]; then \
-      echo "Eden ${TAG} : AppImage en cache"; \
-    else \
-      rm -f /var/cache/eden/*.AppImage /var/cache/eden/*.part && \
-      curl -fSL --retry 3 -o "/var/cache/eden/${F}.part" "https://nightly.eden-emu.dev/${TAG}/${F}" && \
-      mv "/var/cache/eden/${F}.part" "/var/cache/eden/${F}"; \
-    fi && \
-    /usr/local/lib/steambox-build/install-appimage eden "Eden" "/var/cache/eden/${F}" && \
-    ln -sf /usr/local/bin/eden /usr/bin/eden && \
-    printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
-      '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">' \
-      '  <mime-type type="application/x-nx-nro"><glob pattern="*.nro"/></mime-type>' \
-      '  <mime-type type="application/x-nx-nso"><glob pattern="*.nso"/></mime-type>' \
-      '  <mime-type type="application/x-nx-nsp"><glob pattern="*.nsp"/></mime-type>' \
-      '  <mime-type type="application/x-nx-xci"><glob pattern="*.xci"/></mime-type>' \
-      '</mime-info>' > /usr/share/mime/packages/eden.xml && \
-    echo 'MimeType=application/x-nx-nro;application/x-nx-nso;application/x-nx-nsp;application/x-nx-xci;' \
-      >> /usr/share/applications/eden.desktop && \
-    update-mime-database /usr/share/mime
 
 # Flips — patcher de ROMs IPS/BPS, petit utilitaire ligne de commande + GUI.
 ARG FLIPS_TAG=""
@@ -1574,6 +1336,22 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
     find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \; && \
     ln -sf /usr/local/bin/scripts/steamos-session-select.sh /usr/bin/steamos-session-select && \
     ln -sf /usr/local/bin/scripts/os-session-select.sh /usr/lib/os-session-select
+
+# ── Lanceurs des AppImage (25/10) : les émulateurs ne sont plus dans l'image.
+# Ils sont installés par AppManager dans ~/Applications (persistant, /config).
+# Chaque lien porte le nom attendu par les scripts de jeux et apps.json ; le
+# script commun appimage-launch.sh trouve l'AppImage d'après ce nom ($0).
+# Les tarballs (Supermodel, DOSBox, Flips) et les cœurs libretro restent dans
+# l'image. RetroArch, Dolphin et ScummVM viennent d'AppManager : leurs paquets
+# Arch sont retirés (les cœurs libretro, eux, restent).
+RUN for app in ppsspp flycast cemu pcsx2 pcsx2x6 rpcs3 melonDS eden lindbergh \
+        duckstation duckstation-qt xemu vita3k xenia shadps4 steam-rom-manager \
+        retroarch dolphin-emu scummvm supermodel heroic; do \
+      ln -sf /usr/local/bin/scripts/appimage-launch.sh "/usr/local/bin/${app}"; \
+    done && \
+    ln -sf /usr/local/bin/eden /usr/bin/eden
+# run-exe : lancer un .exe/.msi avec Proton (umu), voir root-cachyos/scripts/run-exe.sh
+RUN ln -sf /usr/local/bin/scripts/run-exe.sh /usr/local/bin/run-exe
 
 # Caches de shaders (DXVK/NVIDIA) HORS de /config (audit 2026-08-26) :
 # /config est sur un partage Unraid FUSE/shfs, lent en accès aléatoire,

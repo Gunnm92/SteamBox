@@ -10,6 +10,7 @@
 # Variables optionnelles :
 #   BIN=...          nom du lanceur dans /usr/local/bin (défaut : <nom>)
 #   WRAPPER_ENV=...  ligne shell insérée dans le lanceur avant l'exec
+#   CATEGORIES=...   catégories du .desktop (défaut : celles de l'AppImage, sinon Game;)
 #                    (ex: "export APPDIR=/opt/x")
 #   DESKTOP_ARGS=... arguments ajoutés à l'Exec= du .desktop
 #
@@ -63,6 +64,12 @@ mv "$(readlink -f squashfs-root)" "${dest}"
 [ -e "${dest}/AppRun" ] || { echo "FATAL: ${dest}/AppRun absent après extraction" >&2; exit 1; }
 chmod -R a+rX "${dest}"
 
+# Catégories : celles que l'AppImage annonce dans son propre .desktop (ex.
+# AppManager : Utility), sinon Game; (émulateurs). CATEGORIES=… force une valeur.
+upstream_cat="$(find "${dest}" -maxdepth 4 -name '*.desktop' -print -quit 2>/dev/null \
+    | xargs -r sed -n 's/^Categories=//p' | head -n 1)"
+cats="${CATEGORIES:-${upstream_cat:-Game;}}"
+
 {
     echo '#!/bin/sh'
     if [ -n "${WRAPPER_ENV:-}" ]; then
@@ -72,8 +79,8 @@ chmod -R a+rX "${dest}"
 } > "/usr/local/bin/${bin}"
 chmod 755 "/usr/local/bin/${bin}"
 
-printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\nCategories=Game;\n' \
-    "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${dest}/.DirIcon" \
+printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\nCategories=%s\n' \
+    "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${dest}/.DirIcon" "${cats}" \
     > "/usr/share/applications/${name}.desktop"
 
 echo "[install-appimage] ${label} installé dans ${dest} (lanceur /usr/local/bin/${bin})"

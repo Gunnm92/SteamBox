@@ -66,20 +66,23 @@ Chaque app applique la résolution du client à la connexion et revient à
 
 ## Contenu de l'image
 
-- **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon), Wine-staging +
+- **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon, AppImage via AppManager), Wine-tkg +
   DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera) avec wine-tkg
   (arcade) et umu + proton-cachyos / UMU-Proton (jeux PC ; DualSense et
   vibration).
 - **Émulateurs standalone** : Cemu (Wii U), PCSX2, RPCS3, DuckStation, Xemu,
   Xenia, melonDS, PPSSPP, Flycast, Vita3K (PS Vita), DOSBox Staging, ShadPS4,
-  Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3),
-  TeknoParrotUI (lanceur natif, jeux toujours sous Wine).
+  Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3).
+  Les AppImage (Cemu, PCSX2, RPCS3, DuckStation, Xemu, Xenia, melonDS, PPSSPP,
+  Flycast, Vita3K, ShadPS4, Eden, Lindbergh, Steam ROM Manager) ne sont pas dans
+  l'image : elles s'installent avec AppManager dans `~/Applications` (persistant),
+  et `/usr/local/bin/<nom>` les lance via `root-cachyos/scripts/appimage-launch.sh`.
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
 - **Bureau** : XFCE (panel, Thunar avec accès aux partages réseau `smb://`, terminal), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
   même disposition clavier partout (local, VNC, Moonlight — `KEYBOARD_LAYOUT`).
-- **Divers** : Steam ROM Manager, Flips, Google Chrome, flatpak (+ Flathub).
+- **Divers** : Steam ROM Manager, Flips, Google Chrome, AppManager (gestion des AppImage).
 
 ## Déploiement
 
