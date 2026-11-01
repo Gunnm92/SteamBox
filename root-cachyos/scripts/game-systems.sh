@@ -168,7 +168,7 @@ SYSTEMS["chihiro"]="Sega Chihiro|iso|${SCRIPTS}/game-launch-chihiro.sh \"{file.p
 SYSTEMS["triforce"]="Triforce|rvz,iso,gcz|dolphin-emu -b -C Dolphin.Display.Fullscreen=True -e \"{file.path}\""
 SYSTEMS["ps3"]="PlayStation 3|squashfs,psn|${SCRIPTS}/game-launch-ps3.sh \"{file.path}\""
 # ScummVM : jeux en DOSSIERS (« / » = dossier accepté), lancés par le
-# ScummVM standalone du paquet pacman avec détection automatique du jeu.
+# ScummVM standalone (AppImage AppManager) avec détection automatique du jeu.
 SYSTEMS["scummvm"]="ScummVM|/|scummvm -f -p \"{file.path}\" --auto-detect"
 # Sony
 SYSTEMS["psx"]="PlayStation|chd,cue,pbp,7z,bin,m3u|/usr/local/bin/duckstation-qt -batch -nogui -fullscreen -- \"{file.path}\""

@@ -73,7 +73,7 @@ Nouveau dépôt **`steambox-live`**, comme l'a demandé l'utilisateur.
   - la vérification des icônes des `.desktop` et le `fc-cache -s` final : glycin tué par seccomp si le
     cache de polices est incomplet ;
   - les réglages wayvnc et websockify/noVNC de SteamBox, dont la page d'accueil (`resize=scale`,
-    `reconnect`).
+    `reconnect`) et l'habillage (onglet « SteamBox » et son icône au lieu de « WayVNC - noVNC »).
 
 ## Étapes
 

@@ -76,7 +76,9 @@ Chaque app applique la résolution du client à la connexion et revient à
   Les AppImage (Cemu, PCSX2, RPCS3, DuckStation, Xemu, Xenia, melonDS, PPSSPP,
   Flycast, Vita3K, ShadPS4, Eden, Lindbergh, Steam ROM Manager) ne sont pas dans
   l'image : elles s'installent avec AppManager dans `~/Applications` (persistant),
-  et `/usr/local/bin/<nom>` les lance via `root-cachyos/scripts/appimage-launch.sh`.
+  et `/usr/local/bin/<nom>` les lance via `root-cachyos/scripts/appimage-launch.sh`
+  (nom du fichier reconnu sans tenir compte de la casse : `shadPS4`, `Xenia Canary`…).
+  Si l'une manque, une notification dit laquelle installer.
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).

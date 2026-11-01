@@ -8,42 +8,55 @@
 # les arguments reçus. Les scripts de jeux et apps.json n'ont donc pas à
 # connaître le nom exact du fichier, qui peut changer à chaque mise à jour.
 #
+# Noms acceptés : AppManager nomme le fichier d'après l'AppImage, avec la
+# casse et le suffixe de l'éditeur (« shadPS4 », « Xenia Canary », vus le
+# 01/11) — comparaison sans tenir compte de la casse, avec ou sans
+# .AppImage, et plusieurs noms possibles par émulateur.
+#
 # Si l'AppImage n'est pas installée, le message dit quoi installer et sort en
-# erreur, au lieu d'un échec silencieux.
+# erreur. Il passe aussi par une notification : lancé depuis EmulationStation,
+# game-launch.sh envoie la sortie dans un journal, l'échec serait sinon muet.
 set -u
 
 app="$(basename "$0")"
 case "${app}" in
-    ppsspp)                          name="PPSSPP" ;;
-    flycast)                         name="Flycast" ;;
-    cemu)                            name="Cemu" ;;
-    pcsx2)                           name="PCSX2" ;;
-    pcsx2x6)                         name="PCSX2x6" ;;
-    rpcs3)                           name="RPCS3" ;;
-    melonDS)                         name="melonDS" ;;
-    eden)                            name="Eden Nightly" ;;
-    lindbergh)                       name="Lindbergh Loader" ;;
-    duckstation|duckstation-qt)      name="DuckStation" ;;
-    xemu)                            name="Xemu" ;;
-    vita3k)                          name="Vita3K" ;;
-    xenia)                           name="Xenia" ;;
-    shadps4)                         name="ShadPS4" ;;
-    steam-rom-manager)               name="Steam ROM Manager" ;;
-    retroarch)                       name="RetroArch" ;;
-    dolphin-emu)                     name="Dolphin Emulator" ;;
-    scummvm)                         name="ScummVM" ;;
-    supermodel)                      name="Supermodel" ;;
-    heroic)                          name="Heroic Games Launcher" ;;
+    ppsspp)                          names=("PPSSPP") ;;
+    flycast)                         names=("Flycast") ;;
+    cemu)                            names=("Cemu") ;;
+    pcsx2)                           names=("PCSX2") ;;
+    pcsx2x6)                         names=("PCSX2x6") ;;
+    rpcs3)                           names=("RPCS3") ;;
+    melonDS)                         names=("melonDS") ;;
+    eden)                            names=("Eden Nightly" "Eden") ;;
+    lindbergh)                       names=("Lindbergh Loader") ;;
+    duckstation|duckstation-qt)      names=("DuckStation") ;;
+    xemu)                            names=("Xemu") ;;
+    vita3k)                          names=("Vita3K") ;;
+    xenia)                           names=("Xenia Canary" "Xenia") ;;
+    shadps4)                         names=("shadPS4") ;;
+    steam-rom-manager)               names=("Steam ROM Manager") ;;
+    retroarch)                       names=("RetroArch") ;;
+    dolphin-emu)                     names=("Dolphin Emulator" "Dolphin") ;;
+    scummvm)                         names=("ScummVM") ;;
+    supermodel)                      names=("Supermodel") ;;
+    heroic)                          names=("Heroic Games Launcher" "Heroic") ;;
     *) echo "appimage-launch : lanceur inconnu « ${app} »" >&2; exit 2 ;;
 esac
 
 apps_dir="${HOME}/Applications"
-for candidate in "${apps_dir}/${name}" "${apps_dir}/${name}.AppImage"; do
-    if [ -f "${candidate}" ]; then
-        exec "${candidate}" "$@"
-    fi
+for name in "${names[@]}"; do
+    want="${name,,}"
+    for candidate in "${apps_dir}"/*; do
+        [ -f "${candidate}" ] || continue
+        file="${candidate##*/}"
+        file="${file,,}"
+        if [ "${file}" = "${want}" ] || [ "${file}" = "${want}.appimage" ]; then
+            exec "${candidate}" "$@"
+        fi
+    done
 done
 
-echo "${name} n'est pas installée dans ${apps_dir}." >&2
-echo "Installe-la avec AppManager (fichier AppImage → Installer)." >&2
+msg="${names[0]} n'est pas installée dans ${apps_dir}. Installe-la avec AppManager (fichier AppImage → Installer)."
+echo "${msg}" >&2
+command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Émulateur absent" "${msg}" 2>/dev/null
 exit 1

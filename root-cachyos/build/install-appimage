@@ -66,8 +66,11 @@ chmod -R a+rX "${dest}"
 
 # Catégories : celles que l'AppImage annonce dans son propre .desktop (ex.
 # AppManager : Utility), sinon Game; (émulateurs). CATEGORIES=… force une valeur.
-upstream_cat="$(find "${dest}" -maxdepth 4 -name '*.desktop' -print -quit 2>/dev/null \
-    | xargs -r sed -n 's/^Categories=//p' | head -n 1)"
+upstream_desktop="$(find "${dest}" -maxdepth 4 -name '*.desktop' -print -quit 2>/dev/null)"
+upstream_cat=""
+if [ -n "${upstream_desktop}" ]; then
+    upstream_cat="$(sed -n 's/^Categories=//p' "${upstream_desktop}" | head -n 1)"
+fi
 cats="${CATEGORIES:-${upstream_cat:-Game;}}"
 
 {
