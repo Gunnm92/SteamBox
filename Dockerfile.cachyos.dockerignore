@@ -6,7 +6,6 @@
 *
 !root-cachyos/
 !evdev-bridge/
-!icons/steambox-icon.png
 
 # Cache Python des scripts, jamais dans l'image
 **/__pycache__

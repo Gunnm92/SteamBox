@@ -253,7 +253,8 @@ RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr
 # (« refusing to run … with network access ») et ne s'arrête pas pour
 # autant : 65 hooks sautés à l'étape 1 (ldconfig, update-ca-trust,
 # locale-gen, gtk-update-icon-cache, update-desktop-database…). Constaté le
-# 01/11 : 46 autorités racine sur 167 absentes du bundle TLS de l'image.
+# 01/11 : bundle TLS de l'image figé au 30/08 (base CachyOS), alors que la
+# liste Mozilla avait été mise à jour depuis.
 # Une partie était compensée à la main plus bas (glib-compile-schemas,
 # update-mime-database…), sans connaître la cause. Les hooks gardent leur
 # isolation de fichiers et d'appels système, seule celle du réseau saute.
@@ -1230,25 +1231,26 @@ RUN --mount=type=secret,id=github_token \
 # (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
 # — redirection en JS avec l'hôte déduit dynamiquement (window.location.hostname)
 # et le port websockify (même port que la page grâce à --web).
-RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/png" href="steambox-icon.png">\n<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
+RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/png" href="steam.png">\n<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
 # Habillage SteamBox (01/11) : l'onglet affichait « WayVNC - noVNC » (noVNC
 # préfixe PAGE_TITLE du nom de bureau RFB, codé en dur « WayVNC » dans
 # wayvnc, sans option pour le changer) avec le favicon noVNC. ui.js garde
 # désormais un titre fixe « SteamBox », et les <link> d'icônes de vnc.html
-# (favicon + apple-touch-icon) sont remplacés par l'icône du dépôt. Chaque
-# sed est vérifié : une release noVNC qui renommerait ces lignes ferait
-# échouer le build au lieu de revenir en silence à l'habillage d'origine.
-COPY icons/steambox-icon.png /usr/share/webapps/novnc/steambox-icon.png
+# (favicon + apple-touch-icon) sont remplacés par l'icône de Steam (paquet
+# steam, 256 px). Chaque sed est vérifié : une release noVNC qui renommerait
+# ces lignes ferait échouer le build au lieu de revenir en silence à
+# l'habillage d'origine.
 RUN cd /usr/share/webapps/novnc && \
+    cp /usr/share/icons/hicolor/256x256/apps/steam.png steam.png && \
     sed -i 's/^const PAGE_TITLE = "noVNC";/const PAGE_TITLE = "SteamBox";/' app/ui.js && \
     sed -i 's/document\.title = e\.detail\.name + " - " + PAGE_TITLE;/document.title = PAGE_TITLE;/' app/ui.js && \
     grep -q '^const PAGE_TITLE = "SteamBox";' app/ui.js || { echo "FATAL: PAGE_TITLE noVNC non patché"; exit 1; } && \
     ! grep -q 'e\.detail\.name + " - "' app/ui.js || { echo "FATAL: titre nom de bureau noVNC non patché"; exit 1; } && \
     sed -i -e 's|<title>noVNC</title>|<title>SteamBox</title>|' \
            -e '/rel="\(icon\|apple-touch-icon\)"/d' \
-           -e 's|<title>SteamBox</title>|&\n    <link rel="icon" type="image/png" href="steambox-icon.png">\n    <link rel="apple-touch-icon" type="image/png" href="steambox-icon.png">|' vnc.html && \
+           -e 's|<title>SteamBox</title>|&\n    <link rel="icon" type="image/png" href="steam.png">\n    <link rel="apple-touch-icon" type="image/png" href="steam.png">|' vnc.html && \
     grep -q '<title>SteamBox</title>' vnc.html || { echo "FATAL: <title> vnc.html non patché"; exit 1; } && \
     [ "$(grep -c 'novnc.*\.\(ico\|png\)' vnc.html)" = 0 ] || { echo "FATAL: icônes noVNC encore présentes dans vnc.html"; exit 1; }
 
