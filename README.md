@@ -103,6 +103,7 @@ dépôt est générique.
 ```bash
 make build                 # build local (--load)
 make push                  # build + push vers le REGISTRY du profil
+                           # (ou PUSH_REGISTRY : même registre en direct sur le LAN)
 make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
                            # (~18 requêtes/build, limite anonyme 60/h/IP)
 make lint                  # shellcheck + hadolint (via Docker, rien à installer)

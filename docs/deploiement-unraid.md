@@ -16,7 +16,11 @@ Extrait de `docker inspect SteamBox` sur le conteneur en production le
 registry.elfenn.eu/steambox:latest
 ```
 
-Publiée par `make push` depuis ce dépôt (voir Makefile).
+Publiée par `make push` depuis ce dépôt (voir Makefile). Le profil
+`unraid-gunnm` envoie l'image en direct au registre sur le LAN
+(`10.1.1.1:5003`, HTTP) : par `registry.elfenn.eu`, le trafic fait l'aller-retour
+par le routeur (NAT loopback, ~1,7 Mo/s mesuré le 01/11). C'est le même registre,
+l'image se tire toujours par `registry.elfenn.eu/steambox:latest`.
 
 ## Réglages de base
 

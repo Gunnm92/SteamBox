@@ -12,6 +12,14 @@ IMAGE        ?= steambox
 TAG          ?= latest
 GITHUB_TOKEN ?=
 FULL_IMAGE   = $(if $(REGISTRY),$(REGISTRY)/)$(IMAGE):$(TAG)
+# PUSH_REGISTRY (01/11) : adresse par laquelle make push ENVOIE l'image, si
+# elle diffère de REGISTRY (celle que tirent les déploiements) — typiquement
+# le même registre joint en direct sur le LAN plutôt que par son nom public.
+# PUSH_INSECURE=1 : ce registre parle HTTP (registry.insecure de BuildKit).
+PUSH_REGISTRY ?= $(REGISTRY)
+PUSH_INSECURE ?=
+PUSH_IMAGE   = $(PUSH_REGISTRY)/$(IMAGE):$(TAG)
+comma        := ,
 DOCKER       ?= docker
 COMPOSE      = STEAMBOX_IMAGE=$(FULL_IMAGE) $(DOCKER) compose \
                  --file docker-compose.yml \
@@ -74,8 +82,7 @@ push:
 	@test -n "$(REGISTRY)" || { echo "REGISTRY vide : à définir dans profiles/$(PROFILE)/profile.mk ou make push REGISTRY=..."; exit 1; }
 	$(BUILDX) $(BUILD_ARGS) \
 		--file Dockerfile.cachyos \
-		--tag $(FULL_IMAGE) \
-		--push \
+		--output type=image,name=$(PUSH_IMAGE),push=true$(if $(PUSH_INSECURE),$(comma)registry.insecure=true) \
 		.
 
 run:
@@ -116,7 +123,7 @@ help:
 	@echo "Targets:"
 	@echo "  lint     shellcheck + hadolint (via Docker)"
 	@echo "  build    Build l'image localement (--load)"
-	@echo "  push     Build + push vers $(REGISTRY)"
+	@echo "  push     Build + push vers $(PUSH_REGISTRY)$(if $(filter-out $(REGISTRY),$(PUSH_REGISTRY)), (tiree ensuite via $(REGISTRY)))"
 	@echo "  run      docker compose up -d"
 	@echo "  stop     docker compose down"
 	@echo "  logs     Suivre les logs du conteneur"
@@ -125,6 +132,7 @@ help:
 	@echo "Variables (override avec make VAR=val):"
 	@echo "  PROFILE        $(PROFILE)  (profiles/$(PROFILE)/)"
 	@echo "  REGISTRY       $(REGISTRY)"
+	@echo "  PUSH_REGISTRY  $(PUSH_REGISTRY)$(if $(PUSH_INSECURE),  (HTTP))"
 	@echo "  IMAGE          $(IMAGE)"
 	@echo "  TAG            $(TAG)"
 	@echo "  GITHUB_TOKEN   (non defini si vide)"

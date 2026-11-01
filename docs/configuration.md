@@ -8,7 +8,7 @@ dépôt est générique.
 |---|---|
 | `compose.override.yml` | GPU (runtime nvidia ou `/dev/dri`), volumes, PUID/PGID, TZ |
 | `env` | variables du conteneur : ludothèque, clavier, langue (voir ci-dessous) |
-| `profile.mk` | build/push : `REGISTRY`, commande `DOCKER`, `BUILD_ARGS` |
+| `profile.mk` | build/push : `REGISTRY`, `PUSH_REGISTRY`/`PUSH_INSECURE` (adresse d'envoi si différente), commande `DOCKER`, `BUILD_ARGS` |
 
 Modèle commenté : [profiles/example/](../profiles/example/) — le fichier
 `env` y liste chaque variable avec sa valeur par défaut.
