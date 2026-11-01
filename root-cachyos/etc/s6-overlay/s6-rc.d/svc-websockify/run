@@ -3,4 +3,6 @@
 # noVNC classique, identique à l'ancien montage x11vnc/webstation. --web sert
 # aussi les fichiers statiques noVNC sur le même port (6080) : un seul
 # service à superviser, un seul port à exposer côté docker-compose.
-exec websockify --web=/usr/share/webapps/novnc 0.0.0.0:6080 127.0.0.1:5900
+# Lancé via websockify-nocache.py (02/11) : ajoute Cache-Control: no-cache,
+# sinon le navigateur garde un noVNC périmé après un rebuild.
+exec python3 /usr/local/bin/scripts/websockify-nocache.py --web=/usr/share/webapps/novnc 0.0.0.0:6080 127.0.0.1:5900

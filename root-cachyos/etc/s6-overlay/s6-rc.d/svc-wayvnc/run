@@ -41,9 +41,11 @@ mkdir -p /config/logs
 # celles de « @ » et « < ». L'option XKB steambox:isoswap (/etc/xkb) les
 # rééchange, pour wayvnc seul : Moonlight et le clavier local ne sont pas
 # concernés. libxkbcommon lit XKB_DEFAULT_OPTIONS faute d'options explicites.
+# -n SteamBox (02/11) : nom de bureau RFB, « WayVNC » par défaut, affiché
+# par noVNC dans « Connecté (non chiffré) à … ».
 XKB_OPTIONS=""
 [ "${VNC_MAC_ISO_KEYS}" = 1 ] && XKB_OPTIONS="steambox:isoswap"
 exec s6-setuidgid arcade \
   env HOME=/home/arcade WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
       ${XKB_OPTIONS:+XKB_DEFAULT_OPTIONS="${XKB_OPTIONS}"} \
-  wayvnc --render-cursor --max-fps=60 -k "${KEYBOARD_LAYOUT}${KEYBOARD_VARIANT:+-${KEYBOARD_VARIANT}}" 127.0.0.1 5900
+  wayvnc --render-cursor --max-fps=60 -n SteamBox -k "${KEYBOARD_LAYOUT}${KEYBOARD_VARIANT:+-${KEYBOARD_VARIANT}}" 127.0.0.1 5900

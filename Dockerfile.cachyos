@@ -1235,9 +1235,9 @@ RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/p
       > /usr/share/webapps/novnc/index.html
 
 # Habillage SteamBox (01/11) : l'onglet affichait « WayVNC - noVNC » (noVNC
-# préfixe PAGE_TITLE du nom de bureau RFB, codé en dur « WayVNC » dans
-# wayvnc, sans option pour le changer) avec le favicon noVNC. ui.js garde
-# désormais un titre fixe « SteamBox », et les <link> d'icônes de vnc.html
+# préfixe PAGE_TITLE du nom de bureau RFB, « WayVNC » par défaut ; wayvnc
+# reçoit désormais -n SteamBox, voir svc-wayvnc) avec le favicon noVNC. ui.js
+# garde un titre fixe « SteamBox » (sinon « SteamBox - SteamBox »), et les <link> d'icônes de vnc.html
 # (favicon + apple-touch-icon) sont remplacés par l'icône de Steam (paquet
 # steam, 256 px). Chaque sed est vérifié : une release noVNC qui renommerait
 # ces lignes ferait échouer le build au lieu de revenir en silence à

@@ -4,4 +4,35 @@
 # icône introuvable — s6 le relance au lieu de laisser le bureau sans barre.
 # shellcheck source=../../../../scripts/desktop-env.sh
 . /usr/local/bin/scripts/desktop-env.sh
+
+# Attente de l'échelle d'affichage (02/11). svc-xfsettingsd démarre en même
+# temps que le panneau (une dépendance s6 n'attend que le lancement) et
+# n'applique qu'ensuite l'échelle du profil Affichage (1,25 sur HDMI-A-1) :
+# le panneau prenait alors sa largeur sur l'écran à l'échelle 1 (1600 px
+# logiques au lieu de 1280) sans la recalculer, et sa partie droite (zone de
+# notification, horloge, menu d'actions) sortait de l'écran. On attend donc
+# que l'échelle de la sortie soit celle du profil actif de displays.xml,
+# 15 s au plus (pas de profil ou pas d'échelle : aucune attente).
+output=HDMI-A-1
+displays=/home/arcade/.config/xfce4/xfconf/xfce-perchannel-xml/displays.xml
+want=$(awk -v out="${output}" '
+    /name="ActiveProfile"/ { match($0, /value="[^"]*"/); prof = substr($0, RSTART + 7, RLENGTH - 8) }
+    prof != "" && index($0, "<property name=\"" prof "\" type=\"empty\">") { inprof = 1 }
+    inprof && index($0, "<property name=\"" out "\"") { inout = 1 }
+    inout && /name="Scale"/ { match($0, /value="[^"]*"/); print substr($0, RSTART + 7, RLENGTH - 8); exit }
+' "${displays}" 2>/dev/null)
+if [ -n "${want}" ]; then
+    runtime="/run/user/$(id -u arcade)"
+    tries=30
+    while [ "${tries}" -gt 0 ]; do
+        have=$(runuser -u arcade -- env XDG_RUNTIME_DIR="${runtime}" WAYLAND_DISPLAY=wayland-0 \
+            wlr-randr 2>/dev/null \
+            | awk -v out="${output}" '$1 == out { o = 1; next } /^[^ ]/ { o = 0 } o && $1 == "Scale:" { print $2; exit }')
+        awk -v a="${want}" -v b="${have}" 'BEGIN { exit !(b != "" && (a - b) ^ 2 < 1e-6) }' && break
+        sleep 0.5
+        tries=$((tries - 1))
+    done
+    [ "${tries}" = 0 ] && echo "[xfce4-panel] échelle ${want} de ${output} pas appliquée après 15 s (actuelle : ${have:-?}) — lancement quand même."
+fi
+
 desktop_exec xfce4-panel
