@@ -25,10 +25,7 @@ set -uo pipefail
 rom="$1"
 mount_squashfs_rom "${rom}" || exit 1
 acgame=$(find "${MOUNTED_DIR}" -maxdepth 2 -name '*.acgame' -print -quit)
-if [[ -z "${acgame}" ]]; then
-    echo "game-launch-namco2x6 : aucun .acgame dans ${rom}" >&2
-    exit 1
-fi
+[[ -n "${acgame}" ]] || launch_error "Aucun fichier .acgame dans ${rom##*/}"
 
 platform=$(sed -n 's/^[[:space:]]*platform[[:space:]]*=[[:space:]]*//p' "${acgame}" | head -1 | tr -d '\r')
 dongle=$(sed -n 's/^[[:space:]]*dongle[[:space:]]*=[[:space:]]*//p' "${acgame}" | head -1 | tr -d '\r')
@@ -38,10 +35,7 @@ dongle=$(sed -n 's/^[[:space:]]*dongle[[:space:]]*=[[:space:]]*//p' "${acgame}" 
 MEMCARDS_DIR="${SAVES_DIR}/namco2x6/pcsx2x6"
 mkdir -p "${MEMCARDS_DIR}"
 if [[ -n "${dongle}" && ! -f "${MEMCARDS_DIR}/${dongle}" ]]; then
-    msg="Dongle manquant : « ${dongle} » attendu dans ${MEMCARDS_DIR}"
-    echo "game-launch-namco2x6 : ${msg}" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Namco 246/256" "${msg}" 2>/dev/null
-    exit 1
+    launch_error "Dongle manquant : « ${dongle} » attendu dans ${MEMCARDS_DIR}"
 fi
 bios_file="r27v1602f.8g"
 [[ "${platform}" == "246" ]] && bios_file="r27v1602f.7d"
@@ -85,7 +79,7 @@ if grep -qE '^[[:space:]]*subdir[[:space:]]*=' "${acgame}"; then
     exit $?
 fi
 gameid=$(sed -n 's/^[[:space:]]*gameid[[:space:]]*=[[:space:]]*//p' "${acgame}" | head -1 | tr -d '\r')
-[[ -n "${gameid}" ]] || { echo "game-launch-namco2x6 : gameid absent de ${acgame}" >&2; exit 1; }
+[[ -n "${gameid}" ]] || launch_error "gameid absent de ${acgame##*/}"
 work="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/game-namco2x6"
 rm -rf "${work}"
 mkdir -p "${work}/${gameid}"

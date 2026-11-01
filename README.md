@@ -78,11 +78,11 @@ Chaque app applique la résolution du client à la connexion et revient à
   l'image : elles s'installent avec AppManager dans `~/Applications` (persistant),
   et `/usr/local/bin/<nom>` les lance via `root-cachyos/scripts/appimage-launch.sh`
   (nom du fichier reconnu sans tenir compte de la casse : `shadPS4`, `Xenia Canary`…).
-  Si l'une manque, une notification dit laquelle installer.
+  Si l'une manque, EmulationStation affiche laquelle installer.
 - **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
   Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
-- **Bureau** : XFCE (panel, Thunar avec accès aux partages réseau `smb://`, terminal), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
+- **Bureau** : XFCE (panel, Thunar avec miniatures et accès aux partages réseau `smb://`, terminal, notifications xfce4-notifyd), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
   même disposition clavier partout (local, VNC, Moonlight — `KEYBOARD_LAYOUT`).
 - **Divers** : Steam ROM Manager, Flips, Google Chrome, AppManager (gestion des AppImage).
 
@@ -169,6 +169,13 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
   `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+- **Un jeu ne se lance pas depuis EmulationStation** → ES affiche la cause
+  (émulateur ou BIOS absent, format non pris en charge…) dans une boîte
+  d'erreur : convention Batocera, code de sortie 250 et message dans
+  `/tmp/launch_error.log` (`root-cachyos/scripts/launch-error.sh`), doublé
+  d'une notification sur le bureau. Détails :
+  `$XDG_RUNTIME_DIR/game-launch.log` (commandes) et `game-launch-last.log`
+  (sortie du dernier jeu).
 - **PS / Xbox + Start ne ferme pas le jeu** → service `svc-pad-hotkeys`
   (journal dans `docker logs`, préfixe `[pad-hotkeys]`) ; le jeu en cours
   est décrit dans `$XDG_RUNTIME_DIR/steambox-game` par `game-launch.sh`.

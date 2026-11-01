@@ -17,6 +17,9 @@
 # BIOS_DIR / SAVES_DIR, lus par les lanceurs qui sourcent ce fichier.
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
+# launch_error : échec affiché par EmulationStation (voir launch-error.sh).
+# shellcheck source=launch-error.sh
+. /usr/local/bin/scripts/launch-error.sh
 
 _GAME_MOUNTS=()
 _game_unmount_all() {
@@ -36,7 +39,7 @@ mount_squashfs_rom() {
     if mountpoint -q "${mnt}"; then
         fusermount3 -u "${mnt}" 2>/dev/null || fusermount -u "${mnt}" 2>/dev/null || true
     fi
-    squashfuse "${rom}" "${mnt}" || { echo "game-launch : montage impossible de ${rom}" >&2; return 1; }
+    squashfuse "${rom}" "${mnt}" || launch_error "Montage impossible de ${rom##*/}"
     _GAME_MOUNTS+=("${mnt}")
     # shellcheck disable=SC2034  # lue par le lanceur appelant
     MOUNTED_DIR="${mnt}"

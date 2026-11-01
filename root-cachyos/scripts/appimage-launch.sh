@@ -14,9 +14,12 @@
 # .AppImage, et plusieurs noms possibles par émulateur.
 #
 # Si l'AppImage n'est pas installée, le message dit quoi installer et sort en
-# erreur. Il passe aussi par une notification : lancé depuis EmulationStation,
-# game-launch.sh envoie la sortie dans un journal, l'échec serait sinon muet.
+# erreur. Lancé depuis EmulationStation, game-launch.sh envoie la sortie dans
+# un journal : le message passe donc par launch_error (code 250), qu'ES
+# affiche dans une boîte d'erreur (voir launch-error.sh).
 set -u
+# shellcheck source=launch-error.sh
+. /usr/local/bin/scripts/launch-error.sh
 
 app="$(basename "$0")"
 case "${app}" in
@@ -56,7 +59,4 @@ for name in "${names[@]}"; do
     done
 done
 
-msg="${names[0]} n'est pas installée dans ${apps_dir}. Installe-la avec AppManager (fichier AppImage → Installer)."
-echo "${msg}" >&2
-command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Émulateur absent" "${msg}" 2>/dev/null
-exit 1
+launch_error "${names[0]} n'est pas installée dans ${apps_dir}. Installe-la avec AppManager (fichier AppImage → Installer)."

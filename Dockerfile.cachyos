@@ -236,8 +236,29 @@ LABEL org.opencontainers.image.created="${BUILD_DATE}" \
 # journal du conteneur, qui tourne à 50 Mo (max-file 1) et perdait ainsi
 # les traces de démarrage. Sans ses fichiers d'activation D-Bus, ni le
 # moniteur ni udisksd ne démarrent ; le SMB (gvfsd-smb) n'en dépend pas.
-RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr/share/info/* usr/share/help/* usr/share/gtk-doc/* usr/share/locale/* !usr/share/locale/fr* !usr/share/locale/en* !usr/share/locale/locale.alias usr/lib/modules/* usr/share/dbus-1/system-services/org.freedesktop.UDisks2.service usr/share/dbus-1/services/org.gtk.vfs.UDisks2VolumeMonitor.service usr/share/gvfs/remote-volume-monitors/udisks2.monitor|' /etc/pacman.conf && \
+# logind / homed (01/11) : leurs fichiers d'activation (paquet systemd)
+# délèguent le démarrage à systemd, absent du conteneur (s6) — chaque
+# demande lançait le helper D-Bus pour rien et journalisait « Activated
+# service 'org.freedesktop.login1' failed » (16 fois par démarrage). Sans
+# ces fichiers, les clients reçoivent tout de suite « service inconnu » :
+# même résultat (logind n'a jamais existé ici), sans bruit. systemd étant
+# déjà dans l'image de base, ces deux fichiers sont aussi supprimés après
+# l'installation des paquets (étape 1) ; NoExtract les tient absents lors
+# des mises à jour de systemd.
+RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr/share/info/* usr/share/help/* usr/share/gtk-doc/* usr/share/locale/* !usr/share/locale/fr* !usr/share/locale/en* !usr/share/locale/locale.alias usr/lib/modules/* usr/share/dbus-1/system-services/org.freedesktop.UDisks2.service usr/share/dbus-1/services/org.gtk.vfs.UDisks2VolumeMonitor.service usr/share/gvfs/remote-volume-monitors/udisks2.monitor usr/share/dbus-1/system-services/org.freedesktop.login1.service usr/share/dbus-1/system-services/org.freedesktop.home1.service|' /etc/pacman.conf && \
     grep -q '^NoExtract = usr/share/doc' /etc/pacman.conf || { echo "FATAL: NoExtract non appliqué"; exit 1; }
+
+# Hooks pacman (01/11) : pacman 7.1 isole le réseau de chaque hook
+# (unshare), refusé dans un build BuildKit — il ne lance alors AUCUN hook
+# (« refusing to run … with network access ») et ne s'arrête pas pour
+# autant : 65 hooks sautés à l'étape 1 (ldconfig, update-ca-trust,
+# locale-gen, gtk-update-icon-cache, update-desktop-database…). Constaté le
+# 01/11 : 46 autorités racine sur 167 absentes du bundle TLS de l'image.
+# Une partie était compensée à la main plus bas (glib-compile-schemas,
+# update-mime-database…), sans connaître la cause. Les hooks gardent leur
+# isolation de fichiers et d'appels système, seule celle du réseau saute.
+RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
+    grep -q '^DisableSandboxNetwork' /etc/pacman.conf || { echo "FATAL: DisableSandboxNetwork non appliqué"; exit 1; }
 
 # ── 1. Base système + labwc (Wayland) + bureau XFCE + seatd/libinput + GPU (Mesa/Vulkan) ──
 # Panne CachyOS multilib (29/08) : lib32-gcc-libs/lib32-glibc — les DEUX
@@ -301,10 +322,21 @@ RUN sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/share/doc/* usr/share/man/* usr
 # $XDG_RUNTIME_DIR/gvfs ; smbclient pour tester un partage en ligne de
 # commande. smb.conf minimal créé après : Arch n'en livre pas et smbclient
 # râle à chaque appel sans lui.
+# tumbler + ffmpegthumbnailer (01/11) : miniatures d'images et de vidéos dans
+# Thunar et sur le bureau. Sans tumbler, aucun service org.freedesktop.
+# thumbnails.Thumbnailer1 : pas de miniatures et « Thumbnailer Proxy Failed »
+# en boucle dans le journal.
+# xfce4-notifyd (01/11) : démon de notifications, absent depuis le passage à
+# labwc + XFCE (30/08, mako retiré avec Hyprland) — tous les notify-send
+# (lanceurs de jeux, applis) partaient dans le vide. Démarré à la demande
+# par D-Bus, comme Thunar : le bus de session porte WAYLAND_DISPLAY=wayland-0
+# (bureau), et la session « Desktop » de Moonlight a son propre bus sur
+# wayland-1. Affichage par gtk-layer-shell (labwc le gère).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
+      tumbler ffmpegthumbnailer xfce4-notifyd \
       gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
@@ -351,6 +383,11 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
     pacman -Rdd --noconfirm retroarch && \
     rm -rf /var/cache/pacman/pkg/* && \
     mkdir -p /etc/samba && printf '[global]\n' > /etc/samba/smb.conf && \
+    update-ca-trust && \
+    { find /usr/share/dbus-1/services -name '*notifyd*' | grep -q . \
+      || { echo "FATAL: activation D-Bus de xfce4-notifyd absente"; exit 1; }; } && \
+    rm -f /usr/share/dbus-1/system-services/org.freedesktop.login1.service \
+          /usr/share/dbus-1/system-services/org.freedesktop.home1.service && \
     { [ ! -e /usr/share/dbus-1/system-services/org.freedesktop.UDisks2.service ] \
       && [ ! -e /usr/share/gvfs/remote-volume-monitors/udisks2.monitor ] \
       || { echo "FATAL: activation UDisks2 présente malgré NoExtract (voir section 0)"; exit 1; }; }
@@ -1304,6 +1341,14 @@ RUN groupadd -g "${PGID}" arcade 2>/dev/null || true && \
 # process NON privilégié à descendre jusqu'à nice -20, sans capacité.
 # La capacité de fichier reste posée ici pour CAP_SYS_ADMIN (voir plus haut).
 #
+# « Error: Failed to gain CAP_SYS_ADMIN » à chaque « Creating encoder » au
+# démarrage (01/11) : sans conséquence, PAS le symptôme décrit plus haut.
+# Capture wlgrab (Wayland) ; pour son chemin CUDA, Sunshine ouvre la carte
+# DRM par son worker privilégié (kmsgrab.cpp, classe cap_sys_admin), qui
+# tente de reprendre CAP_SYS_ADMIN alors que Sunshine l'a déjà abandonnée
+# (CapPrm=0). L'ouverture réussit quand même (/dev/dri/card* en 666, voir
+# init-system). Le vrai symptôme reste l'absence de ports 47984-47990.
+#
 # Échec franc (22/09) au lieu d'un simple WARN : sans cette capacité,
 # Sunshine ne démarre jamais son serveur (voir plus haut) — une image
 # construite sans elle est inutilisable, autant le savoir au build.
@@ -1461,7 +1506,9 @@ RUN fc-cache -s && \
     ! fc-cache -s -v 2>&1 | grep -qi 'new cache'
 
 # Comptes et groupes système des paquets (26/09) : le hook pacman qui les
-# crée (systemd-sysusers) ne tourne pas pendant le build — polkitd,
+# crée (systemd-sysusers) ne tournait pas pendant le build — cause trouvée
+# le 01/11, voir DisableSandboxNetwork (section 0) ; gardé en filet de
+# sécurité, idempotent. Sans lui à l'époque, polkitd,
 # gamemode, seat, avahi, colord, flatpak… manquaient (vu le 26/09 :
 # polkitd ne démarrait pas, "Unknown username polkitd" côté D-Bus). Pas
 # d'agent polkit graphique : il exige une session logind, absente sous s6

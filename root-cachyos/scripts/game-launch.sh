@@ -13,14 +13,17 @@
 set -uo pipefail
 # shellcheck source=game-systems.sh
 . /usr/local/bin/scripts/game-systems.sh
+# shellcheck source=launch-error.sh
+. /usr/local/bin/scripts/launch-error.sh
 
 LOG="${XDG_RUNTIME_DIR:-/tmp}/game-launch.log"
 rom="${1:-}"
 
+# Échec tracé dans le journal des lancements, puis affiché par
+# EmulationStation (launch_error, code 250 : voir launch-error.sh).
 fail() {
-    echo "[$(date '+%F %T')] ÉCHEC ${rom} : $*" | tee -a "${LOG}" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send -a SteamBox "Lancement impossible" "$*" 2>/dev/null
-    exit 1
+    echo "[$(date '+%F %T')] ÉCHEC ${rom} : $*" >> "${LOG}"
+    launch_error "$*"
 }
 
 [[ -e "${rom}" ]] || fail "fichier introuvable"

@@ -6,10 +6,11 @@
 # par cet identifiant : --installed-path/-r, plein écran --fullscreen/-F
 # (options vérifiées dans vita3k/config/src/config.cpp le 22/09).
 set -euo pipefail
+# shellcheck source=launch-error.sh
+. /usr/local/bin/scripts/launch-error.sh
 
 title_id=$(tr -d '[:space:]' < "$1")
 if [[ ! "${title_id}" =~ ^[A-Z]{4}[0-9]{5}$ ]]; then
-    echo "game-launch-psvita : identifiant de titre invalide dans $1 : '${title_id}'" >&2
-    exit 1
+    launch_error "Identifiant de titre PS Vita invalide dans ${1##*/} : « ${title_id} » (attendu : 4 lettres et 5 chiffres, ex. PCSE00349)"
 fi
 exec /usr/local/bin/vita3k -F -r "${title_id}"

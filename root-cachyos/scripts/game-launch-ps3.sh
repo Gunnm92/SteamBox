@@ -18,11 +18,14 @@ RPCS3_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/rpcs3"
 rom="$1"
 
 if [[ ! -e "${RPCS3_DIR}/dev_flash/vsh/module/vsh.self" ]]; then
-    if [[ ! -f "${BIOS_DIR}/PS3UPDAT.PUP" ]]; then
-        echo "game-launch-ps3 : firmware PS3 absent (ni installé, ni ${BIOS_DIR}/PS3UPDAT.PUP)" >&2
-        exit 1
-    fi
+    [[ -f "${BIOS_DIR}/PS3UPDAT.PUP" ]] \
+        || launch_error "Firmware PS3 absent : ni installé dans RPCS3, ni ${BIOS_DIR}/PS3UPDAT.PUP"
     /usr/local/bin/rpcs3 --installfw "${BIOS_DIR}/PS3UPDAT.PUP"
+    rc=$?
+    # 250 : RPCS3 absent, message déjà écrit par appimage-launch.sh.
+    [[ ${rc} -eq ${LAUNCH_ERROR_CODE} ]] && exit "${rc}"
+    [[ -e "${RPCS3_DIR}/dev_flash/vsh/module/vsh.self" ]] \
+        || launch_error "Installation du firmware PS3 impossible (${BIOS_DIR}/PS3UPDAT.PUP, code ${rc})"
 fi
 
 eboot=""
@@ -42,7 +45,6 @@ case "${rom,,}" in
 esac
 
 if [[ -z "${eboot}" || ! -f "${eboot}" ]]; then
-    echo "game-launch-ps3 : EBOOT.BIN introuvable pour ${rom} (jeu PSN non installé dans RPCS3 ?)" >&2
-    exit 1
+    launch_error "EBOOT.BIN introuvable pour ${rom##*/} (jeu PSN non installé dans RPCS3 ?)"
 fi
 /usr/local/bin/rpcs3 "${eboot}" --no-gui --fullscreen

@@ -13,11 +13,13 @@ set -euo pipefail
 
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
+# shellcheck source=launch-error.sh
+. /usr/local/bin/scripts/launch-error.sh
 DATA="${XDG_DATA_HOME:-${HOME}/.local/share}/xemu-chihiro"
 rom="$1"
 
 for f in cerbios.bin mcpx_1.0.bin; do
-    [[ -f "${BIOS_DIR}/${f}" ]] || { echo "game-launch-chihiro : ${BIOS_DIR}/${f} absent" >&2; exit 1; }
+    [[ -f "${BIOS_DIR}/${f}" ]] || launch_error "BIOS Chihiro absent : ${BIOS_DIR}/${f}"
 done
 mkdir -p "${DATA}"
 [[ -f "${DATA}/xbox_hdd.qcow2" ]] || cp /usr/share/xemu/xbox_hdd.qcow2 "${DATA}/xbox_hdd.qcow2"
@@ -26,8 +28,7 @@ mkdir -p "${DATA}"
 # jeu contenant une apostrophe est refusé plutôt que de produire un TOML
 # invalide.
 if [[ "${rom}" == *"'"* ]]; then
-    echo "game-launch-chihiro : apostrophe non prise en charge dans ${rom}" >&2
-    exit 1
+    launch_error "Apostrophe non prise en charge dans le nom du jeu Chihiro : ${rom##*/}"
 fi
 cat > "${DATA}/xemu.toml" <<EOF
 [general]
