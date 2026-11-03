@@ -82,8 +82,18 @@ cats="${CATEGORIES:-${upstream_cat:-Game;}}"
 } > "/usr/local/bin/${bin}"
 chmod 755 "/usr/local/bin/${bin}"
 
+# Nom du .desktop (02/11) : celui de l'AppImage (ex. com.github.AppManager)
+# quand elle en fournit un, sinon <nom>. Sous Wayland, le panneau XFCE ne
+# reçoit de la fenêtre que son app_id et cherche le .desktop du même nom pour
+# l'icône : avec appmanager.desktop, AppManager avait un carré vide dans la
+# barre des tâches.
+desktop_id="${name}"
+if [ -n "${upstream_desktop}" ]; then
+    desktop_id="$(basename "${upstream_desktop}" .desktop)"
+fi
+
 printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\nCategories=%s\n' \
     "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${dest}/.DirIcon" "${cats}" \
-    > "/usr/share/applications/${name}.desktop"
+    > "/usr/share/applications/${desktop_id}.desktop"
 
-echo "[install-appimage] ${label} installé dans ${dest} (lanceur /usr/local/bin/${bin})"
+echo "[install-appimage] ${label} installé dans ${dest} (lanceur /usr/local/bin/${bin}, ${desktop_id}.desktop)"
