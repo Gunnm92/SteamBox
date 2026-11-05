@@ -935,26 +935,15 @@ RUN pkg=$(pacman -Q sunshine | cut -d' ' -f2) && built=$(cat /tmp/sunshine-usb/v
       echo "FATAL: bibliothèque manquante pour sunshine"; exit 1; \
     fi
 
-# ── 1a8. wsquashfs-launcher — lanceur de jeux Windows .wsquashfs (format
-# Batocera), projet séparé (github.com/Gunnm92/wsquashfs-launcher) plutôt que
-# le script wsquashfs-batocera embarqué dans l'image webstation — plus
-# portable (détection auto Docker/FUSE, fallback unsquashfs), maintenu à part.
-# ADD d'URL plutôt que RUN curl (23/09) : BuildKit télécharge et compare le
-# CONTENU à chaque build — un RUN curl à la commande inchangée restait en
-# cache et figeait silencieusement une ancienne version du lanceur tant
-# qu'aucune couche antérieure ne bougeait.
-# WSQUASHFS_REF (25/09) : branche, tag ou commit du lanceur à embarquer.
-# Le Makefile passe le commit exact de main (30/09, git ls-remote) : l'URL
-# de branche est servie en cache par GitHub quelques minutes après un push.
+# ── 1a8. wsquashfs-launcher — NI dans l'image NI en /usr/local/bin (06/11).
+# Installé une seule fois par init_wsquashfs.sh dans /config/.local/bin
+# (= ~arcade/.local/bin, home persistant) s'il est absent, puis mis à jour par
+# son propre updater (qui exige un dossier inscriptible, pas /usr/bin). Le
+# home est un bind mount de l'hôte : tout fichier posé ici dans l'image serait
+# masqué. WSQUASHFS_REF est gardé en ENV : c'est le commit installé au premier
+# démarrage.
 ARG WSQUASHFS_REF=main
-ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/wsquashfs-launcher \
-    /usr/local/bin/wsquashfs-launcher
-# Pont DualSense Bluetooth → USB (02/10) : en HIDRAW=1, le lanceur présente
-# une DualSense Bluetooth en DualSense USB — les libScePad de 2022 (F1 22)
-# refusent la Bluetooth. Inactif ici (Sunshine en USB, étape sunshine-usb),
-# gardé pour le lanceur tel qu'il est distribué et pour revenir en arrière.
-ADD --chmod=755 https://raw.githubusercontent.com/Gunnm92/wsquashfs-launcher/${WSQUASHFS_REF}/tools/dualsense-usb-bridge/dualsense-usb-bridge \
-    /usr/local/bin/dualsense-usb-bridge
+ENV WSQUASHFS_REF=${WSQUASHFS_REF}
 
 # Type MIME des .wsquashfs + association au lanceur (01/10) : reconnus par
 # leur extension (application/x-wsquashfs, sous-type de squashfs). Sans lui,

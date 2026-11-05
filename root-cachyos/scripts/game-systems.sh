@@ -24,7 +24,8 @@ RA="retroarch -f -L"
 # vérifié sur Blade Strangers. Avant, tout passait par "sudo -E" (montage en
 # root, Wine relancé en arcade), ce qui laissait des fichiers root dans les
 # sauvegardes et les dossiers de cache.
-WSQUASHFS="/usr/local/bin/wsquashfs-launcher"
+# Installé par init_wsquashfs.sh dans le home persistant (/home/arcade → /config).
+WSQUASHFS="/home/arcade/.local/bin/wsquashfs-launcher"
 
 # ── Mapping systèmes ──────────────────────────────────────────────────────────
 # Format : "Nom affiché|extensions (sans point)|commande de lancement"

@@ -153,7 +153,9 @@ done
 # EmulationStation le 24/09) : il repeuple le dossier de cœurs utilisateur
 # (liens vers les cœurs pacman) vers lequel pointent les commandes RetroArch
 # de game-systems.sh.
-for script in init_system init_audio init_sunshine init_retroarch init_emulationstation; do
+# init_wsquashfs avant init_emulationstation : ES lance le lanceur installé
+# dans /config/.local/bin (game-systems.sh).
+for script in init_system init_audio init_sunshine init_retroarch init_wsquashfs init_emulationstation; do
     if [ -x "/usr/local/bin/scripts/${script}.sh" ]; then
         "/usr/local/bin/scripts/${script}.sh" || echo "[init-system] ${script}.sh a échoué (code $?) — on continue"
     fi

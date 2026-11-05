@@ -109,9 +109,13 @@ make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
 make lint                  # shellcheck + hadolint (via Docker, rien à installer)
 ```
 
-Le build embarque `wsquashfs-launcher` au **dernier commit** de sa branche
-`main` (résolu par `git ls-remote`, jamais la version en cache de GitHub) ;
-`make push WSQUASHFS_REF=<branche|tag|commit>` pour en imposer un autre.
+`wsquashfs-launcher` n'est plus dans l'image. `init_wsquashfs.sh` l'installe
+une seule fois dans `/config/.local/bin` (le home persistant, comme l'installeur
+de son dépôt hors root) s'il est absent ; ensuite c'est son updater qui le
+met à jour, pas un redémarrage du conteneur. Le commit installé est celui
+fixé au build (`WSQUASHFS_REF`, par défaut le **dernier commit** de `main`,
+résolu par `git ls-remote`) ; `make push WSQUASHFS_REF=<branche|tag|commit>`
+pour en imposer un autre.
 Les `.wsquashfs` sont reconnus par leur extension sous XFCE (type
 `application/x-wsquashfs`) : un double-clic les ouvre avec le lanceur.
 
