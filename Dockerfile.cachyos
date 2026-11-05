@@ -139,8 +139,10 @@
 # ARG global : même base pour l'étape sunshine-usb ci-dessous.
 ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
 
-# ── Étape sunshine-usb (02/10) : Sunshine à la version exacte du paquet
-# CachyOS, avec sa DualSense virtuelle en USB au lieu de Bluetooth. Les
+# ── Étape sunshine-usb (02/10) : Sunshine compilé depuis le dernier tag
+# upstream (03/11 : le paquet CachyOS n'a pas de tag Git correspondant, son
+# numéro de build n'existe pas sur GitHub), avec sa DualSense virtuelle en
+# USB au lieu de Bluetooth. Les
 # libScePad de 2022 (F1 22, The Devil in Me, KOF XV) refusent la DualSense
 # Bluetooth : énumérée, jamais ouverte, aucune touche reçue. libvirtualhid
 # a les deux profils, mais Sunshine code "ds5" en dur sur dualsense()
@@ -149,25 +151,33 @@ ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9
 # passent par Wine/Proton (hidraw direct) et Steam gère la manette :
 # validé le 02/10 sur les jeux DualSense, XInput et ES. Compilée en
 # parallèle de l'image principale (BuildKit), refaite à chaque build
-# (BUILD_DATE) pour suivre le paquet ; l'image principale vérifie que les
-# versions concordent. CUDA comme le paquet CachyOS (capture NvFBC). Le
-# paquet sunshine est installé ici pour ses dépendances (Qt6, libva…) et sa
-# version, la seule compilée.
+# (BUILD_DATE) pour suivre le dernier tag ; le paquet sunshine n'est installé
+# que pour ses dépendances (Qt6, libva…) et sa web UI. CUDA comme le paquet
+# CachyOS (capture NvFBC).
 FROM ${CACHYOS_BASE} AS sunshine-usb
 ARG BUILD_DATE
+# Même réglage que l'étape principale (voir DisableSandboxNetwork plus bas) :
+# cette étape a sa propre image de base, pacman y refusait les hooks (locale,
+# ldconfig, systemd…) faute de ce réglage. Erreurs non bloquantes, mais hooks
+# non exécutés dans l'étape.
+RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
+    grep -q '^DisableSandboxNetwork' /etc/pacman.conf || { echo "FATAL: DisableSandboxNetwork non appliqué"; exit 1; }
 RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     echo "build ${BUILD_DATE}" && \
     pacman -Syu --needed --noconfirm --noprogressbar base-devel git cmake boost boost-libs \
       nodejs npm shaderc appstream appstream-glib desktop-file-utils python-jinja cuda sunshine && \
-    ver=$(pacman -Q sunshine | cut -d' ' -f2) && \
-    tag="v${ver%-*}" && echo "Sunshine ${tag} (paquet ${ver})" && \
+    pkg=$(pacman -Q sunshine | cut -d' ' -f2) && \
+    tag=$(git ls-remote --tags --refs https://github.com/LizardByte/Sunshine.git 'v*' \
+          | sed 's|.*refs/tags/||' | sort -V | tail -1) && \
+    [ -n "${tag}" ] || { echo "FATAL: aucun tag Sunshine trouvé"; exit 1; } && \
+    ver="${tag#v}" && echo "Sunshine ${tag} (dernier tag upstream ; paquet CachyOS ${pkg})" && \
     git clone --quiet --depth 1 --branch "${tag}" --recurse-submodules --shallow-submodules \
       https://github.com/LizardByte/Sunshine.git /src && \
     f=/src/src/platform/virtualhid_input.cpp && \
     sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
     { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
     commit="$(git -C /src rev-parse HEAD)" && \
-    export BRANCH=master BUILD_VERSION="${ver%-*}" COMMIT="${commit}" \
+    export BRANCH=master BUILD_VERSION="${ver}" COMMIT="${commit}" \
            CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
     cmake -S /src -B /build -Wno-dev -D BUILD_DOCS=OFF -D BUILD_WERROR=OFF -D BUILD_TESTS=OFF \
       -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr \
@@ -175,7 +185,9 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
       -D SUNSHINE_PUBLISHER_NAME=LizardByte -D SUNSHINE_PUBLISHER_WEBSITE=https://app.lizardbyte.dev \
       -D SUNSHINE_PUBLISHER_ISSUE_URL=https://app.lizardbyte.dev/support && \
     cmake --build /build -j "$(nproc)" && \
-    mkdir -p /out && install -m 755 -s /build/sunshine /out/sunshine && echo "${ver}" > /out/version
+    mkdir -p /out && install -m 755 -s /build/sunshine /out/sunshine && echo "${ver}" > /out/version && \
+    DESTDIR=/out/root cmake --install /build >/dev/null && \
+    [ -f /out/root/usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI absente de l'installation Sunshine ${tag}"; exit 1; }
 
 FROM ${CACHYOS_BASE}
 
@@ -924,13 +936,15 @@ RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl &&
 
 # ── 1a7e. Sunshine en DualSense USB (02/10) — binaire de l'étape
 # sunshine-usb à la place de celui du paquet (gardé pour ses dépendances,
-# sa web UI et ses fichiers). Versions comparées : un paquet monté entre-temps
-# donnerait une web UI d'une autre version que le binaire. Avant le setcap
-# de /usr/bin/sunshine (plus bas), qu'une copie après effacerait.
+# web UI et ses shaders, installés depuis le même tag que le binaire : la web
+# UI du paquet ne correspondrait pas au binaire compilé (03/11). Avant le
+# setcap de /usr/bin/sunshine (plus bas), qu'une copie après effacerait.
 COPY --from=sunshine-usb /out/ /tmp/sunshine-usb/
 RUN pkg=$(pacman -Q sunshine | cut -d' ' -f2) && built=$(cat /tmp/sunshine-usb/version) && \
-    { [ "$pkg" = "$built" ] || { echo "FATAL: Sunshine USB compilé en ${built}, paquet installé en ${pkg}"; exit 1; }; } && \
-    install -m 755 /tmp/sunshine-usb/sunshine /usr/bin/sunshine && rm -rf /tmp/sunshine-usb && \
+    echo "Sunshine USB ${built} : binaire et web UI du même tag (paquet CachyOS ${pkg}, dépendances seules)" && \
+    install -m 755 /tmp/sunshine-usb/sunshine /usr/bin/sunshine && \
+    rm -rf /usr/share/sunshine && cp -a /tmp/sunshine-usb/root/usr/share/sunshine /usr/share/sunshine && \
+    rm -rf /tmp/sunshine-usb && \
     if ldd /usr/bin/sunshine | grep -q "not found"; then \
       echo "FATAL: bibliothèque manquante pour sunshine"; exit 1; \
     fi
