@@ -119,6 +119,21 @@ pour en imposer un autre.
 Les `.wsquashfs` sont reconnus par leur extension sous XFCE (type
 `application/x-wsquashfs`) : un double-clic les ouvre avec le lanceur.
 
+Les systèmes d'arcade PC (segare, segarw, segaalls, segaer, seganu, typex,
+typex2, type-x2, nesicax, konamipc, rawthrills, namcoes3, unis, arcadepc,
+adrenaline, globalvr) acceptent
+aussi, comme le pack RGS, les dumps `.squashfs` / `.windowsloader` :
+`game-launch-arcade.sh` les confie au **Windows arcade loader** de RGS
+(`arcade-launcher`, émulation des cartes d'E/S, dongles, retour de force), les
+`.wsquashfs` restant à `wsquashfs-launcher`. Le loader n'est pas dans
+l'image : copier le dossier `system/rgs/emulators/windows-arcade-loader` du
+pack RGS dans `/config/.local/share/windows-arcade-loader`, son GE-Proton
+(`system/wine/custom/GE-Proton…`) dans son sous-dossier `runners/`, et
+adapter `launcher.yaml` (`runners_dir: runners`,
+`squashfs_saves: /home/arcade/games/Batocera/saves`).
+exaarcadia (jeux PC de la borne Exa-Arcadia, `.wsquashfs` seulement) passe
+directement par `wsquashfs-launcher`.
+
 ## Accès
 
 | Service | Port | Authentification |

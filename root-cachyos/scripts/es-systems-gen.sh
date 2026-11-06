@@ -23,6 +23,8 @@ LAUNCH="/usr/local/bin/scripts/game-launch.sh"
 # l'alias remplaçait par le logo générique de la famille (vu le 25/09).
 declare -A THEME_ALIAS=(
     [win]=windows            [type-x]=typex           [arcadepc]=arcade
+    [type-x2]=typex2         [adrenaline]=arcade      [globalvr]=arcade
+    [exaarcadia]=arcade
     [rawthrills]=arcade      [unis]=arcade            [nesicax]=taito
     [nesicax2]=taito         [segaalls]=sega          [segaer]=sega
     [seganu]=sega            [segare]=sega            [segarw]=sega

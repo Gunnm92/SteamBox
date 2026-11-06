@@ -87,7 +87,11 @@ exec > "${XDG_RUNTIME_DIR:-/tmp}/game-launch-last.log" 2>&1
 state="${XDG_RUNTIME_DIR:-/tmp}/steambox-game"
 if [[ "${cmd}" != retroarch* ]]; then
     wine_prefix=""
-    if [[ "${cmd}" == *wsquashfs-launcher* ]]; then
+    # game-launch-arcade.sh passe les .wsquashfs à wsquashfs-launcher (même
+    # prefix) ; arcade-launcher (.squashfs/.windowsloader) s'arrête lui-même
+    # proprement sur SIGTERM (Wine compris, comme sous RGS) : pas de prefix.
+    if [[ "${cmd}" == *wsquashfs-launcher* \
+          || ( "${cmd}" == *game-launch-arcade.sh* && "${rom_real,,}" == *.wsquashfs ) ]]; then
         wine_prefix="${WSQUASHFS_CACHE:-${HOME}/.cache/wsquashfs}/wine/$(basename "${rom_real}" .wsquashfs)"
     fi
     printf 'pid=%s\nprefix=%s\nrom=%s\n' "$$" "${wine_prefix}" "${rom_real}" > "${state}.tmp" \
