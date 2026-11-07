@@ -57,7 +57,6 @@ SYSTEMS["konamipc"]="Konami PC|wsquashfs,squashfs,windowsloader|${SCRIPTS}/game-
 SYSTEMS["konamilcd"]="Konami LCD|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["namco2x6"]="Namco System 2x6|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["namcoes3"]="Namco ES3|wsquashfs,squashfs|${SCRIPTS}/game-launch-arcade.sh \"{file.path}\""
-SYSTEMS["chihiro"]="Sega Chihiro|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["triforce"]="Namco Triforce|wsquashfs,zip|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["ikemen"]="Ikemen|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["unis"]="Unis|wsquashfs,squashfs,windowsloader|${SCRIPTS}/game-launch-arcade.sh \"{file.path}\""
@@ -168,10 +167,12 @@ SYSTEMS["win"]="Windows|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["konamilcd"]="Konami LCD|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 # Systèmes arcade/console lancés comme Batocera (22/09, code de lancement
 # batocera-linux relu : emulators/pcsx2x6.py, rpcs3/emulator.py, xemu.py,
-# dolphin/emulator.py). BIOS attendus dans bios/ (namco2x6/, cerbios.bin,
-# mcpx_1.0.bin, PS3UPDAT.PUP) — voir chaque lanceur.
+# dolphin/emulator.py). BIOS attendus dans bios/ (namco2x6/, chihiro/,
+# PS3UPDAT.PUP) — voir chaque lanceur.
 SYSTEMS["namco2x6"]="Namco System 246/256|squashfs|${SCRIPTS}/game-launch-namco2x6.sh \"{file.path}\""
-SYSTEMS["chihiro"]="Sega Chihiro|iso|${SCRIPTS}/game-launch-chihiro.sh \"{file.path}\""
+# Chihiro (07/11) : images DIMM .bin par le fork xemu-chihiro (AppImage
+# « xemu »), comme Batocera v44 et RGS — game-launch-chihiro.sh.
+SYSTEMS["chihiro"]="Sega Chihiro|bin|${SCRIPTS}/game-launch-chihiro.sh \"{file.path}\""
 # Triforce : Dolphin officiel, comme la GameCube (Batocera n'utilise plus de
 # build Triforce séparé) — remplace l'ancien mapping wsquashfs, faux.
 SYSTEMS["triforce"]="Triforce|rvz,iso,gcz|dolphin-emu -b -C Dolphin.Display.Fullscreen=True -e \"{file.path}\""

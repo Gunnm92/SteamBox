@@ -1104,17 +1104,6 @@ RUN curl -fsSL -o /tmp/chrome.deb "https://dl.google.com/linux/direct/google-chr
       > /usr/share/applications/google-chrome.desktop && \
     rm -rf /tmp/chrome.deb /tmp/control.tar.* /tmp/data.tar.* /tmp/debian-binary /tmp/chrome-extract
 
-# Disque dur virtuel Xbox vierge (22/09) — xemu exige un hdd_path ; même
-# image que Batocera (release publique mborgerson/xemu-hdd-image 1.0, déjà
-# formatée, sans aucun contenu Microsoft). Copiée au premier lancement par
-# game-launch-chihiro.sh dans les données utilisateur.
-RUN curl -fSL --retry 3 -o /tmp/xbox_hdd.zip \
-      "https://github.com/mborgerson/xemu-hdd-image/releases/download/1.0/xbox_hdd.qcow2.zip" && \
-    mkdir -p /usr/share/xemu && \
-    unzip -q -o -j /tmp/xbox_hdd.zip xbox_hdd.qcow2 -d /usr/share/xemu && \
-    chmod 644 /usr/share/xemu/xbox_hdd.qcow2 && \
-    rm -f /tmp/xbox_hdd.zip
-
 # Base de données RetroArch (18/09, "Scan Directory"/Manual Scan ne créait
 # aucune liste) : content_database_path pointe par défaut sur
 # ~/.config/retroarch/database/rdb, un dossier VIDE tant que personne n'a

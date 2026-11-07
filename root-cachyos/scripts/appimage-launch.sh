@@ -33,7 +33,7 @@ case "${app}" in
     eden)                            names=("Eden Nightly" "Eden") ;;
     lindbergh)                       names=("Lindbergh Loader") ;;
     duckstation|duckstation-qt)      names=("DuckStation") ;;
-    xemu)                            names=("Xemu") ;;
+    xemu)                            names=("Xemu" "xemu-chihiro") ;;
     vita3k)                          names=("Vita3K") ;;
     xenia)                           names=("Xenia Canary" "Xenia") ;;
     shadps4)                         names=("shadPS4") ;;
