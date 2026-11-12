@@ -1,10 +1,10 @@
 #!/command/with-contenv bash
-# Raccourcis manette pendant les parties (27/09) : Hotkey (PS / Xbox) + Start
-# ferme le jeu en cours, comme evmapy sous Batocera — voir
-# scripts/pad-exit-watcher.py. Service permanent (plutôt qu'un surveillant
+# Raccourcis pendant les parties (27/09) : Hotkey (PS / Xbox) + Start, et
+# Alt + F4 au clavier, ferment le jeu en cours, comme evmapy sous Batocera —
+# voir scripts/pad-exit-watcher.py. Service permanent (plutôt qu'un surveillant
 # lancé à chaque partie par game-launch.sh) : supervisé, SDL initialisé une
-# fois, et sans jeu en cours il ne lit pas les manettes. En arcade, comme les
-# jeux : il doit pouvoir arrêter leur wineserver.
+# fois, et sans jeu en cours il ne lit ni manettes ni claviers. En arcade,
+# comme les jeux : il doit pouvoir arrêter leur wineserver.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 for _ in $(seq 1 60); do
     [ -d "${XDG_RUNTIME_DIR}" ] && break

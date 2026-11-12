@@ -196,6 +196,10 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   d'une notification sur le bureau. Détails :
   `$XDG_RUNTIME_DIR/game-launch.log` (commandes) et `game-launch-last.log`
   (sortie du dernier jeu).
+- **Alt + F4 ferme le jeu** (clavier, Alt gauche ou droit) : même service
+  `svc-pad-hotkeys`, qui lit les claviers dans `/dev/input` pendant une
+  partie. Il faut que `arcade` puisse lire ces périphériques (groupe
+  `steambox-input`).
 - **PS / Xbox + Start ne ferme pas le jeu** → service `svc-pad-hotkeys`
   (journal dans `docker logs`, préfixe `[pad-hotkeys]`) ; le jeu en cours
   est décrit dans `$XDG_RUNTIME_DIR/steambox-game` par `game-launch.sh`.
