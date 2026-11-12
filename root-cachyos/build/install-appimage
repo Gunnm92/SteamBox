@@ -13,6 +13,9 @@
 #   CATEGORIES=...   catégories du .desktop (défaut : celles de l'AppImage, sinon Game;)
 #                    (ex: "export APPDIR=/opt/x")
 #   DESKTOP_ARGS=... arguments ajoutés à l'Exec= du .desktop
+#   ICON=...         icône du .desktop : nom d'icône du thème (ex.
+#                    system-software-install) ou chemin absolu ; défaut :
+#                    l'icône de l'AppImage (${dest}/.DirIcon)
 #
 # Choix communs à toutes les AppImage :
 #   - extraction (--appimage-extract) plutôt que l'AppImage brute : aucun FUSE
@@ -93,7 +96,7 @@ if [ -n "${upstream_desktop}" ]; then
 fi
 
 printf '[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nIcon=%s\nTerminal=false\nCategories=%s\n' \
-    "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${dest}/.DirIcon" "${cats}" \
+    "${label}" "/usr/local/bin/${bin}${DESKTOP_ARGS:+ ${DESKTOP_ARGS}}" "${ICON:-${dest}/.DirIcon}" "${cats}" \
     > "/usr/share/applications/${desktop_id}.desktop"
 
 echo "[install-appimage] ${label} installé dans ${dest} (lanceur /usr/local/bin/${bin}, ${desktop_id}.desktop)"
