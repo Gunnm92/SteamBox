@@ -156,7 +156,8 @@ Le loader et les jeux sont en 32 bits : sur le partage Unraid (inodes au-delà
 de 2^32), ils ne peuvent pas lire les dossiers. Le jeu est donc monté par
 fuse-overlayfs (`ino32_t`) ; ses écritures (EEPROM, SRAM, `lindbergh.ini`)
 vont dans `~/.local/share/steambox/lindbergh/<jeu>/upper`, la ludothèque
-reste intacte.
+reste intacte. Les exécutables du jeu y reçoivent aussi le droit d'exécution,
+souvent absent sur la ludothèque.
 
 ## Accès
 

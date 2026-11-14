@@ -78,6 +78,17 @@ if [[ ! -f "${ini}" ]]; then
     sed -i 's/^FULLSCREEN = .*/FULLSCREEN = true/' "${ini}"
 fi
 
+# Droit d'exécution : sur la ludothèque, les exécutables des jeux sont en
+# rw-rw-r-- (« ./drive.elf: Permission non accordée », 14/11). Donné dans
+# l'overlay (copie dans la couche haute, une seule fois par fichier) aux
+# exécutables ELF (e_type 2 = EXEC, pas les .so) du dossier du jeu.
+for f in "${dir}"/*; do
+    [[ -f "${f}" && ! -x "${f}" ]] || continue
+    [[ "$(head -c 4 "${f}" | od -An -tx1 | tr -d ' \n')" == "7f454c46" ]] || continue
+    [[ "$(od -An -tu1 -j16 -N1 "${f}" | tr -d ' ')" == 2 ]] || continue
+    chmod +x "${f}"
+done
+
 # Pas d'exec : le montage doit être défait à la fin de la partie. Le loader
 # tourne en arrière-plan pour que SIGTERM (Hotkey + Start, svc-pad-hotkeys)
 # arrive tout de suite à ce script, qui le relaie (cleanup).
