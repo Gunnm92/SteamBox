@@ -134,6 +134,18 @@ adapter `launcher.yaml` (`runners_dir: runners`,
 exaarcadia (jeux PC de la borne Exa-Arcadia, `.wsquashfs` seulement) passe
 directement par `wsquashfs-launcher`.
 
+Sega Lindbergh suit la convention Batocera : un dossier par jeu, et un
+fichier `<jeu>.game` à côté de l'exécutable (`2spicy/elf/2spicy.game`).
+EmulationStation ne liste que ces `.game` ; `game-launch-lindbergh.sh` lance
+l'AppImage Lindbergh Loader (2.x) depuis ce dossier, où elle détecte
+l'exécutable. Elle lit `lindbergh.ini` (créé en plein écran au premier
+lancement s'il manque), pas l'ancien `lindbergh.conf` de Batocera.
+Le loader et les jeux sont en 32 bits : sur le partage Unraid (inodes au-delà
+de 2^32), ils ne peuvent pas lire les dossiers. Le jeu est donc monté par
+fuse-overlayfs (`ino32_t`) ; ses écritures (EEPROM, SRAM, `lindbergh.ini`)
+vont dans `~/.local/share/steambox/lindbergh/<jeu>/upper`, la ludothèque
+reste intacte.
+
 ## Accès
 
 | Service | Port | Authentification |

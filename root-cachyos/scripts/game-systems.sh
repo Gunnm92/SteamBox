@@ -65,7 +65,9 @@ SYSTEMS["pc"]="PC (DOS/Windows)|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["dos"]="MS-DOS|wsquashfs,exe,com,bat|${WSQUASHFS} \"{file.path}\""
 
 # ── Standalone launchers ──────────────────────────────────────────────────────
-SYSTEMS["lindbergh"]="Sega Lindbergh|elf,sh,zip|/usr/local/bin/lindbergh \"{file.path}\""
+# Lindbergh (14/11) : un fichier <jeu>.game par jeu (convention Batocera),
+# lancé depuis son dossier par game-launch-lindbergh.sh.
+SYSTEMS["lindbergh"]="Sega Lindbergh|game|${SCRIPTS}/game-launch-lindbergh.sh \"{file.path}\""
 SYSTEMS["model3"]="Sega Model 3|zip|/usr/local/bin/supermodel -res=1920,1080 -fullscreen \"{file.path}\""
 SYSTEMS["model2"]="Sega Model 2|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
 SYSTEMS["model1"]="Sega Model 1|zip|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
