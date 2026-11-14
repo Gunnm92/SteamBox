@@ -131,6 +131,18 @@ pack RGS dans `/config/.local/share/windows-arcade-loader`, son GE-Proton
 (`system/wine/custom/GE-Proton…`) dans son sous-dossier `runners/`, et
 adapter `launcher.yaml` (`runners_dir: runners`,
 `squashfs_saves: /home/arcade/games/Batocera/saves`).
+Ensuite, `docker exec -it -u arcade SteamBox rgs-update` (`rgs-update.sh`,
+équivalent de `rgs_upgrade` / `rgs_theme_upgrade` de RGS) le met à jour :
+il lit en flux l'archive `update/v43/update.tar.gz` de RGS (seulement si elle
+a changé), n'en garde que le loader et son GE-Proton, conserve
+`launcher.yaml` (ligne `runner:` alignée sur RGS), `userprofiles/` et les
+prefixes extraits, puis synchronise par rclone les thèmes RGS installés
+(ckau-book-PixN…). `rgs-update --check` dit s'il y a du neuf ; `loader` ou
+`theme` pour une seule partie. Dans EmulationStation, le système RGS
+propose « Mise à jour RGS » (`roms/rgs/Mise à jour RGS.steambox`, lancé
+par `rgs-update-es.sh` dans un terminal plein écran ; le contenu du fichier
+donne les arguments). Fichiers remplacés gardés dans
+`~/.local/share/steambox/rgs-backup/`. BIOS et bezels restent à la main.
 exaarcadia (jeux PC de la borne Exa-Arcadia, `.wsquashfs` seulement) passe
 directement par `wsquashfs-launcher`.
 

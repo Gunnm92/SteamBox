@@ -21,10 +21,12 @@ LAUNCH="/usr/local/bin/scripts/game-launch.sh"
 # Repli SEULEMENT si le thème actif ne connaît pas le nom d'origine :
 # ckau-book-PixN a ses propres visuels segare, namcoes3, nesicax... que
 # l'alias remplaçait par le logo générique de la famille (vu le 25/09).
+# rgs → batocera (14/11) : thème de l'es_systems_rgs.cfg de RGS (logo et
+# visuel Batocera de ckau-book-PixN).
 declare -A THEME_ALIAS=(
     [win]=windows            [type-x]=typex           [arcadepc]=arcade
     [type-x2]=typex2         [adrenaline]=arcade      [globalvr]=arcade
-    [exaarcadia]=arcade
+    [exaarcadia]=arcade      [rgs]=batocera
     [rawthrills]=arcade      [unis]=arcade            [nesicax]=taito
     [nesicax2]=taito         [segaalls]=sega          [segaer]=sega
     [seganu]=sega            [segare]=sega            [segarw]=sega

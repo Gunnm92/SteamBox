@@ -64,6 +64,12 @@ SYSTEMS["exl100"]="EXL100|wsquashfs|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["pc"]="PC (DOS/Windows)|wsquashfs,exe,bat|${WSQUASHFS} \"{file.path}\""
 SYSTEMS["dos"]="MS-DOS|wsquashfs,exe,com,bat|${WSQUASHFS} \"{file.path}\""
 
+# ── Outils RGS ────────────────────────────────────────────────────────────────
+# rgs (14/11) : « Mise à jour RGS.steambox » lance rgs-update dans un terminal.
+# Seuls les .steambox : les scripts Batocera du dossier ne tournent pas ici.
+# Nom affiché et thème (batocera, voir es-systems-gen.sh) repris de RGS.
+SYSTEMS["rgs"]="Batocera config|steambox|${SCRIPTS}/rgs-update-es.sh \"{file.path}\""
+
 # ── Standalone launchers ──────────────────────────────────────────────────────
 # Lindbergh (14/11) : un fichier <jeu>.game par jeu (convention Batocera),
 # lancé depuis son dossier par game-launch-lindbergh.sh.

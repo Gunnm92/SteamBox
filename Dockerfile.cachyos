@@ -345,7 +345,10 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # par D-Bus, comme Thunar : le bus de session porte WAYLAND_DISPLAY=wayland-0
 # (bureau), et la session « Desktop » de Moonlight a son propre bus sur
 # wayland-1. Affichage par gtk-layer-shell (labwc le gère).
-RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip \
+# rsync + rclone (14/11) : mise à jour du pack RGS (rgs-update.sh) — rclone
+# lit le serveur HTTP de RGS comme son rgs_theme_upgrade, rsync fusionne le
+# loader d'arcade en gardant les réglages SteamBox.
+RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
@@ -1421,7 +1424,9 @@ RUN for app in ppsspp flycast cemu pcsx2 pcsx2x6 rpcs3 melonDS eden lindbergh \
     done && \
     ln -sf /usr/local/bin/eden /usr/bin/eden
 # run-exe : lancer un .exe/.msi avec Proton (umu), voir root-cachyos/scripts/run-exe.sh
-RUN ln -sf /usr/local/bin/scripts/run-exe.sh /usr/local/bin/run-exe
+# rgs-update : mise à jour du loader d'arcade et des thèmes RGS (rgs-update.sh)
+RUN ln -sf /usr/local/bin/scripts/run-exe.sh /usr/local/bin/run-exe && \
+    ln -sf /usr/local/bin/scripts/rgs-update.sh /usr/local/bin/rgs-update
 
 # Caches de shaders (DXVK/NVIDIA) HORS de /config (audit 2026-08-26) :
 # /config est sur un partage Unraid FUSE/shfs, lent en accès aléatoire,
