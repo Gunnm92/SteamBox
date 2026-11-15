@@ -45,8 +45,11 @@ bureau d'administration du flux de jeu :
   Input (hidraw — voir la règle udev
   [99-steambox-hidraw-fallback.rules](root-cachyos/etc/udev/rules.d/99-steambox-hidraw-fallback.rules)).
   La DualSense virtuelle est en **USB** et non en Bluetooth comme dans le
-  Sunshine d'origine : Sunshine est compilé avec ce seul changement
-  (étape `sunshine-usb` de [Dockerfile.prebuilt](Dockerfile.prebuilt)), sans quoi les jeux à `libScePad` de
+  Sunshine d'origine : Sunshine est compilé avec ce changement
+  (étape `sunshine-usb` de [Dockerfile.prebuilt](Dockerfile.prebuilt)). Il
+  est aussi patché pour envoyer les vibrations et les effets de
+  gâchette en 5 ms au plus, au lieu d'attendre jusqu'à 100 ms le prochain
+  paquet du client. Sans le passage en USB, les jeux à `libScePad` de
   2022 (F1 22…) ignorent la manette.
 
 ## Applications Sunshine
@@ -120,7 +123,8 @@ L'image télécharge la dernière release
 
 ```bash
 make prebuilt-check        # compare la dernière release à l'amont (dernier tag
-                           # Sunshine, HEAD d'ES, AUR freeimage, evdev-bridge/)
+                           # Sunshine, HEAD d'ES et du lanceur XFCE, AUR
+                           # freeimage, evdev-bridge/)
 make prebuilt              # compile tout dans prebuilt/out/ (aucun registre)
 make prebuilt-publish      # publie prebuilt/out/ en release GitHub (gh)
 make push                  # l'image prend la nouvelle release
@@ -131,8 +135,8 @@ make push PREBUILT_TAG=prebuilt-…   # revenir à une release précédente
 modification de `evdev-bridge/`, ou si un build de l'image échoue sur
 « bibliothèque manquante … relancer make prebuilt ». CachyOS est une distribution rolling : une
 bibliothèque peut changer de soname. Surcharges possibles : `ES_REF`,
-`SUNSHINE_TAG`, `XFCE_LAUNCHER_REF`. La base CachyOS (digest) se bumpe dans
-les deux Dockerfile ensemble.
+`SUNSHINE_TAG`, `XFCE_LAUNCHER_REF`. Les deux Dockerfile partent de
+`cachyos/cachyos-v3:latest`, revérifiée à chaque build (`--pull`).
 
 `wsquashfs-launcher` n'est plus dans l'image. `init_wsquashfs.sh` l'installe
 une seule fois dans `/config/.local/bin` (le home persistant, comme l'installeur

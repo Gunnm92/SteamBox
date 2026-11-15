@@ -48,10 +48,10 @@ rec=$(recorded evdev-bridge)
 up=$(git -C "${root}" log -1 --format=%H -- evdev-bridge)
 report evdev-bridge "${rec}" "${up:0:7}" "$([ -n "${rec}" ] && [ "${up#"${rec}"}" != "${up}" ] && echo 1 || echo 0)"
 
-# xfce-launcher : commit figé (ARG XFCE_LAUNCHER_REF de Dockerfile.prebuilt).
+# xfce-launcher : HEAD de main ; enregistré = hash complet.
 rec=$(recorded xfce-launcher)
-up=$(sed -n 's/^ARG XFCE_LAUNCHER_REF=//p' "${root}/Dockerfile.prebuilt")
-report xfce-launcher "${rec}" "${up}" "$([ "${rec}" = "${up}" ] && echo 1 || echo 0)"
+up=$(git ls-remote https://github.com/novik133/xfce-panel-launcher.git HEAD | cut -f1)
+report xfce-launcher "${rec:0:7}" "${up:0:7}" "$([ -n "${rec}" ] && [ "${rec}" = "${up}" ] && echo 1 || echo 0)"
 
 # freeimage : version du paquet AUR ; enregistré "freeimage-<ver>-<rel>-<arch>".
 rec=$(recorded freeimage)

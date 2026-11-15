@@ -129,16 +129,15 @@
 #    plus (toujours WLR_RENDERER par défaut/GLES2) — le seul gain réel est
 #    l'isolation bureau/streaming, pas le HDR, qui reste hors de portée.
 
-# Épinglé par digest (audit H2, 05/09), pas "latest" : un rebuild déclenché
-# pour une seule ligne (ex: une règle udev) pouvait jusqu'ici faire monter
-# silencieusement toute la base — Mesa, wlroots/labwc, Xwayland — sans
-# qu'aucun commit ne le documente. Digest résolu le 05/09 (dernier build
-# réussi et testé en production) ; pour bumper délibérément la base,
-# relancer `docker pull cachyos/cachyos-v3:latest` et copier le nouveau
-# digest ici, dans un commit dédié ("bump: base cachyos-v3").
-# Même digest dans Dockerfile.prebuilt (composants précompilés, 15/11) :
-# à bumper ensemble, puis relancer make prebuilt.
-ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
+# Base "latest" (15/11), plus épinglée par digest (audit H2, 05/09) : le
+# build fait de toute façon un pacman -Syyu complet (Mesa, wlroots…), le
+# digest ne figeait que le socle (pacman.conf, trousseau, miroirs), resté au
+# 05/09 pendant deux mois. Chaque rebuild met tout à jour, socle compris :
+# make passe --pull pour que BuildKit vérifie la dernière base à chaque
+# build. Même base dans Dockerfile.prebuilt. Pour figer ponctuellement (base
+# amont cassée) : BUILD_ARGS += --build-arg CACHYOS_BASE=cachyos/cachyos-v3@sha256:…
+# dans local.mk.
+ARG CACHYOS_BASE=cachyos/cachyos-v3:latest
 
 # Composants précompilés (15/11) — evdev-bridge, Sunshine DualSense USB,
 # Batocera EmulationStation, xfce-panel-launcher et freeimage ne sont plus
@@ -874,9 +873,8 @@ RUN git clone -q https://github.com/vinceliuice/WhiteSur-icon-theme.git /tmp/wsi
 # ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
 # novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau
 # (GPL-2), ni paquet Arch ni AUR, compilé depuis les sources avec son
-# Makefile simple, précompilé dans Dockerfile.prebuilt, figé sur un commit
-# (XFCE_LAUNCHER_REF, défini là-bas) : petit projet d'un seul auteur, testé
-# dans le conteneur le 25/09 sur ce commit. Seul
+# Makefile simple, précompilé dans Dockerfile.prebuilt (dernier commit de
+# main). Seul
 # gtk_window_fullscreen côté fenêtre, rien de propre à X11 : fonctionne sous
 # labwc. À ajouter au panneau par clic droit > Panneau > Ajouter des éléments.
 RUN --mount=type=secret,id=github_token \

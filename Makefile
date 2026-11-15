@@ -24,8 +24,10 @@ DOCKER       ?= docker
 COMPOSE      = STEAMBOX_IMAGE=$(FULL_IMAGE) $(DOCKER) compose \
                  --file docker-compose.yml \
                  --file profiles/$(PROFILE)/compose.override.yml
+# --pull (15/11) : base cachyos-v3:latest revérifiée à chaque build (sinon
+# le démon réutilise la copie locale, aussi vieille soit-elle).
 BUILDX       = $(DOCKER) buildx build \
-                 --builder default \
+                 --builder default --pull \
                  --platform linux/amd64 \
                  --provenance=false --sbom=false
 
@@ -73,7 +75,8 @@ ifneq ($(PREBUILT_TAG),)
 BUILD_ARGS   += --build-arg PREBUILT_TAG=$(PREBUILT_TAG)
 endif
 # Surcharges du build précompilé : ES_REF (branche/tag d'ES), SUNSHINE_TAG
-# (tag Sunshine, vide = dernier v*), XFCE_LAUNCHER_REF (commit du lanceur).
+# (tag Sunshine, vide = dernier v*), XFCE_LAUNCHER_REF (commit du lanceur,
+# vide = main).
 PREBUILT_ARGS = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
                 --build-arg EVDEV_REF=$(shell git log -1 --format=%h -- evdev-bridge) \
                 $(if $(ES_REF),--build-arg ES_REF=$(ES_REF)) \

@@ -11,11 +11,11 @@
 # un vrai paquet pacman (.pkg.tar.zst), installé par pacman -U pour que ses
 # dépendances d'exécution viennent des dépôts.
 #
-# Même base que l'image principale (digest épinglé) : mêmes bibliothèques au
-# moment du build. CachyOS est une distribution rolling, donc un soname peut
+# Même base que l'image principale (cachyos-v3:latest, --pull) : mêmes
+# bibliothèques au moment du build. CachyOS est une distribution rolling, donc un soname peut
 # changer entre deux make push : les contrôles ldd de Dockerfile.cachyos
 # échouent alors franchement, il faut relancer make prebuilt.
-ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
+ARG CACHYOS_BASE=cachyos/cachyos-v3:latest
 
 # ── Base commune : toolchain + DisableSandboxNetwork (sans lui, pacman refuse
 # les hooks dans une étape de build — voir Dockerfile.cachyos).
@@ -52,6 +52,16 @@ RUN make -C /src evdev-bridge-native && \
 # sunshine n'est installé que pour tirer les dépendances de build ; l'image
 # principale le garde pour ses dépendances d'exécution. CUDA comme le paquet
 # CachyOS (capture NvFBC). SUNSHINE_TAG vide = dernier tag v*.
+#
+# Second patch (15/11) : latence des vibrations et effets de gâchette.
+# controlBroadcastThread (stream.cpp) ne vide la file des retours manette
+# qu'une fois par tour, et chaque tour bloque jusqu'à 150 ms dans
+# enet_host_service en attendant un paquet du client. Or Moonlight n'envoie
+# qu'un ping toutes les 100 ms, plus ses paquets de manette quand l'état
+# change : gâchette tenue (jeu de course), la vibration attendait le ping
+# suivant, jusqu'à 100 ms (~50 ms en moyenne). 5 ms ramène le pire cas à
+# 5 ms, pour ~200 réveils/s d'une boucle très légère. L'envoi lui-même est
+# déjà immédiat (enet_host_flush), comme la lecture uhid de libvirtualhid.
 FROM base AS sunshine-usb
 ARG SUNSHINE_TAG=""
 RUN --mount=type=cache,target=/var/cache/pacman/pkg \
@@ -70,6 +80,9 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     f=/src/src/platform/virtualhid_input.cpp && \
     sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
     { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
+    f=/src/src/stream.cpp && \
+    sed -i 's|server->iterate(150ms);|server->iterate(5ms);|' "$f" && \
+    { grep -q 'server->iterate(5ms);' "$f" || { echo "FATAL: patch latence vibrations non appliqué (Sunshine ${tag})"; exit 1; }; } && \
     commit="$(git -C /src rev-parse HEAD)" && \
     export BRANCH=master BUILD_VERSION="${ver}" COMMIT="${commit}" \
            CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
@@ -138,20 +151,23 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     echo "batocera-es ${ver}" > /out/batocera-es.version
 
 # ── xfce-panel-launcher — lanceur plein écran façon Launchpad macOS
-# (novik133, plugin C du panneau XFCE, GPL-2), ni paquet Arch ni AUR. Figé
-# sur un commit (XFCE_LAUNCHER_REF) : petit projet d'un seul auteur, testé
-# dans le conteneur le 25/09 sur ce commit.
+# (novik133, plugin C du panneau XFCE, GPL-2), ni paquet Arch ni AUR.
+# Dernier commit de main, comme le reste (figé sur un commit jusqu'au 15/11,
+# par simple prudence). novik133 est le compte actif de l'auteur, qui a perdu
+# l'accès à l'ancien (Axis0S). XFCE_LAUNCHER_REF : commit/branche/tag
+# imposé, vide = main.
 FROM base AS xfce-launcher
-ARG XFCE_LAUNCHER_REF=15dd4b2a42904c1de9e1aa777271f1d558613891
+ARG XFCE_LAUNCHER_REF=""
 RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     pacman -S --needed --noconfirm --noprogressbar gtk3 xfce4-panel libxfce4util xfconf && \
     git clone -q https://github.com/novik133/xfce-panel-launcher.git /src && \
-    cd /src && git checkout -q "${XFCE_LAUNCHER_REF}" && \
+    cd /src && { [ -z "${XFCE_LAUNCHER_REF}" ] || git checkout -q "${XFCE_LAUNCHER_REF}"; } && \
+    ver=$(git rev-parse HEAD) && \
     make && make install DESTDIR=/pkg PREFIX=/usr && \
     [ -f /pkg/usr/lib/xfce4/panel/plugins/libxfce-launcher.so ] \
       || { echo "FATAL: libxfce-launcher.so absent de l'installation"; exit 1; } && \
     mkdir -p /out && tar --zstd -cf /out/xfce-launcher.tar.zst -C /pkg . && \
-    echo "xfce-launcher ${XFCE_LAUNCHER_REF}" > /out/xfce-launcher.version
+    echo "xfce-launcher ${ver}" > /out/xfce-launcher.version
 
 # ── Export : tous les /out/* + versions.txt (notes de la release GitHub,
 # lu par make prebuilt-check).
