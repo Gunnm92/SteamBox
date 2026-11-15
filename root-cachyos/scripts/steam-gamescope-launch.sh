@@ -53,4 +53,14 @@ WIDTH="${SUNSHINE_CLIENT_WIDTH:-2560}"
 HEIGHT="${SUNSHINE_CLIENT_HEIGHT:-1440}"
 FPS="${SUNSHINE_CLIENT_FPS:-120}"
 
+# Applis Qt (Lichii, Eden, PCSX2, RPCS3, DuckStation…) en X11 dans gamescope
+# (15/11) : l'image exporte QT_QPA_PLATFORM=wayland, mais gamescope ne donne
+# pas de WAYLAND_DISPLAY à ses clients. Qt retombait alors sur wayland-0 (le
+# bureau labwc), hors de gamescope : la surface Vulkan échouait (Lichii :
+# « Failed to initialize Wayland surface », VK_ERROR_INITIALIZATION_FAILED)
+# et le jeu se fermait aussitôt. En xcb, elles s'affichent dans le Xwayland
+# de gamescope (DISPLAY fourni par gamescope). Sans effet sur gamescope
+# lui-même (SDL) ni sur Steam.
+export QT_QPA_PLATFORM=xcb
+
 exec gamescope --force-grab-cursor --backend sdl -W "${WIDTH}" -H "${HEIGHT}" -r "${FPS}" -f -e -C 0 --immediate-flips -- /usr/local/bin/steam -gamepadui

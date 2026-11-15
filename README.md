@@ -214,6 +214,11 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
   `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+- **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
+  journal de l'émulateur : « Failed to initialize Wayland surface ». La session
+  gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une
+  image plus ancienne, mettre `QT_QPA_PLATFORM=xcb %command%` dans les options
+  de lancement du raccourci.
 - **Un jeu ne se lance pas depuis EmulationStation** → ES affiche la cause
   (émulateur ou BIOS absent, format non pris en charge…) dans une boîte
   d'erreur : convention Batocera, code de sortie 250 et message dans
