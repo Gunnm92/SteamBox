@@ -309,7 +309,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
-      tumbler ffmpegthumbnailer xfce4-notifyd \
+      tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip \
       gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
