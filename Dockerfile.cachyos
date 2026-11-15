@@ -136,58 +136,16 @@
 # réussi et testé en production) ; pour bumper délibérément la base,
 # relancer `docker pull cachyos/cachyos-v3:latest` et copier le nouveau
 # digest ici, dans un commit dédié ("bump: base cachyos-v3").
-# ARG global : même base pour l'étape sunshine-usb ci-dessous.
+# Même digest dans Dockerfile.prebuilt (composants précompilés, 15/11) :
+# à bumper ensemble, puis relancer make prebuilt.
 ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
 
-# ── Étape sunshine-usb (02/10) : Sunshine compilé depuis le dernier tag
-# upstream (03/11 : le paquet CachyOS n'a pas de tag Git correspondant, son
-# numéro de build n'existe pas sur GitHub), avec sa DualSense virtuelle en
-# USB au lieu de Bluetooth. Les
-# libScePad de 2022 (F1 22, The Devil in Me, KOF XV) refusent la DualSense
-# Bluetooth : énumérée, jamais ouverte, aucune touche reçue. libvirtualhid
-# a les deux profils, mais Sunshine code "ds5" en dur sur dualsense()
-# (= Bluetooth) : sous Linux, SDL2 HIDAPI ignore une DualSense hidraw USB
-# sans vrai parent USB, ce qu'est un périphérique uhid. Ici, les jeux
-# passent par Wine/Proton (hidraw direct) et Steam gère la manette :
-# validé le 02/10 sur les jeux DualSense, XInput et ES. Compilée en
-# parallèle de l'image principale (BuildKit), refaite à chaque build
-# (BUILD_DATE) pour suivre le dernier tag ; le paquet sunshine n'est installé
-# que pour ses dépendances (Qt6, libva…) et sa web UI. CUDA comme le paquet
-# CachyOS (capture NvFBC).
-FROM ${CACHYOS_BASE} AS sunshine-usb
-ARG BUILD_DATE
-# Même réglage que l'étape principale (voir DisableSandboxNetwork plus bas) :
-# cette étape a sa propre image de base, pacman y refusait les hooks (locale,
-# ldconfig, systemd…) faute de ce réglage. Erreurs non bloquantes, mais hooks
-# non exécutés dans l'étape.
-RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
-    grep -q '^DisableSandboxNetwork' /etc/pacman.conf || { echo "FATAL: DisableSandboxNetwork non appliqué"; exit 1; }
-RUN --mount=type=cache,target=/var/cache/pacman/pkg \
-    echo "build ${BUILD_DATE}" && \
-    pacman -Syu --needed --noconfirm --noprogressbar base-devel git cmake boost boost-libs \
-      nodejs npm shaderc appstream appstream-glib desktop-file-utils python-jinja cuda sunshine && \
-    pkg=$(pacman -Q sunshine | cut -d' ' -f2) && \
-    tag=$(git ls-remote --tags --refs https://github.com/LizardByte/Sunshine.git 'v*' \
-          | sed 's|.*refs/tags/||' | sort -V | tail -1) && \
-    [ -n "${tag}" ] || { echo "FATAL: aucun tag Sunshine trouvé"; exit 1; } && \
-    ver="${tag#v}" && echo "Sunshine ${tag} (dernier tag upstream ; paquet CachyOS ${pkg})" && \
-    git clone --quiet --depth 1 --branch "${tag}" --recurse-submodules --shallow-submodules \
-      https://github.com/LizardByte/Sunshine.git /src && \
-    f=/src/src/platform/virtualhid_input.cpp && \
-    sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
-    { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
-    commit="$(git -C /src rev-parse HEAD)" && \
-    export BRANCH=master BUILD_VERSION="${ver}" COMMIT="${commit}" \
-           CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
-    cmake -S /src -B /build -Wno-dev -D BUILD_DOCS=OFF -D BUILD_WERROR=OFF -D BUILD_TESTS=OFF \
-      -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr \
-      -D SUNSHINE_EXECUTABLE_PATH=/usr/bin/sunshine -D SUNSHINE_ASSETS_DIR=share/sunshine \
-      -D SUNSHINE_PUBLISHER_NAME=LizardByte -D SUNSHINE_PUBLISHER_WEBSITE=https://app.lizardbyte.dev \
-      -D SUNSHINE_PUBLISHER_ISSUE_URL=https://app.lizardbyte.dev/support && \
-    cmake --build /build -j "$(nproc)" && \
-    mkdir -p /out && install -m 755 -s /build/sunshine /out/sunshine && echo "${ver}" > /out/version && \
-    DESTDIR=/out/root cmake --install /build >/dev/null && \
-    [ -f /out/root/usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI absente de l'installation Sunshine ${tag}"; exit 1; }
+# Composants précompilés (15/11) — evdev-bridge, Sunshine DualSense USB,
+# Batocera EmulationStation, xfce-panel-launcher et freeimage ne sont plus
+# compilés ici : Dockerfile.prebuilt les construit à la demande (make
+# prebuilt, quand make prebuilt-check signale une nouvelle version) et les
+# publie en release GitHub du dépôt (make prebuilt-publish) ; chaque bloc
+# ci-dessous les installe par root-cachyos/build/prebuilt-fetch.
 
 FROM ${CACHYOS_BASE}
 
@@ -518,12 +476,8 @@ git clone --depth 1 https://aur.archlinux.org/python-aiohttp-cors.git
 cd python-aiohttp-cors
 makepkg -si --noconfirm --needed --nocheck
 
-# freeimage (24/09) : dépendance de build ET d'exécution de Batocera
-# EmulationStation (bloc 1a7), retirée des dépôts officiels Arch.
-cd /tmp
-git clone --depth 1 https://aur.archlinux.org/freeimage.git
-cd freeimage
-makepkg -si --noconfirm --needed
+# freeimage (dépendance d'ES, AUR) : précompilé depuis le 15/11, voir
+# prebuilt-fetch --pkg freeimage plus bas.
 BUILD_AUR_EOF
 
 RUN chown aur-builder:aur-builder /tmp/build-aur.sh && \
@@ -532,7 +486,7 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh && \
     rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh && \
     userdel -r aur-builder && \
     rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin \
-           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors /tmp/freeimage && \
+           /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors && \
     pacman -Rns --noconfirm meson ninja && \
     rm -rf /var/cache/pacman/pkg/*
 
@@ -567,6 +521,20 @@ RUN chmod +x /usr/local/bin/systemctl
 # détail). Placés hors du PATH (outils de build, quelques Ko).
 COPY root-cachyos/build/ /usr/local/lib/steambox-build/
 RUN chmod +x /usr/local/lib/steambox-build/*
+
+# PREBUILT_TAG (15/11) : release GitHub des composants précompilés
+# (Dockerfile.prebuilt), lue par prebuilt-fetch ; vide = dernière release.
+# make push PREBUILT_TAG=prebuilt-AAAAMMJJ-HHMM pour revenir à une version.
+# PREBUILT_REPO : dépôt GitHub qui porte ces releases (fork : le sien).
+ARG PREBUILT_TAG=""
+ARG PREBUILT_REPO=Gunnm92/SteamBox
+
+# freeimage (24/09) : dépendance d'exécution de Batocera EmulationStation
+# (bloc 1a7), retirée des dépôts officiels Arch (AUR-only). Paquet pacman
+# précompilé (Dockerfile.prebuilt) : pacman -U tire ses dépendances.
+RUN --mount=type=secret,id=github_token \
+    /usr/local/lib/steambox-build/prebuilt-fetch --pkg freeimage && \
+    rm -rf /var/cache/pacman/pkg/*
 
 # Heroic (Epic/GOG/Amazon) : retiré de l'image (25/10). Installé comme AppImage
 # par AppManager dans ~/Applications ; lancé par /usr/local/bin/heroic.
@@ -772,12 +740,9 @@ RUN --mount=type=secret,id=github_token \
 # de médias (./covers/, ./videos/, ./marquees/...), tels que RomM/Batocera
 # les écrivent — ES-DE, lui, ignore ces chemins (arborescence de médias
 # propre). Pas de paquet ni de release binaire : compilé depuis les sources
-# (instructions Arch officielles du README), freeimage vient d'AUR (bloc
-# build-aur.sh plus haut). ES_REF : branche/tag, vide = branche par défaut.
-#   -DGL=ON          OpenGL bureau (NVIDIA/Mesa), pas GLES
-#   -DCEC=OFF        pas de HDMI-CEC dans un conteneur
-#   -DENABLE_PULSE=ON contrôle du volume via PulseAudio/PipeWire au lieu
-#                    d'ALSA ("Failed to attach to default card" sinon)
+# dans Dockerfile.prebuilt (options de build et ES_REF y sont documentés),
+# installé ici précompilé ; freeimage est installé plus haut (prebuilt-fetch
+# --pkg freeimage).
 # Les systèmes (es_systems.cfg) et réglages par défaut sont écrits au
 # démarrage par init_emulationstation.sh ; chaque jeu passe par
 # game-launch.sh. Thème Carbon (celui de Batocera, dépôt amont référencé
@@ -789,23 +754,10 @@ RUN --mount=type=secret,id=github_token \
 # par le build Windows — installées ailleurs, ES restait en anglais malgré
 # LANG=fr_FR.UTF-8 (confirmé en direct, deux fois). vlc-plugin-ffmpeg : décodage H.264/AAC des vidéos
 # d'aperçu (MP4) par libVLC — sans lui, aucun décodeur H.264 logiciel.
-ARG ES_REF=""
-RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
+RUN --mount=type=secret,id=github_token \
+    pacman -S --noconfirm --needed glu sdl2_mixer \
       libvlc vlc-plugins-base vlc-plugin-ffmpeg && \
-    git clone --recursive --depth 1 ${ES_REF:+--branch "${ES_REF}"} \
-      https://github.com/batocera-linux/batocera-emulationstation.git /tmp/batocera-es && \
-    cd /tmp/batocera-es && \
-    git log -1 --format='batocera-emulationstation %h (%cs)' && \
-    cmake -DGL=ON -DCEC=OFF -DENABLE_PULSE=ON -DCMAKE_BUILD_TYPE=Release . && \
-    make -j"$(nproc)" && \
-    mkdir -p /opt/batocera-es && \
-    strip -o /opt/batocera-es/emulationstation emulationstation && \
-    cp -a resources /opt/batocera-es/ && \
-    for d in locale/lang/*/; do \
-      [ -f "${d}LC_MESSAGES/emulationstation2.mo" ] || continue; \
-      install -Dm644 "${d}LC_MESSAGES/emulationstation2.mo" \
-        "/usr/share/locale/$(basename "${d}")/LC_MESSAGES/emulationstation2.mo"; \
-    done && \
+    /usr/local/lib/steambox-build/prebuilt-fetch batocera-es && \
     [ -f /usr/share/locale/fr/LC_MESSAGES/emulationstation2.mo ] \
       || { echo "FATAL: traduction française d'ES absente"; exit 1; } && \
     git clone --depth 1 https://github.com/fabricecaruso/es-theme-carbon.git \
@@ -813,11 +765,9 @@ RUN pacman -S --noconfirm --needed cmake boost rapidjson glu sdl2_mixer \
     rm -rf /usr/share/emulationstation/themes/es-theme-carbon/.git && \
     printf '[Desktop Entry]\nType=Application\nName=EmulationStation\nExec=/opt/batocera-es/emulationstation\nIcon=/opt/batocera-es/resources/window_icon_256.png\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/emulationstation.desktop && \
-    cd / && rm -rf /tmp/batocera-es && \
-    pacman -Rns --noconfirm cmake boost rapidjson && \
     rm -rf /var/cache/pacman/pkg/* && \
     if ldd /opt/batocera-es/emulationstation | grep -q "not found"; then \
-      echo "FATAL: bibliothèque manquante pour emulationstation"; exit 1; \
+      echo "FATAL: bibliothèque manquante pour emulationstation (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \
     fi
 
 # Manettes par défaut d'ES (consulté quand ~/.emulationstation/es_input.cfg
@@ -924,32 +874,31 @@ RUN git clone -q https://github.com/vinceliuice/WhiteSur-icon-theme.git /tmp/wsi
 # ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
 # novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau
 # (GPL-2), ni paquet Arch ni AUR, compilé depuis les sources avec son
-# Makefile simple. Figé sur un commit (XFCE_LAUNCHER_REF) : petit projet
-# d'un seul auteur, testé dans le conteneur le 25/09 sur ce commit. Seul
+# Makefile simple, précompilé dans Dockerfile.prebuilt, figé sur un commit
+# (XFCE_LAUNCHER_REF, défini là-bas) : petit projet d'un seul auteur, testé
+# dans le conteneur le 25/09 sur ce commit. Seul
 # gtk_window_fullscreen côté fenêtre, rien de propre à X11 : fonctionne sous
 # labwc. À ajouter au panneau par clic droit > Panneau > Ajouter des éléments.
-ARG XFCE_LAUNCHER_REF=15dd4b2a42904c1de9e1aa777271f1d558613891
-RUN git clone -q https://github.com/novik133/xfce-panel-launcher.git /tmp/xpl && \
-    cd /tmp/xpl && git checkout -q "${XFCE_LAUNCHER_REF}" && \
-    make && make install PREFIX=/usr && \
-    cd / && rm -rf /tmp/xpl && \
+RUN --mount=type=secret,id=github_token \
+    /usr/local/lib/steambox-build/prebuilt-fetch xfce-launcher && \
     if ldd /usr/lib/xfce4/panel/plugins/libxfce-launcher.so | grep -q "not found"; then \
-      echo "FATAL: bibliothèque manquante pour libxfce-launcher.so"; exit 1; \
+      echo "FATAL: bibliothèque manquante pour libxfce-launcher.so (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \
     fi
 
-# ── 1a7e. Sunshine en DualSense USB (02/10) — binaire de l'étape
-# sunshine-usb à la place de celui du paquet (gardé pour ses dépendances,
-# web UI et ses shaders, installés depuis le même tag que le binaire : la web
-# UI du paquet ne correspondrait pas au binaire compilé (03/11). Avant le
-# setcap de /usr/bin/sunshine (plus bas), qu'une copie après effacerait.
-COPY --from=sunshine-usb /out/ /tmp/sunshine-usb/
-RUN pkg=$(pacman -Q sunshine | cut -d' ' -f2) && built=$(cat /tmp/sunshine-usb/version) && \
-    echo "Sunshine USB ${built} : binaire et web UI du même tag (paquet CachyOS ${pkg}, dépendances seules)" && \
-    install -m 755 /tmp/sunshine-usb/sunshine /usr/bin/sunshine && \
-    rm -rf /usr/share/sunshine && cp -a /tmp/sunshine-usb/root/usr/share/sunshine /usr/share/sunshine && \
-    rm -rf /tmp/sunshine-usb && \
+# ── 1a7e. Sunshine en DualSense USB (02/10) — binaire précompilé (étape
+# sunshine-usb de Dockerfile.prebuilt, qui documente le pourquoi du patch) à
+# la place de celui du paquet, gardé pour ses dépendances seules. Web UI et
+# shaders viennent du même tag que le binaire : la web UI du paquet ne
+# correspondrait pas au binaire compilé (03/11), d'où l'effacement de
+# /usr/share/sunshine avant extraction. Avant le setcap de /usr/bin/sunshine
+# (plus bas), qu'une copie après effacerait.
+RUN --mount=type=secret,id=github_token \
+    echo "Sunshine : paquet CachyOS $(pacman -Q sunshine | cut -d' ' -f2), dépendances seules" && \
+    rm -rf /usr/share/sunshine && \
+    /usr/local/lib/steambox-build/prebuilt-fetch sunshine-usb && \
+    [ -f /usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI Sunshine absente de l'archive"; exit 1; } && \
     if ldd /usr/bin/sunshine | grep -q "not found"; then \
-      echo "FATAL: bibliothèque manquante pour sunshine"; exit 1; \
+      echo "FATAL: bibliothèque manquante pour sunshine (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \
     fi
 
 # ── 1a8. wsquashfs-launcher — NI dans l'image NI en /usr/local/bin (06/11).
@@ -1192,10 +1141,15 @@ RUN --mount=type=secret,id=github_token \
 # manquant, EGL_BAD_ACCESS) — confirmé aussi par le projet Wolf (games-on-
 # whales), qui a abandonné gamescope pour la même raison. Bridge libei
 # retiré : code mort sans cible fonctionnelle.
-COPY evdev-bridge /tmp/evdev-bridge
-RUN make -C /tmp/evdev-bridge evdev-bridge-native && \
-    install -Dm755 /tmp/evdev-bridge/evdev-bridge-native /usr/local/bin/evdev-bridge-native && \
-    rm -rf /tmp/evdev-bridge
+#
+# Précompilé (15/11) dans Dockerfile.prebuilt depuis evdev-bridge/ : après
+# une modification de bridge.c, relancer make prebuilt + make prebuilt-publish
+# (make prebuilt-check compare le dernier commit du dossier à la release).
+RUN --mount=type=secret,id=github_token \
+    /usr/local/lib/steambox-build/prebuilt-fetch evdev-bridge && \
+    if ldd /usr/local/bin/evdev-bridge-native | grep -q "not found"; then \
+      echo "FATAL: bibliothèque manquante pour evdev-bridge-native (relancer make prebuilt)"; exit 1; \
+    fi
 
 # ── 1c. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 # wayvnc sert le RFB brut (5900, interne, voir svc-wayvnc) ; websockify (pip,

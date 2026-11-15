@@ -1,0 +1,48 @@
+#!/bin/bash
+# Installe un composant précompilé de SteamBox (outil de BUILD uniquement,
+# voir Dockerfile.cachyos) — archives produites par Dockerfile.prebuilt
+# (make prebuilt) et publiées en release GitHub du dépôt (make
+# prebuilt-publish), au lieu de recompiler à chaque make push.
+#
+# Usage : prebuilt-fetch <nom>          archive <nom>.tar.zst extraite dans /
+#         prebuilt-fetch --pkg <nom>    paquet <nom>.pkg.tar.zst, pacman -U
+#
+# PREBUILT_TAG (env) : tag de release ("prebuilt-AAAAMMJJ-HHMM"), vide =
+# dernière release. PREBUILT_REPO (env) : dépôt GitHub, Gunnm92/SteamBox par
+# défaut. La version embarquée (<nom>.version, même release) est affichée
+# dans le log du build.
+set -euo pipefail
+
+pkg=0
+if [ "${1:-}" = "--pkg" ]; then
+    pkg=1
+    shift
+fi
+name="${1:?usage: prebuilt-fetch [--pkg] <nom>}"
+repo="${PREBUILT_REPO:-Gunnm92/SteamBox}"
+tag="${PREBUILT_TAG:-}"
+here="$(dirname "$(readlink -f "$0")")"
+
+if [ "${pkg}" = 1 ]; then
+    file="${name}.pkg.tar.zst"
+else
+    file="${name}.tar.zst"
+fi
+# Nom d'asset exact (regex ancrée sur "/<fichier>$" de l'URL de téléchargement).
+re_file="${file//./\\.}"
+re_version="${name//./\\.}\\.version"
+
+url=$("${here}/gh-asset-url" "${repo}" "${tag}" "/${re_file}\$")
+version_url=$("${here}/gh-asset-url" "${repo}" "${tag}" "/${re_version}\$")
+
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+curl -fsSL --retry 3 -o "${tmp}/${file}" "${url}"
+curl -fsSL --retry 3 -o "${tmp}/version" "${version_url}"
+echo "précompilé : $(cat "${tmp}/version") (${url})"
+
+if [ "${pkg}" = 1 ]; then
+    pacman -U --noconfirm --noprogressbar "${tmp}/${file}"
+else
+    tar --zstd -xf "${tmp}/${file}" -C / --no-same-owner --no-overwrite-dir
+fi

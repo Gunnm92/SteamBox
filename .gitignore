@@ -21,3 +21,6 @@ local.mk
 
 # Cache Python (vérification locale des scripts)
 __pycache__/
+
+# Composants précompilés (make prebuilt), publiés en release GitHub
+prebuilt/out/

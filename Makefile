@@ -58,12 +58,34 @@ ifdef GITHUB_TOKEN
 BUILD_ARGS  += --secret id=github_token,env=GITHUB_TOKEN
 endif
 
-.PHONY: build push run stop logs clean lint help
+# Composants précompilés (15/11) — evdev-bridge, Sunshine DualSense USB,
+# Batocera ES, xfce-panel-launcher, freeimage : construits par
+# Dockerfile.prebuilt (make prebuilt, à la demande), publiés en release
+# GitHub de PREBUILT_REPO (make prebuilt-publish), téléchargés par make
+# build/push au lieu d'être recompilés. PREBUILT_TAG vide = dernière release ;
+# make push PREBUILT_TAG=prebuilt-AAAAMMJJ-HHMM pour revenir en arrière.
+# make prebuilt-check dit s'il faut relancer make prebuilt (nouvelle version
+# amont, ou evdev-bridge/ modifié).
+PREBUILT_REPO ?= Gunnm92/SteamBox
+PREBUILT_TAG  ?=
+BUILD_ARGS   += --build-arg PREBUILT_REPO=$(PREBUILT_REPO)
+ifneq ($(PREBUILT_TAG),)
+BUILD_ARGS   += --build-arg PREBUILT_TAG=$(PREBUILT_TAG)
+endif
+# Surcharges du build précompilé : ES_REF (branche/tag d'ES), SUNSHINE_TAG
+# (tag Sunshine, vide = dernier v*), XFCE_LAUNCHER_REF (commit du lanceur).
+PREBUILT_ARGS = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                --build-arg EVDEV_REF=$(shell git log -1 --format=%h -- evdev-bridge) \
+                $(if $(ES_REF),--build-arg ES_REF=$(ES_REF)) \
+                $(if $(SUNSHINE_TAG),--build-arg SUNSHINE_TAG=$(SUNSHINE_TAG)) \
+                $(if $(XFCE_LAUNCHER_REF),--build-arg XFCE_LAUNCHER_REF=$(XFCE_LAUNCHER_REF))
+
+.PHONY: build push run stop logs clean lint help prebuilt prebuilt-publish prebuilt-check
 
 # Fichiers shell du dépôt : scripts de session/init, outils de build, et
 # les "run" s6 (shebang with-contenv, non reconnu par shellcheck d'où -s bash).
 SHELL_FILES  = root-cachyos/scripts root-cachyos/build root-cachyos/usr/local/bin \
-               root-cachyos/etc/s6-overlay/s6-rc.d
+               root-cachyos/etc/s6-overlay/s6-rc.d prebuilt/check.sh
 
 # Seul Dockerfile restant depuis le pivot Waybox -> SteamBox (Dockerfile et
 # Dockerfile.ubuntu supprimés — plus de variante webstation/Debian ni
@@ -84,6 +106,28 @@ push:
 		--file Dockerfile.cachyos \
 		--output type=image,name=$(PUSH_IMAGE),push=true$(if $(PUSH_INSECURE),$(comma)registry.insecure=true) \
 		.
+
+# Export local (type=local) : BuildKit renvoie les fichiers au client, ça
+# marche aussi avec un démon distant (docker-socket-proxy), sans registre.
+# Dossier vidé avant : l'export n'efface pas les fichiers d'un ancien build.
+prebuilt:
+	rm -rf prebuilt/out
+	$(BUILDX) $(PREBUILT_ARGS) \
+		--file Dockerfile.prebuilt \
+		--output type=local,dest=prebuilt/out \
+		.
+	@cat prebuilt/out/versions.txt
+
+prebuilt-publish:
+	@test -f prebuilt/out/versions.txt || { echo "prebuilt/out/ vide : lancer make prebuilt d'abord"; exit 1; }
+	tag=prebuilt-$$(date -u +%Y%m%d-%H%M) && \
+	gh release create "$$tag" --repo $(PREBUILT_REPO) --latest \
+		--title "Composants précompilés $$tag" --notes-file prebuilt/out/versions.txt \
+		prebuilt/out/*.tar.zst prebuilt/out/*.version prebuilt/out/versions.txt && \
+	echo "Publié : $$tag (pris par le prochain make push)"
+
+prebuilt-check:
+	@prebuilt/check.sh $(PREBUILT_REPO)
 
 run:
 	$(COMPOSE) up -d
@@ -118,12 +162,18 @@ lint:
 	$(DOCKER) run --rm -i hadolint/hadolint hadolint --no-color --failure-threshold warning \
 		--ignore DL3059 --ignore DL4006 --ignore DL3003 --ignore DL3010 --ignore DL3013 \
 		- < Dockerfile.cachyos
+	$(DOCKER) run --rm -i hadolint/hadolint hadolint --no-color --failure-threshold warning \
+		--ignore DL3059 --ignore DL4006 --ignore DL3003 --ignore DL3010 --ignore DL3013 \
+		- < Dockerfile.prebuilt
 
 help:
 	@echo "Targets:"
 	@echo "  lint     shellcheck + hadolint (via Docker)"
 	@echo "  build    Build l'image localement (--load)"
 	@echo "  push     Build + push vers $(PUSH_REGISTRY)$(if $(filter-out $(REGISTRY),$(PUSH_REGISTRY)), (tiree ensuite via $(REGISTRY)))"
+	@echo "  prebuilt          Compile les composants precompiles (Dockerfile.prebuilt) dans prebuilt/out/"
+	@echo "  prebuilt-publish  Publie prebuilt/out/ en release GitHub de $(PREBUILT_REPO) (gh)"
+	@echo "  prebuilt-check    Compare la derniere release a l'amont (faut-il relancer make prebuilt ?)"
 	@echo "  run      docker compose up -d"
 	@echo "  stop     docker compose down"
 	@echo "  logs     Suivre les logs du conteneur"
@@ -137,3 +187,6 @@ help:
 	@echo "  TAG            $(TAG)"
 	@echo "  GITHUB_TOKEN   (non defini si vide)"
 	@echo "  WSQUASHFS_REF  $(WSQUASHFS_REF)  (commit du lanceur embarque)"
+	@echo "  PREBUILT_REPO  $(PREBUILT_REPO)  (releases des composants precompiles)"
+	@echo "  PREBUILT_TAG   $(if $(PREBUILT_TAG),$(PREBUILT_TAG),(derniere release))"
+	@echo "  ES_REF / SUNSHINE_TAG / XFCE_LAUNCHER_REF  surcharges de make prebuilt"

@@ -5,7 +5,7 @@
 # réintègre que ce que Dockerfile.cachyos COPY réellement.
 *
 !root-cachyos/
-!evdev-bridge/
+# evdev-bridge/ : précompilé par Dockerfile.prebuilt (15/11), plus copié ici.
 
 # Cache Python des scripts, jamais dans l'image
 **/__pycache__

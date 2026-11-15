@@ -45,8 +45,8 @@ bureau d'administration du flux de jeu :
   Input (hidraw — voir la règle udev
   [99-steambox-hidraw-fallback.rules](root-cachyos/etc/udev/rules.d/99-steambox-hidraw-fallback.rules)).
   La DualSense virtuelle est en **USB** et non en Bluetooth comme dans le
-  Sunshine d'origine : l'image compile Sunshine avec ce seul changement
-  (étape `sunshine-usb` du Dockerfile), sans quoi les jeux à `libScePad` de
+  Sunshine d'origine : Sunshine est compilé avec ce seul changement
+  (étape `sunshine-usb` de [Dockerfile.prebuilt](Dockerfile.prebuilt)), sans quoi les jeux à `libScePad` de
   2022 (F1 22…) ignorent la manette.
 
 ## Applications Sunshine
@@ -108,6 +108,31 @@ make push GITHUB_TOKEN=…   # recommandé : évite le rate-limit API GitHub
                            # (~18 requêtes/build, limite anonyme 60/h/IP)
 make lint                  # shellcheck + hadolint (via Docker, rien à installer)
 ```
+
+### Composants précompilés
+
+evdev-bridge, Sunshine (DualSense USB), Batocera EmulationStation,
+xfce-panel-launcher et freeimage ne sont **plus compilés à chaque
+`make push`**. [Dockerfile.prebuilt](Dockerfile.prebuilt) les construit à la
+demande, et ils sont publiés en release GitHub du dépôt (`prebuilt-AAAAMMJJ-HHMM`).
+L'image télécharge la dernière release
+([prebuilt-fetch](root-cachyos/build/prebuilt-fetch)).
+
+```bash
+make prebuilt-check        # compare la dernière release à l'amont (dernier tag
+                           # Sunshine, HEAD d'ES, AUR freeimage, evdev-bridge/)
+make prebuilt              # compile tout dans prebuilt/out/ (aucun registre)
+make prebuilt-publish      # publie prebuilt/out/ en release GitHub (gh)
+make push                  # l'image prend la nouvelle release
+make push PREBUILT_TAG=prebuilt-…   # revenir à une release précédente
+```
+
+À relancer quand `prebuilt-check` signale une nouvelle version, après une
+modification de `evdev-bridge/`, ou si un build de l'image échoue sur
+« bibliothèque manquante … relancer make prebuilt ». CachyOS est une distribution rolling : une
+bibliothèque peut changer de soname. Surcharges possibles : `ES_REF`,
+`SUNSHINE_TAG`, `XFCE_LAUNCHER_REF`. La base CachyOS (digest) se bumpe dans
+les deux Dockerfile ensemble.
 
 `wsquashfs-launcher` n'est plus dans l'image. `init_wsquashfs.sh` l'installe
 une seule fois dans `/config/.local/bin` (le home persistant, comme l'installeur
@@ -184,7 +209,9 @@ passer par un VPN ou un reverse proxy authentifié en amont.
 
 ```
 Dockerfile.cachyos          # l'image — historique des architectures en tête
-Makefile                    # build/push/run (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN/WSQUASHFS_REF)
+Dockerfile.prebuilt         # composants précompilés (make prebuilt → release GitHub)
+Makefile                    # build/push/run/prebuilt (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN/WSQUASHFS_REF/PREBUILT_TAG)
+prebuilt/check.sh           # make prebuilt-check ; prebuilt/out/ = sortie de make prebuilt (ignorée)
 docker-compose.yml          # compose générique, complété par l'override du profil
 docs/                       # configuration (profils, variables), déploiement Unraid
 profiles/
@@ -194,9 +221,9 @@ root-cachyos/
   etc/s6-overlay/           # services s6 (labwc ×2, sunshine, wayvnc, evdev-bridge…)
   etc/udev/rules.d/         # règles manettes (hidraw fallback)
   scripts/                  # session Wayland, init_*, lanceurs, steambox-env.sh (variables)
-  build/                    # outils de build (gh-asset-url, install-appimage)
+  build/                    # outils de build (gh-asset-url, install-appimage, prebuilt-fetch)
   usr/local/bin/            # install driver NVIDIA userspace (matché à l'hôte)
-evdev-bridge/               # pont uinput→Wayland pour l'input Sunshine (C, vendored)
+evdev-bridge/               # pont uinput→Wayland pour l'input Sunshine (C, vendored, précompilé)
 Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignorée par git)
 ```
 

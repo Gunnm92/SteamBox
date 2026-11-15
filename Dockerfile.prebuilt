@@ -1,0 +1,167 @@
+# syntax=docker/dockerfile:1
+# Composants précompilés de SteamBox (15/11) — tout ce que Dockerfile.cachyos
+# compilait jusqu'ici à chaque make push alors que ça ne bouge presque jamais.
+# Construit à la main (make prebuilt) quand une nouvelle version sort
+# (make prebuilt-check le signale), exporté en local (prebuilt/out/) puis
+# publié en release GitHub du dépôt (make prebuilt-publish). L'image
+# principale télécharge ces archives (root-cachyos/build/prebuilt-fetch).
+#
+# Chaque étape produit /out/<nom>.tar.zst (arborescence relative à /, extraite
+# telle quelle dans l'image) et /out/<nom>.version (une ligne). freeimage est
+# un vrai paquet pacman (.pkg.tar.zst), installé par pacman -U pour que ses
+# dépendances d'exécution viennent des dépôts.
+#
+# Même base que l'image principale (digest épinglé) : mêmes bibliothèques au
+# moment du build. CachyOS est une distribution rolling, donc un soname peut
+# changer entre deux make push : les contrôles ldd de Dockerfile.cachyos
+# échouent alors franchement, il faut relancer make prebuilt.
+ARG CACHYOS_BASE=cachyos/cachyos-v3@sha256:8ab75658c3b5f7440615d533331c9f29896f9c9e2a92d4e8760f0d16f005b3a9
+
+# ── Base commune : toolchain + DisableSandboxNetwork (sans lui, pacman refuse
+# les hooks dans une étape de build — voir Dockerfile.cachyos).
+FROM ${CACHYOS_BASE} AS base
+ARG BUILD_DATE
+RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
+    grep -q '^DisableSandboxNetwork' /etc/pacman.conf || { echo "FATAL: DisableSandboxNetwork non appliqué"; exit 1; }
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    echo "build ${BUILD_DATE}" && \
+    pacman -Syu --needed --noconfirm --noprogressbar base-devel git cmake zstd
+
+# ── evdev-bridge — pont uinput→Wayland (source vendored dans evdev-bridge/).
+# EVDEV_REF : dernier commit touchant evdev-bridge/ (passé par le Makefile).
+FROM base AS evdev-bridge
+ARG EVDEV_REF=unknown
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    pacman -S --needed --noconfirm --noprogressbar wayland libxkbcommon
+COPY evdev-bridge /src
+RUN make -C /src evdev-bridge-native && \
+    install -Dm755 /src/evdev-bridge-native /pkg/usr/local/bin/evdev-bridge-native && \
+    mkdir -p /out && tar --zstd -cf /out/evdev-bridge.tar.zst -C /pkg . && \
+    echo "evdev-bridge ${EVDEV_REF}" > /out/evdev-bridge.version
+
+# ── Sunshine DualSense USB (02/10) — compilé depuis le dernier tag upstream
+# (03/11 : le paquet CachyOS n'a pas de tag Git correspondant, son numéro de
+# build n'existe pas sur GitHub), avec sa DualSense virtuelle en USB au lieu
+# de Bluetooth. Les libScePad de 2022 (F1 22, The Devil in Me, KOF XV)
+# refusent la DualSense Bluetooth : énumérée, jamais ouverte, aucune touche
+# reçue. libvirtualhid a les deux profils, mais Sunshine code "ds5" en dur
+# sur dualsense() (= Bluetooth) : sous Linux, SDL2 HIDAPI ignore une
+# DualSense hidraw USB sans vrai parent USB, ce qu'est un périphérique uhid.
+# Ici, les jeux passent par Wine/Proton (hidraw direct) et Steam gère la
+# manette : validé le 02/10 sur les jeux DualSense, XInput et ES. Le paquet
+# sunshine n'est installé que pour tirer les dépendances de build ; l'image
+# principale le garde pour ses dépendances d'exécution. CUDA comme le paquet
+# CachyOS (capture NvFBC). SUNSHINE_TAG vide = dernier tag v*.
+FROM base AS sunshine-usb
+ARG SUNSHINE_TAG=""
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    pacman -S --needed --noconfirm --noprogressbar boost boost-libs \
+      nodejs npm shaderc appstream appstream-glib desktop-file-utils python-jinja cuda sunshine && \
+    pkg=$(pacman -Q sunshine | cut -d' ' -f2) && \
+    tag="${SUNSHINE_TAG}" && \
+    if [ -z "${tag}" ]; then \
+      tag=$(git ls-remote --tags --refs https://github.com/LizardByte/Sunshine.git 'v*' \
+            | sed 's|.*refs/tags/||' | sort -V | tail -1); \
+    fi && \
+    [ -n "${tag}" ] || { echo "FATAL: aucun tag Sunshine trouvé"; exit 1; } && \
+    ver="${tag#v}" && echo "Sunshine ${tag} (paquet CachyOS ${pkg})" && \
+    git clone --quiet --depth 1 --branch "${tag}" --recurse-submodules --shallow-submodules \
+      https://github.com/LizardByte/Sunshine.git /src && \
+    f=/src/src/platform/virtualhid_input.cpp && \
+    sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
+    { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
+    commit="$(git -C /src rev-parse HEAD)" && \
+    export BRANCH=master BUILD_VERSION="${ver}" COMMIT="${commit}" \
+           CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
+    cmake -S /src -B /build -Wno-dev -D BUILD_DOCS=OFF -D BUILD_WERROR=OFF -D BUILD_TESTS=OFF \
+      -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr \
+      -D SUNSHINE_EXECUTABLE_PATH=/usr/bin/sunshine -D SUNSHINE_ASSETS_DIR=share/sunshine \
+      -D SUNSHINE_PUBLISHER_NAME=LizardByte -D SUNSHINE_PUBLISHER_WEBSITE=https://app.lizardbyte.dev \
+      -D SUNSHINE_PUBLISHER_ISSUE_URL=https://app.lizardbyte.dev/support && \
+    cmake --build /build -j "$(nproc)" && \
+    DESTDIR=/root-install cmake --install /build >/dev/null && \
+    [ -f /root-install/usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI absente de l'installation Sunshine ${tag}"; exit 1; } && \
+    install -Dm755 -s /build/sunshine /pkg/usr/bin/sunshine && \
+    mkdir -p /pkg/usr/share && cp -a /root-install/usr/share/sunshine /pkg/usr/share/sunshine && \
+    mkdir -p /out && tar --zstd -cf /out/sunshine-usb.tar.zst -C /pkg . && \
+    echo "sunshine-usb ${tag}" > /out/sunshine-usb.version
+
+# ── freeimage (AUR) — dépendance de build ET d'exécution de Batocera ES,
+# retirée des dépôts officiels Arch. makepkg refuse root : utilisateur
+# temporaire. Sortie = paquet pacman (installé par pacman -U dans l'image).
+FROM base AS freeimage
+RUN useradd -m aur-builder && \
+    echo 'aur-builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/aur-builder
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    su aur-builder -c 'cd /tmp && git clone --depth 1 https://aur.archlinux.org/freeimage.git && \
+      cd freeimage && makepkg -s --noconfirm --needed' && \
+    mkdir -p /out && \
+    pkgfile=$(find /tmp/freeimage -maxdepth 1 -name 'freeimage-*.pkg.tar.zst' ! -name '*-debug-*' | head -1) && \
+    [ -n "${pkgfile}" ] || { echo "FATAL: paquet freeimage non produit"; exit 1; } && \
+    cp "${pkgfile}" /out/freeimage.pkg.tar.zst && \
+    echo "freeimage $(basename "${pkgfile}" .pkg.tar.zst)" > /out/freeimage.version
+
+# ── Batocera EmulationStation (24/09) — pas de paquet ni de release binaire,
+# compilé depuis les sources (instructions Arch officielles du README).
+# ES_REF : branche/tag, vide = branche par défaut.
+#   -DGL=ON          OpenGL bureau (NVIDIA/Mesa), pas GLES
+#   -DCEC=OFF        pas de HDMI-CEC dans un conteneur
+#   -DENABLE_PULSE=ON contrôle du volume via PulseAudio/PipeWire au lieu
+#                    d'ALSA ("Failed to attach to default card" sinon)
+# Traductions (.mo) dans /usr/share/locale : sous Linux ES passe par gettext
+# (bindtextdomain sur ./locale/lang relatif au dossier COURANT, sinon
+# /usr/share/locale) ; resources/locale n'est lu que par le build Windows.
+FROM base AS batocera-es
+ARG ES_REF=""
+COPY --from=freeimage /out/freeimage.pkg.tar.zst /tmp/freeimage.pkg.tar.zst
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    pacman -U --noconfirm --noprogressbar /tmp/freeimage.pkg.tar.zst && \
+    pacman -S --needed --noconfirm --noprogressbar boost rapidjson glu sdl2_mixer \
+      libvlc vlc-plugins-base vlc-plugin-ffmpeg libpulse curl freetype2 fribidi alsa-lib systemd-libs && \
+    git clone --recursive --depth 1 ${ES_REF:+--branch "${ES_REF}"} \
+      https://github.com/batocera-linux/batocera-emulationstation.git /src && \
+    cd /src && \
+    ver=$(git log -1 --format='%h (%cs)') && echo "batocera-emulationstation ${ver}" && \
+    cmake -DGL=ON -DCEC=OFF -DENABLE_PULSE=ON -DCMAKE_BUILD_TYPE=Release . && \
+    make -j"$(nproc)" && \
+    mkdir -p /pkg/opt/batocera-es && \
+    strip -o /pkg/opt/batocera-es/emulationstation emulationstation && \
+    cp -a resources /pkg/opt/batocera-es/ && \
+    for d in locale/lang/*/; do \
+      [ -f "${d}LC_MESSAGES/emulationstation2.mo" ] || continue; \
+      install -Dm644 "${d}LC_MESSAGES/emulationstation2.mo" \
+        "/pkg/usr/share/locale/$(basename "${d}")/LC_MESSAGES/emulationstation2.mo"; \
+    done && \
+    [ -f /pkg/usr/share/locale/fr/LC_MESSAGES/emulationstation2.mo ] \
+      || { echo "FATAL: traduction française d'ES absente"; exit 1; } && \
+    mkdir -p /out && tar --zstd -cf /out/batocera-es.tar.zst -C /pkg . && \
+    echo "batocera-es ${ver}" > /out/batocera-es.version
+
+# ── xfce-panel-launcher — lanceur plein écran façon Launchpad macOS
+# (novik133, plugin C du panneau XFCE, GPL-2), ni paquet Arch ni AUR. Figé
+# sur un commit (XFCE_LAUNCHER_REF) : petit projet d'un seul auteur, testé
+# dans le conteneur le 25/09 sur ce commit.
+FROM base AS xfce-launcher
+ARG XFCE_LAUNCHER_REF=15dd4b2a42904c1de9e1aa777271f1d558613891
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    pacman -S --needed --noconfirm --noprogressbar gtk3 xfce4-panel libxfce4util xfconf && \
+    git clone -q https://github.com/novik133/xfce-panel-launcher.git /src && \
+    cd /src && git checkout -q "${XFCE_LAUNCHER_REF}" && \
+    make && make install DESTDIR=/pkg PREFIX=/usr && \
+    [ -f /pkg/usr/lib/xfce4/panel/plugins/libxfce-launcher.so ] \
+      || { echo "FATAL: libxfce-launcher.so absent de l'installation"; exit 1; } && \
+    mkdir -p /out && tar --zstd -cf /out/xfce-launcher.tar.zst -C /pkg . && \
+    echo "xfce-launcher ${XFCE_LAUNCHER_REF}" > /out/xfce-launcher.version
+
+# ── Export : tous les /out/* + versions.txt (notes de la release GitHub,
+# lu par make prebuilt-check).
+FROM base AS collect
+COPY --from=evdev-bridge  /out/ /out/
+COPY --from=sunshine-usb  /out/ /out/
+COPY --from=freeimage     /out/ /out/
+COPY --from=batocera-es   /out/ /out/
+COPY --from=xfce-launcher /out/ /out/
+RUN cat /out/*.version > /out/versions.txt && cat /out/versions.txt
+
+FROM scratch
+COPY --from=collect /out/ /
