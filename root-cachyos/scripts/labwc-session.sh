@@ -116,4 +116,10 @@ rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null 
 # ("Could not connect to remote display", confirmé en direct). Xwayland
 # démarre à la demande du premier client X11.
 unset WAYLAND_DISPLAY DISPLAY
-exec labwc
+# Autostart XDG (~/.config/autostart, /etc/xdg/autostart — 16/11) : labwc
+# n'est pas un gestionnaire de session et ne lit pas ces .desktop (pas de
+# xfce4-session ici). dex les lance une fois labwc prêt, avec
+# WAYLAND_DISPLAY/DISPLAY du bureau ; -e XFCE respecte OnlyShowIn/NotShowIn.
+# Par -s et NON par ~/.config/labwc/autostart : ce dossier est partagé avec
+# le labwc headless de Sunshine (même HOME), qui lancerait tout en double.
+exec labwc -s "dex -a -e XFCE"

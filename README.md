@@ -245,6 +245,11 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
   `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+- **Appli de `~/.config/autostart` jamais lancée** → labwc ne lit pas
+  l'autostart XDG : c'est `dex -a -e XFCE`, lancé par `labwc -s` dans
+  labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
+  seulement, pas dans la session headless de Sunshine). Voir son lancement
+  dans les logs de `svc-labwc`.
 - **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
   journal de l'émulateur : « Failed to initialize Wayland surface ». La session
   gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une

@@ -305,11 +305,13 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # rsync + rclone (14/11) : mise à jour du pack RGS (rgs-update.sh) — rclone
 # lit le serveur HTTP de RGS comme son rgs_theme_upgrade, rsync fusionne le
 # loader d'arcade en gardant les réglages SteamBox.
+# dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
+# labwc, qui ne le fait pas lui-même (voir labwc-session.sh).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin \
-      tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip \
+      tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip dex \
       gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
