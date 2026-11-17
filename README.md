@@ -73,6 +73,12 @@ Chaque app applique la résolution du client à la connexion et revient à
   DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera) avec wine-tkg
   (arcade) et umu + proton-cachyos / UMU-Proton (jeux PC ; DualSense et
   vibration).
+- **Génération d'images** : [lsfg-vk](https://lsfg-vk.dev) (Lossless Scaling
+  sous Linux, couche Vulkan : jeux Vulkan, DXVK et VKD3D-Proton). Il faut
+  posséder Lossless Scaling sur Steam et l'installer sur la branche bêta
+  `lsfg-vk` (elle fournit `lsfg-vk.dll`). Réglages par profil de jeu avec
+  `lsfg-vk-ui` (menu « Configure lsfg-vk ») dans `~/.config/lsfg-vk/conf.toml` ;
+  un jeu sans profil n'est pas touché. Vérification : `lsfg-vk-cli healthcheck`.
 - **Émulateurs standalone** : Cemu (Wii U), PCSX2, RPCS3, DuckStation, Xemu,
   Xenia, melonDS, PPSSPP, Flycast, Vita3K (PS Vita), DOSBox Staging, ShadPS4,
   Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3).
@@ -248,8 +254,9 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Appli de `~/.config/autostart` jamais lancée** → labwc ne lit pas
   l'autostart XDG : c'est `dex -a -e XFCE`, lancé par `labwc -s` dans
   labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
-  seulement, pas dans la session headless de Sunshine). Voir son lancement
-  dans les logs de `svc-labwc`.
+  seulement, pas dans la session headless de Sunshine). Seul
+  `~/.config/autostart` est lu : `/etc/xdg/autostart` doublerait les services
+  s6 (nm-applet, xfsettingsd). Voir son lancement dans les logs de `svc-labwc`.
 - **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
   journal de l'émulateur : « Failed to initialize Wayland surface ». La session
   gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une

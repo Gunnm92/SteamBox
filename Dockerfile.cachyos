@@ -307,6 +307,12 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # loader d'arcade en gardant les réglages SteamBox.
 # dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
 # labwc, qui ne le fait pas lui-même (voir labwc-session.sh).
+# lsfg-vk (18/11, dépôt cachyos, v2) : génération d'images de Lossless
+# Scaling en couche Vulkan implicite. Inactive tant qu'aucun profil de
+# ~/.config/lsfg-vk/conf.toml ne vise le jeu (active_in) ou que
+# LSFGVK_PROFILE n'est pas posé ; réglages par lsfg-vk-ui. Demande
+# lsfg-vk.dll de Lossless Scaling (Steam, app 993090, branche bêta lsfg-vk),
+# non fournie. 64 bits seulement (pas de lib32).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
@@ -329,7 +335,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       ffmpeg \
       steam \
       sunshine \
-      gamemode mangohud lib32-gamemode lib32-mangohud \
+      gamemode mangohud lib32-gamemode lib32-mangohud lsfg-vk \
       dbus polkit networkmanager \
       xdg-desktop-portal \
       gamescope \
