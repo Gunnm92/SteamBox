@@ -69,6 +69,36 @@ if ! xfconf-query -c xfce4-desktop -p "${backdrop}/last-image" >/dev/null 2>&1; 
     set_default xfce4-desktop "${backdrop}/image-style" int 5
 fi
 
+# Greffon son du panneau (18/11) : xfce4-pulseaudio-plugin est dans l'image,
+# mais le panneau par défaut de XFCE ne l'a pas — pas d'icône de volume,
+# même en stream Moonlight. Inséré UNE fois, juste après la zone de
+# notification (systray) ; le marqueur évite de le remettre si
+# l'utilisateur l'a retiré. Pas encore de panneau (premier démarrage, créé
+# par xfce4-panel lui-même) : réessayé au démarrage suivant.
+pa_marker="${HOME}/.config/xfce4/.steambox-pulseaudio-plugin"
+if [ ! -e "${pa_marker}" ]; then
+    plugins=$(xfconf-query -c xfce4-panel -l -v 2>/dev/null | awk '$1 ~ /^\/plugins\/plugin-[0-9]+$/ { sub(/.*-/, "", $1); print $1, $2 }')
+    systray=$(awk '$2 == "systray" { print $1; exit }' <<<"${plugins}")
+    if awk '$2 == "pulseaudio" { f = 1 } END { exit !f }' <<<"${plugins}"; then
+        touch "${pa_marker}"
+    elif [ -n "${systray}" ]; then
+        new=$(( $(awk '$1 > m { m = $1 } END { print m + 0 }' <<<"${plugins}") + 1 ))
+        for panel in $(xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E '^[0-9]+$'); do
+            ids=$(xfconf-query -c xfce4-panel -p "/panels/panel-${panel}/plugin-ids" 2>/dev/null | grep -E '^[0-9]+$')
+            grep -qx "${systray}" <<<"${ids}" || continue
+            args=()
+            for id in ${ids}; do
+                args+=(-t int -s "${id}")
+                [ "${id}" = "${systray}" ] && args+=(-t int -s "${new}")
+            done
+            xfconf-query -c xfce4-panel -p "/plugins/plugin-${new}" -n -t string -s pulseaudio \
+                && xfconf-query -c xfce4-panel -p "/panels/panel-${panel}/plugin-ids" --force-array "${args[@]}" \
+                && touch "${pa_marker}"
+            break
+        done
+    fi
+fi
+
 if [[ $# -gt 0 ]]; then
     exec "$@"
 fi
