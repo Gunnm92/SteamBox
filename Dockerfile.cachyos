@@ -349,7 +349,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       papirus-icon-theme hicolor-icon-theme adwaita-icon-theme \
       ttf-jetbrains-mono cantarell-fonts noto-fonts ttf-dejavu \
       libva-utils \
-      qt6-multimedia \
+      qt6-multimedia qt6-wayland \
       gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav" && \
     for i in 1 2 3; do \
       pacman -Syyu --noconfirm && pacman -S --noconfirm --needed ${PKGS} && break; \
@@ -373,6 +373,9 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       && [ ! -e /usr/share/gvfs/remote-volume-monitors/udisks2.monitor ] \
       || { echo "FATAL: activation UDisks2 présente malgré NoExtract (voir section 0)"; exit 1; }; }
 
+# qt6-wayland (18/11) : plugin Qt 6 pour Wayland. Le bureau pose
+# QT_QPA_PLATFORM=wayland ; sans lui, les applis Qt 6 du système (lsfg-vk-ui…)
+# refusaient de s'ouvrir (« could not find the Qt platform plugin wayland »).
 # qt6-multimedia (audit menu XFCE 31/08) : melonDS a besoin de
 # libQt6Multimedia.so.6 au runtime mais ne l'embarque pas dans son zip
 # (contrairement à RPCS3/Azahar/ShadPS4 qui embarquent leur propre copie
