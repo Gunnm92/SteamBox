@@ -46,6 +46,19 @@ case "${app}" in
     *) echo "appimage-launch : lanceur inconnu « ${app} »" >&2; exit 2 ;;
 esac
 
+# libwayland-client du système chargée AVANT celle de l'AppImage (18/11) :
+# les plateformes EGL Wayland du pilote NVIDIA (libnvidia-egl-wayland et
+# -wayland2, pilote 620) appellent wl_proxy_marshal_flags (libwayland
+# ≥ 1.20), absente de la libwayland-client embarquée par certaines AppImage.
+# RetroArch quittait aussitôt (« symbol lookup error … wl_proxy_marshal_flags »,
+# tous les jeux RetroArch) ; vérifié le 18/11 qu'il démarre avec. ABI stable :
+# la version du système, plus récente, sert aussi les AppImage qui n'en ont
+# pas besoin. Sauf Heroic : LD_PRELOAD passerait à Wine/Proton (processus
+# 32 bits : « wrong ELF class » à chaque lancement).
+if [ "${app}" != "heroic" ] && [ -e /usr/lib/libwayland-client.so.0 ]; then
+    export LD_PRELOAD="/usr/lib/libwayland-client.so.0${LD_PRELOAD:+:${LD_PRELOAD}}"
+fi
+
 apps_dir="${HOME}/Applications"
 for name in "${names[@]}"; do
     want="${name,,}"
