@@ -35,7 +35,22 @@ set_default() {
 set_default xsettings /Net/ThemeName string "WhiteSur-Dark"
 set_default xsettings /Net/IconThemeName string "WhiteSur-dark"
 set_default xsettings /Gtk/CursorThemeName string "WhiteSur-cursors"
-set_default xsettings /Gtk/CursorSize int 24
+# Taille du curseur (18/11) : xfsettingsd lit /Gtk/CursorThemeSize (pas
+# /Gtk/CursorSize, réglé ici jusqu'au 18/11 et ignoré) et la recopie dans
+# dconf (org.gnome.desktop.interface cursor-size). Restée vide (type
+# "empty") : cursor-size=0, et la GTK3 embarquée par les AppImage
+# Tauri/WebKitGTK (fefw-launcher) n'arrivait plus à charger le thème
+# ("Failed to load cursor theme"), puis plantait sous Wayland au survol de
+# la fenêtre (assertion cursor_theme_name). Vide ou 0 : reprend l'ancienne
+# clé, sinon 24 ; une taille choisie par l'utilisateur est gardée.
+size=$(xfconf-query -c xsettings -p /Gtk/CursorThemeSize 2>/dev/null || true)
+if ! [[ "${size}" =~ ^[1-9][0-9]*$ ]]; then
+    size=$(xfconf-query -c xsettings -p /Gtk/CursorSize 2>/dev/null || true)
+    [[ "${size}" =~ ^[1-9][0-9]*$ ]] || size=24
+    xfconf-query -c xsettings -p /Gtk/CursorThemeSize -r 2>/dev/null || true
+    xfconf-query -c xsettings -p /Gtk/CursorThemeSize -n -t int -s "${size}" 2>/dev/null || true
+fi
+xfconf-query -c xsettings -p /Gtk/CursorSize -r 2>/dev/null || true
 set_default xsettings /Gtk/FontName string "Cantarell 10"
 set_default xsettings /Gtk/MonospaceFontName string "JetBrains Mono 10"
 # Police Nerd retirée de l'image (29/09, ttf-jetbrains-mono-nerd → 232 Mo) :

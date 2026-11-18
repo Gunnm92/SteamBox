@@ -24,7 +24,10 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 # transmet à Xwayland et aux applis qu'il lance ; sans lui, le curseur par
 # défaut s'affichait sur le fond et les bordures de fenêtres.
 cursor_theme=$(xfconf-query -c xsettings -p /Gtk/CursorThemeName 2>/dev/null || true)
-cursor_size=$(xfconf-query -c xsettings -p /Gtk/CursorSize 2>/dev/null || true)
+# Taille : /Gtk/CursorThemeSize, la clé que lit xfsettingsd (18/11) ; vide ou
+# 0 (propriété "empty") → 24.
+cursor_size=$(xfconf-query -c xsettings -p /Gtk/CursorThemeSize 2>/dev/null || true)
+[[ "${cursor_size}" =~ ^[1-9][0-9]*$ ]] || cursor_size=""
 mkdir -p "${HOME}/.config/labwc"
 cat > "${HOME}/.config/labwc/environment" <<EOF
 XKB_DEFAULT_LAYOUT=${KEYBOARD_LAYOUT:-us}
@@ -78,6 +81,7 @@ gtk-theme-name=WhiteSur-Dark
 gtk-application-prefer-dark-theme=1
 gtk-icon-theme-name=WhiteSur-dark
 gtk-cursor-theme-name=WhiteSur-cursors
+gtk-cursor-theme-size=24
 gtk-font-name=Cantarell 10
 EOF
 cp "${HOME}/.config/gtk-3.0/settings.ini" "${HOME}/.config/gtk-4.0/settings.ini"
