@@ -63,10 +63,49 @@ core=$(grep -oE '/[^ "]*_libretro\.so' <<< "${template}" || true)
 # Substitution du chemin, échappé pour le shell : la table ne contient que
 # des commandes de ce dépôt, le seul élément variable est le chemin du jeu.
 cmd="${template//\"\{file.path\}\"/$(printf '%q' "${rom}")}"
-echo "[$(date '+%F %T')] ${system} : ${cmd}" >> "${LOG}"
+
+# Options avancées d'EmulationStation (18/11, es_features.cfg de l'image) :
+# ES les enregistre dans batocera.conf, comme Batocera — jeu
+# (<système>["<fichier>"].<option>, '=' et '#' retirés du nom comme le fait
+# ES), puis système, puis global ; vide ou "auto" = non réglé.
+ES_CONF="${ES_HOME:-/home/arcade/.emulationstation}/batocera.conf"
+es_conf_get() {
+    [[ -f "${ES_CONF}" ]] || return 0
+    awk -v k="$1=" 'index($0, k) == 1 { v = substr($0, length(k) + 1) } END { if (v != "") print v }' "${ES_CONF}"
+}
+es_option() {
+    local k v game="${name//[=#]/}"
+    for k in "${system}[\"${game}\"].$1" "${system}.$1" "global.$1"; do
+        v=$(es_conf_get "${k}")
+        if [[ -n "${v}" && "${v}" != "auto" ]]; then
+            echo "${v}"
+            return
+        fi
+    done
+}
+
+# Génération d'images MAKO (option « mako ») : la commande passe par
+# mako-launch, qui active la couche Vulkan pour ce seul jeu (rien ailleurs :
+# il isole les couches implicites, lsfg-vk compris) puis fait exec — même
+# PID, la sortie par la manette (svc-pad-hotkeys) reste valable. Réglages
+# dans le profil de mako-ui qui vise l'émulateur ; « mako_profile » en
+# impose un par son nom (MAKO_PROFILE). Sans profil applicable, MAKO reste
+# inactif.
+wrapper=""
+if [[ "$(es_option mako)" == "1" ]]; then
+    if command -v mako-launch >/dev/null 2>&1; then
+        wrapper="mako-launch "
+        mako_profile=$(es_option mako_profile)
+        [[ -n "${mako_profile}" ]] && export MAKO_PROFILE="${mako_profile}"
+    else
+        echo "[$(date '+%F %T')] MAKO demandé mais mako-launch absent, lancement sans" >> "${LOG}"
+    fi
+fi
+
+echo "[$(date '+%F %T')] ${system} : ${MAKO_PROFILE:+MAKO_PROFILE=${MAKO_PROFILE} }${wrapper}${cmd}" >> "${LOG}"
 # GAME_LAUNCH_DRYRUN=1 : affiche la commande sans la lancer (tests).
 if [[ -n "${GAME_LAUNCH_DRYRUN:-}" ]]; then
-    echo "${cmd}"
+    echo "${MAKO_PROFILE:+MAKO_PROFILE=${MAKO_PROFILE} }${wrapper}${cmd}"
     exit 0
 fi
 # Sortie du jeu dans son propre journal (écrasé à chaque lancement), jamais
@@ -99,4 +138,4 @@ if [[ "${cmd}" != retroarch* ]]; then
 else
     rm -f "${state}"
 fi
-eval "exec ${cmd}"
+eval "exec ${wrapper}${cmd}"

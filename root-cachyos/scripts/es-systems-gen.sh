@@ -6,6 +6,10 @@
 # applique la commande de la table. Seuls les systèmes dont le dossier
 # existe dans ROMS_DIR sont déclarés (ES masque de toute façon les vides,
 # mais inutile de les lui faire scanner).
+# Émulateur unique « steambox » par système (18/11) : sans émulateur déclaré,
+# ES n'affiche aucune option avancée (es_features.cfg de l'image : MAKO…).
+# Un seul émulateur et un seul cœur : pas de choix d'émulateur dans les menus,
+# et la commande ne dépend pas de %EMULATOR%/%CORE%.
 # Usage : es-systems-gen.sh > ~/.emulationstation/es_systems.cfg
 set -uo pipefail
 # shellcheck source=game-systems.sh
@@ -105,6 +109,11 @@ while IFS= read -r sys; do
     <command>${LAUNCH} %ROM%</command>
     <platform>${theme}</platform>
     <theme>${theme}</theme>
+    <emulators>
+      <emulator name="steambox">
+        <cores><core default="true">steambox</core></cores>
+      </emulator>
+    </emulators>
   </system>
 EOF
 done < <(printf '%s\n' "${!SYSTEMS[@]}" | sort)
