@@ -749,7 +749,7 @@ RUN --mount=type=secret,id=github_token \
 # ENABLE_MAKO=1, posé par mako-launch, et seulement si un profil de mako-ui
 # vise le programme (ou MAKO_PROFILE). EmulationStation : option par
 # système/jeu (es_features.cfg ci-dessous, lue par game-launch.sh). Testé le
-# 18/11 sur RTX 5080 (vkcube, mako-ui). Remplace lsfg-vk (retiré le 18/11) :
+# 18/11 sur RTX 3090 (vkcube, mako-ui). Remplace lsfg-vk (retiré le 18/11) :
 # mêmes modèles LSFG avec Lossless.dll, sans exiger lsfg-vk.dll (branche
 # bêta payante de Lossless Scaling).
 # vkd3d + lib32-vkd3d (18/11, dépendances optionnelles du paquet) :

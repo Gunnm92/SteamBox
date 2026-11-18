@@ -23,6 +23,16 @@ set_cfg() {
 # entièrement (confirmé : jeu Dreamcast plein écran et réactif ensuite).
 set_cfg "video_vsync" "false"
 
+# video_driver vulkan (18/11) : le défaut "gl" ne lit que les shaders .glslp,
+# or l'image n'installe que libretro-shaders-slang (2 500 .slangp) — le
+# navigateur de shaders montrait des dossiers vides. Vulkan est aussi requis
+# par la génération d'images MAKO. Seulement si le pilote est encore "gl" ou
+# absent : un autre choix fait dans RetroArch (glcore…) est respecté.
+current_driver=$(sed -n 's/^video_driver = "\(.*\)"$/\1/p' "${CFG}")
+if [ -z "${current_driver}" ] || [ "${current_driver}" = "gl" ]; then
+    set_cfg "video_driver" "vulkan"
+fi
+
 # pause_nonactive : RetroArch se met en pause dès que sa fenêtre perd le
 # focus. Pegasus (et les frontends en général) ne garantissent pas
 # toujours le transfert de focus vers le jeu qu'ils viennent de lancer —
