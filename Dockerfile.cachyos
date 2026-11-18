@@ -748,6 +748,11 @@ RUN --mount=type=secret,id=github_token \
 # 18/11 sur RTX 5080 (vkcube, mako-ui). Remplace lsfg-vk (retiré le 18/11) :
 # mêmes modèles LSFG avec Lossless.dll, sans exiger lsfg-vk.dll (branche
 # bêta payante de Lossless Scaling).
+# vkd3d + lib32-vkd3d (18/11, dépendances optionnelles du paquet) :
+# libvkd3d-shader traduit les shaders DirectX du Lossless.dll — scaling LS1
+# et modèles LSFG de ce DLL (FP32 : il n'a pas de modèle FP16 natif, donc
+# allow_fp16 = false). Sans eux, LS1 retombe sur MAKO Scaler. Vérifié le
+# 18/11 par mako-cli inspect-dll (--ls1, --lsfg --no-fp16 : compatibles).
 ARG MAKO_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
@@ -764,6 +769,7 @@ RUN --mount=type=secret,id=github_token \
     curl -fSL --retry 3 -o "/tmp/mako/${NAME}" "$(printf '%s' "${ASSET}" | jq -r .browser_download_url)" && \
     echo "${SHA}  /tmp/mako/${NAME}" | sha256sum -c - && \
     pacman -U --noconfirm --needed "/tmp/mako/${NAME}" && \
+    pacman -S --noconfirm --needed vkd3d lib32-vkd3d && \
     rm -rf /tmp/mako /var/cache/pacman/pkg/* && \
     [ -f /usr/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json ] \
       && command -v mako-launch >/dev/null \

@@ -76,8 +76,10 @@ Chaque app applique la résolution du client à la connexion et revient à
 - **Génération d'images** : [MAKO Renderer](https://github.com/eugeniosegala/MAKO),
   couche Vulkan (jeux Vulkan, DXVK et VKD3D-Proton, émulateurs en rendu
   Vulkan ; pas l'OpenGL), 64 et 32 bits. Modèle MAKO FG libre, sans DLL
-  (modèles LSFG de Lossless Scaling en option avec un `Lossless.dll` à soi),
-  scaler et shaders. Profils dans `mako-ui` (menu « MAKO Renderer
+  (modèles LSFG de Lossless Scaling en option avec un `Lossless.dll` à soi,
+  en FP32 : `allow_fp16 = false`), upscaling (MAKO Scaler, ou LS1 avec ce
+  même DLL) et shaders. Vérifier un DLL : `mako-cli inspect-dll --dll <chemin>
+  --ls1 ls1` ou `--lsfg --no-fp16`. Profils dans `mako-ui` (menu « MAKO Renderer
   Configuration »), fichier `~/.config/mako-render/conf.toml` ; MAKO n'agit
   que sur un programme lancé par `mako-launch` ET visé par un profil
   (« Processus associés » : `duckstation-qt`, `retroarch`, `pcsx2-qt`, exe
