@@ -98,6 +98,14 @@ if [ ! -e "${pa_marker}" ]; then
         done
     fi
 fi
+# Volume plafonné à 100 % (18/11) : le greffon monte jusqu'à 150 % par
+# défaut (molette sur l'icône, touches multimédia qu'il intercepte) et
+# WirePlumber mémorise le volume par sortie — la sortie 5.1 de Sunshine
+# restait à 150 % (+10,6 dB) : son saturé, « basse résolution », dans
+# Moonlight. Seulement si absent : un autre plafond choisi est gardé.
+for pa in $(xfconf-query -c xfce4-panel -l -v 2>/dev/null | awk '$1 ~ /^\/plugins\/plugin-[0-9]+$/ && $2 == "pulseaudio" { print $1 }'); do
+    set_default xfce4-panel "${pa}/volume-max" int 100
+done
 
 if [[ $# -gt 0 ]]; then
     exec "$@"
