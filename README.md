@@ -96,8 +96,9 @@ Chaque app applique la résolution du client à la connexion et revient à
   et `/usr/local/bin/<nom>` les lance via `root-cachyos/scripts/appimage-launch.sh`
   (nom du fichier reconnu sans tenir compte de la casse : `shadPS4`, `Xenia Canary`…).
   Si l'une manque, EmulationStation affiche laquelle installer.
-- **RetroArch** + cores (FBNeo, MAME, snes9x, mGBA, melonDS, Flycast,
-  Dolphin, PPSSPP, Beetle PSX/PCE, mupen64plus…).
+- **RetroArch** (paquet du système, à jour à chaque rebuild) + cores (FBNeo,
+  MAME, snes9x, mGBA, melonDS, Flycast, Dolphin, PPSSPP, Beetle PSX/PCE,
+  mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
 - **Bureau** : XFCE (panel, Thunar avec miniatures et accès aux partages réseau `smb://`, terminal, notifications xfce4-notifyd), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
   même disposition clavier partout (local, VNC, Moonlight — `KEYBOARD_LAYOUT`).

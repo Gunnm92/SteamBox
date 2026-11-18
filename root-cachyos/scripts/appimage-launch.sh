@@ -38,7 +38,6 @@ case "${app}" in
     xenia)                           names=("Xenia Canary" "Xenia") ;;
     shadps4)                         names=("shadPS4") ;;
     steam-rom-manager)               names=("Steam ROM Manager") ;;
-    retroarch)                       names=("RetroArch") ;;
     dolphin-emu)                     names=("Dolphin Emulator" "Dolphin") ;;
     scummvm)                         names=("ScummVM") ;;
     supermodel)                      names=("Supermodel") ;;
@@ -49,9 +48,10 @@ esac
 # libwayland-client du système chargée AVANT celle de l'AppImage (18/11) :
 # les plateformes EGL Wayland du pilote NVIDIA (libnvidia-egl-wayland et
 # -wayland2, pilote 620) appellent wl_proxy_marshal_flags (libwayland
-# ≥ 1.20), absente de la libwayland-client embarquée par certaines AppImage.
-# RetroArch quittait aussitôt (« symbol lookup error … wl_proxy_marshal_flags »,
-# tous les jeux RetroArch) ; vérifié le 18/11 qu'il démarre avec. ABI stable :
+# ≥ 1.20), absente de la libwayland-client embarquée par les AppImage
+# compilées sur une base ancienne. Vu le 18/11 sur l'AppImage RetroArch 1.19.1
+# (« symbol lookup error … wl_proxy_marshal_flags », démarre avec ce
+# préchargement ; RetroArch est depuis revenu au paquet système). ABI stable :
 # la version du système, plus récente, sert aussi les AppImage qui n'en ont
 # pas besoin. Sauf Heroic : LD_PRELOAD passerait à Wine/Proton (processus
 # 32 bits : « wrong ELF class » à chaque lancement).

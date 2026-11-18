@@ -260,6 +260,11 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # cœurs écrivable en plus du dossier système). Règle ce même "menu Ozone
 # dégradé" documenté au commit précédent (retroarch-assets-ozone inclus
 # dans le groupe).
+# RetroArch reste le paquet du groupe (18/11) : retiré le 25/10 au profit
+# d'une AppImage AppManager, restée en 1.19.1 (oct. 2024, base Ubuntu
+# 20.04) — sa libwayland embarquée cassait l'EGL Wayland du pilote NVIDIA
+# 620 (aucun jeu RetroArch ne démarrait). Le paquet suit les dépôts à chaque
+# rebuild et partage les bibliothèques des cœurs du groupe.
 # Nouvel essai automatique (22/09, "make push" en échec) : chaque rebuild
 # fait un -Syyu complet, donc dépend de l'état des miroirs CachyOS À CET
 # INSTANT — confirmé en direct le 22/09 : base de paquets déjà publiée mais
@@ -355,7 +360,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       echo "pacman : miroirs CachyOS décalés, nouveau premier : $(grep -m1 '^Server' /etc/pacman.d/cachyos-mirrorlist)"; \
       sleep 60; \
     done && \
-    pacman -Rdd --noconfirm retroarch && \
     rm -rf /var/cache/pacman/pkg/* && \
     mkdir -p /etc/samba && printf '[global]\n' > /etc/samba/smb.conf && \
     update-ca-trust && \
@@ -1415,11 +1419,12 @@ RUN chmod +x /usr/local/bin/scripts/*.sh && \
 # Chaque lien porte le nom attendu par les scripts de jeux et apps.json ; le
 # script commun appimage-launch.sh trouve l'AppImage d'après ce nom ($0).
 # Les tarballs (Supermodel, DOSBox, Flips) et les cœurs libretro restent dans
-# l'image. RetroArch, Dolphin et ScummVM viennent d'AppManager : leurs paquets
-# Arch sont retirés (les cœurs libretro, eux, restent).
+# l'image. Dolphin et ScummVM viennent d'AppManager : leurs paquets Arch sont
+# retirés. RetroArch est revenu au paquet du système le 18/11 (pas de lien
+# ici : /usr/bin/retroarch).
 RUN for app in ppsspp flycast cemu pcsx2 pcsx2x6 rpcs3 melonDS eden lindbergh \
         duckstation duckstation-qt xemu vita3k xenia shadps4 steam-rom-manager \
-        retroarch dolphin-emu scummvm supermodel heroic; do \
+        dolphin-emu scummvm supermodel heroic; do \
       ln -sf /usr/local/bin/scripts/appimage-launch.sh "/usr/local/bin/${app}"; \
     done && \
     ln -sf /usr/local/bin/eden /usr/bin/eden
