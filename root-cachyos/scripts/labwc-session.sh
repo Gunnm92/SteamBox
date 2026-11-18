@@ -118,11 +118,8 @@ rm -f "${HOME}/.config/google-chrome/Singleton"{Lock,Cookie,Socket} 2>/dev/null 
 unset WAYLAND_DISPLAY DISPLAY
 # Autostart XDG de l'utilisateur (~/.config/autostart — 16/11) : labwc
 # n'est pas un gestionnaire de session et ne lit pas ces .desktop (pas de
-# xfce4-session ici). dex les lance une fois labwc prêt, avec
-# WAYLAND_DISPLAY/DISPLAY du bureau ; -e XFCE respecte OnlyShowIn/NotShowIn.
-# --search-paths (18/11) : SEULEMENT le dossier de l'utilisateur. Le défaut
-# lit aussi /etc/xdg/autostart, qui relancerait en double nm-applet et
-# xfsettingsd (déjà services s6) et xfce4-notifyd.
+# xfce4-session ici). xdg-autostart.sh attend la zone de notification puis
+# les lance par dex, avec WAYLAND_DISPLAY/DISPLAY du bureau.
 # Par -s et NON par ~/.config/labwc/autostart : ce dossier est partagé avec
 # le labwc headless de Sunshine (même HOME), qui lancerait tout en double.
-exec labwc -s "dex -a -e XFCE --search-paths ${XDG_CONFIG_HOME:-${HOME}/.config}/autostart"
+exec labwc -s /usr/local/bin/scripts/xdg-autostart.sh

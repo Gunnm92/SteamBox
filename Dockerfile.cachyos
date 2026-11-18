@@ -306,7 +306,7 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # lit le serveur HTTP de RGS comme son rgs_theme_upgrade, rsync fusionne le
 # loader d'arcade en gardant les réglages SteamBox.
 # dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
-# labwc, qui ne le fait pas lui-même (voir labwc-session.sh).
+# labwc, qui ne le fait pas lui-même (voir xdg-autostart.sh).
 # lsfg-vk (18/11, dépôt cachyos, v2) : génération d'images de Lossless
 # Scaling en couche Vulkan implicite. Inactive tant qu'aucun profil de
 # ~/.config/lsfg-vk/conf.toml ne vise le jeu (active_in) ou que

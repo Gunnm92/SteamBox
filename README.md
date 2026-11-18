@@ -252,9 +252,11 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   bureau visible est un service s6 relancé automatiquement :
   `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
 - **Appli de `~/.config/autostart` jamais lancée** → labwc ne lit pas
-  l'autostart XDG : c'est `dex -a -e XFCE`, lancé par `labwc -s` dans
-  labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
-  seulement, pas dans la session headless de Sunshine). Seul
+  l'autostart XDG : c'est `xdg-autostart.sh` (dex), lancé par `labwc -s`
+  dans labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
+  seulement, pas dans la session headless de Sunshine). Il attend d'abord la
+  zone de notification de xfce4-panel (60 s au plus) : sans elle, une icône
+  comme `wsquashfs-launcher --tray` quitte aussitôt. Seul
   `~/.config/autostart` est lu : `/etc/xdg/autostart` doublerait les services
   s6 (nm-applet, xfsettingsd). Voir son lancement dans les logs de `svc-labwc`.
 - **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
