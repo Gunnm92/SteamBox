@@ -307,12 +307,6 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # loader d'arcade en gardant les réglages SteamBox.
 # dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
 # labwc, qui ne le fait pas lui-même (voir xdg-autostart.sh).
-# lsfg-vk (18/11, dépôt cachyos, v2) : génération d'images de Lossless
-# Scaling en couche Vulkan implicite. Inactive tant qu'aucun profil de
-# ~/.config/lsfg-vk/conf.toml ne vise le jeu (active_in) ou que
-# LSFGVK_PROFILE n'est pas posé ; réglages par lsfg-vk-ui. Demande
-# lsfg-vk.dll de Lossless Scaling (Steam, app 993090, branche bêta lsfg-vk),
-# non fournie. 64 bits seulement (pas de lib32).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
       labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
@@ -335,7 +329,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       ffmpeg \
       steam \
       sunshine \
-      gamemode mangohud lib32-gamemode lib32-mangohud lsfg-vk \
+      gamemode mangohud lib32-gamemode lib32-mangohud \
       dbus polkit networkmanager \
       xdg-desktop-portal \
       gamescope \
@@ -374,7 +368,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       || { echo "FATAL: activation UDisks2 présente malgré NoExtract (voir section 0)"; exit 1; }; }
 
 # qt6-wayland (18/11) : plugin Qt 6 pour Wayland. Le bureau pose
-# QT_QPA_PLATFORM=wayland ; sans lui, les applis Qt 6 du système (lsfg-vk-ui…)
+# QT_QPA_PLATFORM=wayland ; sans lui, les applis Qt 6 du système (mako-ui…)
 # refusaient de s'ouvrir (« could not find the Qt platform plugin wayland »).
 # qt6-multimedia (audit menu XFCE 31/08) : melonDS a besoin de
 # libQt6Multimedia.so.6 au runtime mais ne l'embarque pas dans son zip
@@ -751,7 +745,9 @@ RUN --mount=type=secret,id=github_token \
 # ENABLE_MAKO=1, posé par mako-launch, et seulement si un profil de mako-ui
 # vise le programme (ou MAKO_PROFILE). EmulationStation : option par
 # système/jeu (es_features.cfg ci-dessous, lue par game-launch.sh). Testé le
-# 18/11 sur RTX 5080 (vkcube, mako-ui).
+# 18/11 sur RTX 5080 (vkcube, mako-ui). Remplace lsfg-vk (retiré le 18/11) :
+# mêmes modèles LSFG avec Lossless.dll, sans exiger lsfg-vk.dll (branche
+# bêta payante de Lossless Scaling).
 ARG MAKO_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \

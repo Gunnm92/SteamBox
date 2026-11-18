@@ -73,22 +73,18 @@ Chaque app applique la résolution du client à la connexion et revient à
   DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera) avec wine-tkg
   (arcade) et umu + proton-cachyos / UMU-Proton (jeux PC ; DualSense et
   vibration).
-- **Génération d'images** (couches Vulkan : jeux Vulkan, DXVK et
-  VKD3D-Proton, émulateurs en rendu Vulkan ; pas l'OpenGL) :
-  - [MAKO Renderer](https://github.com/eugeniosegala/MAKO) : modèle MAKO FG
-    libre, sans DLL (modèles LSFG en option avec un `Lossless.dll` à soi),
-    scaler et shaders, 64 et 32 bits. Profils dans `mako-ui` (menu « MAKO
-    Renderer Configuration »), fichier `~/.config/mako-render/conf.toml` ;
-    MAKO n'agit que sur un programme lancé par `mako-launch` ET visé par un
-    profil (« Processus associés » : `duckstation-qt`, `retroarch`,
-    `pcsx2-qt`…), ou imposé par `MAKO_PROFILE`. Depuis EmulationStation :
-    option « Génération d'images (MAKO) » par système (Réglages des jeux >
-    Configuration avancée par système) ou par jeu (Options avancées du jeu),
-    avec « Profil MAKO » pour imposer un profil.
-  - [lsfg-vk](https://lsfg-vk.dev) : demande `lsfg-vk.dll`, fournie par
-    Lossless Scaling (payant, Steam) sur la branche bêta `lsfg-vk`. Profils
-    avec `lsfg-vk-ui` dans `~/.config/lsfg-vk/conf.toml` ; un jeu sans profil
-    n'est pas touché. Vérification : `lsfg-vk-cli healthcheck`.
+- **Génération d'images** : [MAKO Renderer](https://github.com/eugeniosegala/MAKO),
+  couche Vulkan (jeux Vulkan, DXVK et VKD3D-Proton, émulateurs en rendu
+  Vulkan ; pas l'OpenGL), 64 et 32 bits. Modèle MAKO FG libre, sans DLL
+  (modèles LSFG de Lossless Scaling en option avec un `Lossless.dll` à soi),
+  scaler et shaders. Profils dans `mako-ui` (menu « MAKO Renderer
+  Configuration »), fichier `~/.config/mako-render/conf.toml` ; MAKO n'agit
+  que sur un programme lancé par `mako-launch` ET visé par un profil
+  (« Processus associés » : `duckstation-qt`, `retroarch`, `pcsx2-qt`, exe
+  Windows…), ou imposé par `MAKO_PROFILE`. Depuis EmulationStation : option
+  « Génération d'images (MAKO) » par système (Réglages des jeux >
+  Configuration avancée par système) ou par jeu (Options avancées du jeu),
+  avec « Profil MAKO » pour imposer un profil.
 - **Émulateurs standalone** : Cemu (Wii U), PCSX2, RPCS3, DuckStation, Xemu,
   Xenia, melonDS, PPSSPP, Flycast, Vita3K (PS Vita), DOSBox Staging, ShadPS4,
   Eden (Switch), Dolphin, ScummVM, Lindbergh Loader, Supermodel (Model 3).

@@ -86,7 +86,7 @@ es_option() {
 
 # Génération d'images MAKO (option « mako ») : la commande passe par
 # mako-launch, qui active la couche Vulkan pour ce seul jeu (rien ailleurs :
-# il isole les couches implicites, lsfg-vk compris) puis fait exec — même
+# il isole les couches implicites) puis fait exec — même
 # PID, la sortie par la manette (svc-pad-hotkeys) reste valable. Réglages
 # dans le profil de mako-ui qui vise l'émulateur ; « mako_profile » en
 # impose un par son nom (MAKO_PROFILE). Sans profil applicable, MAKO reste
