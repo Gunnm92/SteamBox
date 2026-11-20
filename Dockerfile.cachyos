@@ -326,7 +326,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
-      wayvnc wlr-randr \
+      wayvnc python-pip wlr-randr \
       gtk3 \
       xorg-xwayland wayland libxkbcommon \
       mesa vulkan-icd-loader vulkan-tools \
@@ -387,8 +387,10 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
 # Retirés le 20/11 : vulkan-intel/lib32-vulkan-intel/intel-media-driver/
 # libva-intel-driver (~150 Mo : le conteneur ne reçoit que le GPU NVIDIA,
 # l'iGPU Intel de l'hôte n'y est pas ; vulkan-radeon reste, pilote Vulkan
-# exigé par Steam et GPU de la future machine AMD), python-pip et
-# libva-utils (rien ne les appelait).
+# exigé par Steam et GPU de la future machine AMD) et libva-utils (rien ne
+# l'appelait). python-pip reste : websockify (noVNC, accès VNC par le navigateur,
+# section 1c) n'existe pas en paquet Arch/CachyOS et s'installe par
+# pip.
 #
 # gst-plugins-good/bad + gst-libav (20/09, "Pegasus n'arrive pas à lire les
 # vidéos de preview") : qt6-multimedia tire gstreamer/gst-plugins-base-libs/
