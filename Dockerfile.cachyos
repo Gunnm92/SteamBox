@@ -284,14 +284,18 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # question "supprimer TOUS les fichiers du cache ? [o/N]" a "non" pour
 # réponse par défaut, et --noconfirm la choisit. 1,8 Go de paquets restaient
 # dans l'image ; rm -rf à la place, dans chaque RUN qui installe.
-# umu-launcher + proton-cachyos-slr (27/09) : wsquashfs-launcher lance les
-# prefixes créés par Proton (Heroic, Steam) via umu-run et le script proton,
-# comme Heroic — le seul binaire wine de Proton donnait écran noir puis
-# plantage sur Kingdom Hearts III. proton-cachyos = Proton par défaut des
-# nouveaux prefixes (30/09) : optimisé CachyOS, sa SDL gère la DualSense en
-# XInput avec la vibration. Il exige une pile limitée (8 Mo, posée dans les
-# services de session) : pile illimitée, son émulation seccomp tuait wineboot.
-# UMU-Proton en secours (section 1a9b).
+# umu-launcher (27/09) : wsquashfs-launcher lance les prefixes créés par
+# Proton (Heroic, Steam) via umu-run et le script proton, comme Heroic — le
+# seul binaire wine de Proton donnait écran noir puis plantage sur Kingdom
+# Hearts III. Aucun Proton dans l'image depuis le 20/11 (proton-cachyos-slr
+# et UMU-Proton, ~3 Go, retirés) : « wsquashfs-launcher --setup
+# proton-cachyos » installe le Proton par défaut (release GitHub de CachyOS,
+# SHA-512) dans ~/.local/share/Steam/compatibilitytools.d, donc dans /config,
+# vu aussi par Steam ; UMU-Proton et GE-Proton de la même façon. Une version
+# de Proton ne suit plus le rythme des mises à jour de l'image, et une
+# release au nommage changé (UMU-Proton 11.0-2e, -x86_64) ne casse plus le
+# build. proton-cachyos exige une pile limitée (8 Mo, posée dans les services
+# de session) : pile illimitée, son émulation seccomp tuait wineboot.
 # gvfs + gvfs-smb (22/10) : partages réseau smb:// dans Thunar (« Parcourir le
 # réseau »), aussi exposés aux autres programmes via FUSE dans
 # $XDG_RUNTIME_DIR/gvfs ; smbclient pour tester un partage en ligne de
@@ -342,7 +346,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       gamescope \
       libretro \
       winetricks dxvk-mingw-git vkd3d-proton-mingw-git \
-      umu-launcher proton-cachyos-slr \
+      umu-launcher \
       squashfuse squashfs-tools fuse-overlayfs \
       libnotify cabextract p7zip binutils nss \
       ark unrar zip \
@@ -954,14 +958,11 @@ RUN --mount=type=secret,id=github_token \
     fi
 
 # ── 1a8. wsquashfs-launcher — NI dans l'image NI en /usr/local/bin (06/11).
-# Installé une seule fois par init_wsquashfs.sh dans /config/.local/bin
-# (= ~arcade/.local/bin, home persistant) s'il est absent, puis mis à jour par
-# son propre updater (qui exige un dossier inscriptible, pas /usr/bin). Le
-# home est un bind mount de l'hôte : tout fichier posé ici dans l'image serait
-# masqué. WSQUASHFS_REF est gardé en ENV : c'est le commit installé au premier
-# démarrage.
-ARG WSQUASHFS_REF=main
-ENV WSQUASHFS_REF=${WSQUASHFS_REF}
+# Vit dans /config/.local/bin (= ~arcade/.local/bin, home persistant), où
+# son propre updater le met à jour (il exige un dossier inscriptible, pas
+# /usr/bin). Installé à la main par l'installeur de son dépôt ; l'image ne
+# l'installe plus (init_wsquashfs.sh retiré le 20/11). Le home est un bind
+# mount de l'hôte : tout fichier posé ici dans l'image serait masqué.
 
 # Type MIME des .wsquashfs + association au lanceur (01/10) : reconnus par
 # leur extension (application/x-wsquashfs, sous-type de squashfs). Sans lui,
@@ -1009,28 +1010,6 @@ RUN --mount=type=secret,id=github_token \
     ln -sf /opt/wine-tkg/bin/wine /usr/bin/wine
 # wine-staging (Arch) n'est plus installé : /usr/bin/wine pointe sur wine-tkg,
 # pour winetricks et les outils qui appellent « wine » sans chemin.
-
-# ── 1a9b. UMU-Proton — Proton de Valve préparé pour umu (30/09), second choix
-# de wsquashfs-launcher après proton-cachyos : sa SDL gère aussi la DualSense
-# en manette XInput avec la vibration (evdev, hid-playstation du noyau), là
-# où GE-Proton la force en hidraw sans vibration. Avant, il n'existait que
-# dans /config, téléchargé un jour par umu. Dernière version à chaque build,
-# empreinte SHA-512 vérifiée ; UMU_PROTON_TAG pour en figer une.
-ARG UMU_PROTON_TAG=""
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    UMU_PROTON_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Open-Wine-Components/umu-proton/releases/${UMU_PROTON_TAG:+tags/}${UMU_PROTON_TAG:-latest}" \
-      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
-    [ -n "${UMU_PROTON_VERSION}" ] || { echo "FATAL: UMU_PROTON_VERSION vide"; exit 1; } && \
-    BASE="https://github.com/Open-Wine-Components/umu-proton/releases/download/${UMU_PROTON_VERSION}" && \
-    mkdir -p /tmp/umu-proton /usr/share/steam/compatibilitytools.d && cd /tmp/umu-proton && \
-    curl -fSL --retry 3 -O "${BASE}/${UMU_PROTON_VERSION}.tar.gz" && \
-    curl -fSL --retry 3 -O "${BASE}/${UMU_PROTON_VERSION}.sha512sum" && \
-    sha512sum -c "${UMU_PROTON_VERSION}.sha512sum" && \
-    tar -xzf "${UMU_PROTON_VERSION}.tar.gz" -C /usr/share/steam/compatibilitytools.d && \
-    cd / && rm -rf /tmp/umu-proton && \
-    [ -x "/usr/share/steam/compatibilitytools.d/${UMU_PROTON_VERSION}/proton" ] \
-      || { echo "FATAL: UMU-Proton incomplet"; exit 1; }
 
 # ── 1a8b. AppManager — gestion des AppImage (25/10). Gear Lever n'a pas
 # d'AppImage (releases GitHub : .flatpak seulement ; AUR : compilation

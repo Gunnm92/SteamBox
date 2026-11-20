@@ -71,8 +71,11 @@ Chaque app applique la résolution du client à la connexion et revient à
 
 - **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon, AppImage via AppManager), Wine-tkg +
   DXVK + VKD3D-Proton, wsquashfs-launcher (paquets Batocera) avec wine-tkg
-  (arcade) et umu + proton-cachyos / UMU-Proton (jeux PC ; DualSense et
-  vibration).
+  (arcade) et umu (jeux PC ; DualSense et vibration). Les Proton ne sont pas
+  dans l'image : `wsquashfs-launcher --setup proton-cachyos` (Proton par
+  défaut, UMU-Proton en repli avec `--setup`) et `--setup ge-proton` les
+  installent dans `/config/.local/share/Steam/compatibilitytools.d`, vus
+  aussi par Steam.
 - **Génération d'images** : [MAKO Renderer](https://github.com/eugeniosegala/MAKO),
   couche Vulkan (jeux Vulkan, DXVK et VKD3D-Proton, émulateurs en rendu
   Vulkan ; pas l'OpenGL), 64 et 32 bits. Modèle MAKO FG libre, sans DLL
@@ -153,13 +156,9 @@ bibliothèque peut changer de soname. Surcharges possibles : `ES_REF`,
 `SUNSHINE_TAG`, `XFCE_LAUNCHER_REF`. Les deux Dockerfile partent de
 `cachyos/cachyos-v3:latest`, revérifiée à chaque build (`--pull`).
 
-`wsquashfs-launcher` n'est plus dans l'image. `init_wsquashfs.sh` l'installe
-une seule fois dans `/config/.local/bin` (le home persistant, comme l'installeur
-de son dépôt hors root) s'il est absent ; ensuite c'est son updater qui le
-met à jour, pas un redémarrage du conteneur. Le commit installé est celui
-fixé au build (`WSQUASHFS_REF`, par défaut le **dernier commit** de `main`,
-résolu par `git ls-remote`) ; `make push WSQUASHFS_REF=<branche|tag|commit>`
-pour en imposer un autre.
+`wsquashfs-launcher` n'est pas dans l'image : il vit dans `/config/.local/bin`
+(le home persistant), installé par l'installeur de son dépôt, et son updater
+le met à jour, pas un redémarrage du conteneur.
 Les `.wsquashfs` sont reconnus par leur extension sous XFCE (type
 `application/x-wsquashfs`) : un double-clic les ouvre avec le lanceur.
 
@@ -229,7 +228,7 @@ passer par un VPN ou un reverse proxy authentifié en amont.
 ```
 Dockerfile.cachyos          # l'image — historique des architectures en tête
 Dockerfile.prebuilt         # composants précompilés (make prebuilt → release GitHub)
-Makefile                    # build/push/run/prebuilt (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN/WSQUASHFS_REF/PREBUILT_TAG)
+Makefile                    # build/push/run/prebuilt (PROFILE, REGISTRY/IMAGE/TAG/GITHUB_TOKEN/PREBUILT_TAG)
 prebuilt/check.sh           # make prebuilt-check ; prebuilt/out/ = sortie de make prebuilt (ignorée)
 docker-compose.yml          # compose générique, complété par l'override du profil
 docs/                       # configuration (profils, variables), déploiement Unraid
