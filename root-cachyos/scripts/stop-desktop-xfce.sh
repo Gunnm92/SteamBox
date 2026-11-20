@@ -7,7 +7,7 @@
 # bureau, toujours là (constaté par l'utilisateur).
 #
 # Arrête l'arbre de processus de cette session (dbus-run-session et ses
-# descendants : xfsettingsd, xfdesktop, xfce4-panel, nm-applet et ce qui a
+# descendants : xfsettingsd, xfdesktop, xfce4-panel et ce qui a
 # été lancé depuis le panneau), retrouvé par le fichier PID du script de
 # lancement — jamais par nom : le bureau de la TV (wayland-0) fait tourner
 # les mêmes programmes et ne doit pas être touché.

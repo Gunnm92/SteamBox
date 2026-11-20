@@ -256,9 +256,9 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Clavier Moonlight muet après un changement de fenêtre** → réglé par le
   focus-follows-mouse de labwc (rc.xml généré par labwc-session.sh) ;
   contournement : re-changer de fenêtre.
-- **Panneau, fond d'écran ou icône réseau disparus** → chaque composant du
+- **Panneau ou fond d'écran disparus** → chaque composant du
   bureau visible est un service s6 relancé automatiquement :
-  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`, `svc-nm-applet`.
+  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`.
 - **Appli de `~/.config/autostart` jamais lancée** → labwc ne lit pas
   l'autostart XDG : c'est `xdg-autostart.sh` (dex), lancé par `labwc -s`
   dans labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
@@ -266,7 +266,7 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   zone de notification de xfce4-panel (60 s au plus) : sans elle, une icône
   comme `wsquashfs-launcher --tray` quitte aussitôt. Seul
   `~/.config/autostart` est lu : `/etc/xdg/autostart` doublerait les services
-  s6 (nm-applet, xfsettingsd). Voir son lancement dans les logs de `svc-labwc`.
+  s6 (xfsettingsd). Voir son lancement dans les logs de `svc-labwc`.
 - **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
   journal de l'émulateur : « Failed to initialize Wayland surface ». La session
   gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une

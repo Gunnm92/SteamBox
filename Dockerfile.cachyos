@@ -324,7 +324,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin pavucontrol \
       tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip dex \
       gvfs gvfs-smb smbclient \
-      network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
       wayvnc python-pip wlr-randr \
       gtk3 \
@@ -560,7 +559,10 @@ RUN --mount=type=secret,id=github_token \
 # et reste bloqué sur "waiting for network" sans ce service, même quand la
 # connectivité réelle est bonne (observé : ses propres tests de connectivité
 # HTTP passent, mais "Init: failed to create a NetworkManager client" bloque
-# quand même l'écran de login). unmanaged-devices=* est CRITIQUE en
+# quand même l'écran de login). Pas d'applet réseau (nm-applet retiré le
+# 20/11) : NetworkManager ne gère aucune interface, il se disait donc
+# « déconnecté » et l'applet affichait un Wi-Fi grisé alors que le réseau
+# (celui d'Unraid) marche. unmanaged-devices=* est CRITIQUE en
 # network_mode: host : NetworkManager voit alors les vraies interfaces de
 # l'hôte Unraid — sans ce réglage il pourrait tenter de les gérer/reconfigurer.
 RUN mkdir -p /etc/NetworkManager && \

@@ -6,7 +6,7 @@
 # vide.
 #
 # dbus-run-session obligatoire (confirmé en direct 06/09) : xfsettingsd/
-# xfdesktop/xfce4-panel/nm-applet lancés en héritant simplement du bus de
+# xfdesktop/xfce4-panel lancés en héritant simplement du bus de
 # session existant ($XDG_RUNTIME_DIR/bus, svc-dbus-session) s'exécutaient
 # bien mais se terminaient tout seuls en ~1s (exit 0, aucune erreur) —
 # wayland-0 (bureau visible) ET wayland-1 (ce script) partagent le MÊME
@@ -50,7 +50,6 @@ xfsettingsd &
 /usr/local/bin/scripts/xfce-defaults.sh HEADLESS-1
 xfdesktop &
 xfce4-panel &
-nm-applet &
 
 wait
 '
