@@ -326,13 +326,12 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       gvfs gvfs-smb smbclient \
       network-manager-applet \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
-      wayvnc python-pip wlr-randr \
+      wayvnc wlr-randr \
       gtk3 \
       xorg-xwayland wayland libxkbcommon \
       mesa vulkan-icd-loader vulkan-tools \
       core/lib32-gcc-libs core/lib32-glibc extra/libpulse extra/libasyncns \
       vulkan-radeon lib32-vulkan-radeon \
-      vulkan-intel lib32-vulkan-intel intel-media-driver libva-intel-driver \
       pipewire pipewire-pulse pipewire-alsa wireplumber \
       lib32-pipewire lib32-libpulse \
       lib32-libxrandr lib32-libxi lib32-libxcursor lib32-libxcomposite lib32-libxrender \
@@ -353,7 +352,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       sdl2_image sdl2_mixer sdl2_ttf sdl2_gfx \
       papirus-icon-theme hicolor-icon-theme adwaita-icon-theme \
       ttf-jetbrains-mono cantarell-fonts noto-fonts ttf-dejavu \
-      libva-utils \
       qt6-multimedia qt6-wayland \
       gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav" && \
     for i in 1 2 3; do \
@@ -386,6 +384,12 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
 # dans leur AppDir) — "cannot open shared object file" confirmé en direct
 # sans ce paquet.
 #
+# Retirés le 20/11 : vulkan-intel/lib32-vulkan-intel/intel-media-driver/
+# libva-intel-driver (~150 Mo : le conteneur ne reçoit que le GPU NVIDIA,
+# l'iGPU Intel de l'hôte n'y est pas ; vulkan-radeon reste, pilote Vulkan
+# exigé par Steam et GPU de la future machine AMD), python-pip et
+# libva-utils (rien ne les appelait).
+#
 # gst-plugins-good/bad + gst-libav (20/09, "Pegasus n'arrive pas à lire les
 # vidéos de preview") : qt6-multimedia tire gstreamer/gst-plugins-base-libs/
 # gst-plugins-bad-libs en dépendance, mais ce sont uniquement des paquets
@@ -401,6 +405,8 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
 # (MP4/MOV) et la plupart des formats courants ; gst-plugins-bad et
 # gst-libav (décodeurs de secours via FFmpeg) ajoutés pour une couverture
 # large plutôt que corriger un format à la fois.
+# Pegasus a été remplacé par EmulationStation (VLC), mais ces greffons
+# restent : Wine (winegstreamer) en a besoin pour les vidéos des jeux.
 # gst-plugins-ugly (23/09) : asfdemux (ASF/WMV) n'est QUE là — les vidéos
 # .wmv des jeux wsquashfs passent par winegstreamer et échouaient ("Missing
 # decoder: Advanced Streaming Format"), confirmé en direct : BlazBlue Central
@@ -421,18 +427,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
 # secondes, pas la même échelle qu'un navigateur. meson/ninja/libva/
 # ffnvcodec-headers = makedepends du PKGBUILD AUR, supprimés après coup
 # avec le user de build temporaire.
-# ludusavi (sauvegarde/restauration des saves de jeux, backend de la
-# fonctionnalité "Ludusavi Manager" de Heroic) ajouté dans la MÊME session
-# de build AUR que nvidia-vaapi-driver ci-dessus (un seul aller-retour
-# useradd/userdel) : suite à l'audit du 29/08 sur le prefix Wine "shared"
-# corrompu par nos changements de Proton successifs (voir commit sur
-# install-nvidia-userspace.sh) — le prefix Wine ne doit plus être la seule
-# copie des sauvegardes. Version "-bin" choisie (binaire précompilé upstream)
-# plutôt que "ludusavi" source : évite d'ajouter toute la toolchain Rust/
-# cargo à l'image pour un seul outil. depends du PKGBUILD (bzip2, gtk3,
-# hicolor-icon-theme, libgcc) ajoutés aux paquets normaux car ce sont des
-# dépendances RUNTIME (pas des makedepends) — elles doivent rester après
-# le nettoyage, contrairement à meson/ninja plus bas.
 # Eden (Switch) : sorti de l'AUR le 22/10, voir le bloc « Eden (Nintendo Switch) » plus bas.
 # decky-loader (31/08, demande utilisateur) — chargeur de plugins Steam
 # Deck (SteamDeckHomebrew/decky-loader). PAS installé via AUR (revu le
@@ -456,7 +450,6 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
 # -multidict/-setproctitle/-jinja) vient des dépôts officiels.
 RUN pacman -S --noconfirm --needed \
       meson ninja libva ffnvcodec-headers \
-      bzip2 gtk3 hicolor-icon-theme libgcc \
       python python-aiohttp python-watchdog python-certifi python-packaging \
       python-multidict python-setproctitle python-jinja \
       python-setuptools python-wheel && \
@@ -469,11 +462,6 @@ set -e
 cd /tmp
 git clone --depth 1 https://aur.archlinux.org/libva-nvidia-driver-git.git
 cd libva-nvidia-driver-git
-makepkg -si --noconfirm --needed
-
-cd /tmp
-git clone --depth 1 https://aur.archlinux.org/ludusavi-bin.git
-cd ludusavi-bin
 makepkg -si --noconfirm --needed
 
 # --nocheck (21/10) : les tests amont de python-aiohttp-jinja2 cassent avec
@@ -499,7 +487,7 @@ RUN chown aur-builder:aur-builder /tmp/build-aur.sh && \
     su aur-builder -c /tmp/build-aur.sh && \
     rm -f /etc/sudoers.d/aur-builder /tmp/build-aur.sh && \
     userdel -r aur-builder && \
-    rm -rf /tmp/libva-nvidia-driver-git /tmp/ludusavi-bin \
+    rm -rf /tmp/libva-nvidia-driver-git \
            /tmp/python-aiohttp-jinja2 /tmp/python-aiohttp-cors && \
     pacman -Rns --noconfirm meson ninja && \
     rm -rf /var/cache/pacman/pkg/*
@@ -552,7 +540,7 @@ RUN --mount=type=secret,id=github_token \
 
 # Heroic (Epic/GOG/Amazon) : retiré de l'image (25/10). Installé comme AppImage
 # par AppManager dans ~/Applications ; lancé par /usr/local/bin/heroic.
-# DISPLAY sur Ludusavi, Dolphin et Winetricks (audit menu XFCE 31/08 puis
+# DISPLAY sur Ludusavi (retiré le 20/11), Dolphin et Winetricks (audit menu XFCE 31/08 puis
 # 18/09) : ces apps nécessitaient un sed sur leur .desktop upstream pour
 # forcer DISPLAY=:0 (Ludusavi : "neither WAYLAND_DISPLAY nor
 # WAYLAND_SOCKET nor DISPLAY is set" ; Dolphin : "Aborted" silencieux sans

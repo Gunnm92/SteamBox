@@ -5,15 +5,16 @@ set -e
 CONF_DIR="/config/.config/sunshine"
 mkdir -p "${CONF_DIR}"
 
-# Encodeur d'après le GPU (25/09) : nvenc sur NVIDIA, vaapi sur AMD/Intel
-# (Mesa radeonsi / intel-media-driver, installés dans l'image). GPU_VENDOR
+# Encodeur d'après le GPU (25/09) : nvenc sur NVIDIA, vaapi sur AMD (Mesa
+# radeonsi), logiciel ailleurs : les pilotes Intel ont quitté l'image le
+# 20/11 (le conteneur ne reçoit que le GPU NVIDIA). GPU_VENDOR
 # est exporté par init-system ; recalculé si le script est lancé seul.
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 [ "${GPU_VENDOR}" = "auto" ] && GPU_VENDOR="$(gpu_vendor)"
 case "${GPU_VENDOR}" in
     nvidia)    ENCODER=nvenc ;;
-    amd|intel) ENCODER=vaapi ;;
+    amd)       ENCODER=vaapi ;;
     *)         ENCODER=software ;;
 esac
 # Langue de la Web UI Sunshine : code court de la locale (fr, de, en...).

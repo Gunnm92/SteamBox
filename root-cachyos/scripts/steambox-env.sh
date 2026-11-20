@@ -41,7 +41,8 @@ fi
 
 # GPU : nvidia | amd | intel, "auto" = détection (voir gpu_vendor). NVIDIA
 # demande aussi LIBVA_DRIVER_NAME=nvidia dans l'environnement (VA-API via
-# nvidia-vaapi-driver) ; AMD/Intel : libva trouve seule radeonsi/iHD.
+# nvidia-vaapi-driver) ; AMD : libva trouve seule radeonsi. Intel : détecté,
+# mais plus de pilote dans l'image (20/11), encodage logiciel.
 GPU_VENDOR="${GPU_VENDOR:-auto}"
 
 # Fabricant du GPU passé au conteneur. NVIDIA : module du pilote visible
