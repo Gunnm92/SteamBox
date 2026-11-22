@@ -69,3 +69,10 @@ ACTION!="remove", SUBSYSTEM=="input", ATTRS{name}=="Sunshine*", MODE="0660", GRO
 ACTION!="remove", SUBSYSTEM=="input", ATTRS{name}=="Wireless Controller", MODE="0660", GROUP="input"
 ACTION!="remove", KERNEL=="uhid", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
 ACTION!="remove", KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input"
+# Suppression au débranchement (22/11, ds5-usbip) : les nœuds créés par les
+# mknod ci-dessus restaient en place une fois le périphérique parti. Les
+# numéros sont réattribués : à la manette suivante, TEST!= sautait le mknod
+# et laissait un nœud pointant vers un autre numéro mineur (vu avec la
+# DualSense USB/IP rebranchée). Au « remove », les attributs du parent ne
+# sont plus lisibles : on efface tout nœud hidraw retiré par le noyau.
+ACTION=="remove", SUBSYSTEM=="hidraw", RUN+="/usr/bin/rm -f /dev/%k"
