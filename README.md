@@ -60,7 +60,7 @@ Définies dans `apps.json` (généré/migré par
 | App Moonlight | Contenu |
 |---|---|
 | **Desktop** | La session headless nue — lancer Steam depuis le menu |
-| **Steam Big Picture** | `steam -gamepadui` directement sur wayland-1/Xwayland |
+| **Steam Big Picture** | `steam -gamepadui` directement sur wayland-1/Xwayland (`steam-bigpicture-launch.sh`, jeux Wine en X11) |
 | **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope 2560×1440@120 (scaling FSR, changement de résolution in-game) |
 
 Chaque app applique la résolution du client à la connexion et revient à
@@ -281,6 +281,12 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   `wayland-*`) : les jeux passent en X11 dans gamescope. Sur une image plus
   ancienne : `WINEDLLOVERRIDES=winewayland.drv=d %command%` dans les options de
   lancement.
+- **Big Picture (sans gamescope) qui navigue à la manette pendant une partie**
+  (sons de navigation en fond) → jeu Wine ouvert en Wayland natif : Steam ne
+  voit pas sa fenêtre. L'entrée Sunshine passe par `steam-bigpicture-launch.sh`,
+  qui impose le pilote x11 de Wine (contournement, au prix de l'affichage
+  Wayland natif dans cette session). Inopérant si Steam tournait déjà sur le
+  bureau avant l'ouverture de Big Picture.
 - **Un jeu ne se lance pas depuis EmulationStation** → ES affiche la cause
   (émulateur ou BIOS absent, format non pris en charge…) dans une boîte
   d'erreur : convention Batocera, code de sortie 250 et message dans

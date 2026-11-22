@@ -141,7 +141,7 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     { "name": "Desktop", "image-path": "/usr/share/steambox/sunshine/desktop-xfce.png",
       "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop-xfce.sh" } ] },
-    { "name": "Steam Big Picture", "detached": ["steam -gamepadui"], "image-path": "/usr/share/steambox/sunshine/steam-bigpicture.png",
+    { "name": "Steam Big Picture", "detached": ["/usr/local/bin/scripts/steam-bigpicture-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-bigpicture.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-gamescope.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
@@ -162,7 +162,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=10
+CURRENT_VERSION=11
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -362,6 +362,24 @@ if [ "${INSTALLED_VERSION}" -lt 10 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v10 : jaquettes Desktop / Steam / ES (sauvegarde .bak-migration-v10)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 11 ]; then
+    # v10 -> v11 (22/11) : « Steam Big Picture » passe par
+    # steam-bigpicture-launch.sh, qui impose le pilote x11 de Wine aux jeux
+    # lancés (sinon les .wsquashfs s'ouvrent en Wayland natif, Steam ne voit
+    # pas leur fenêtre et Big Picture continue de naviguer à la manette
+    # pendant la partie). Ne remplace QUE la commande d'origine
+    # « steam -gamepadui » de cette entrée, jamais une commande personnalisée.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        if jq -e '.apps[] | select(.name == "Steam Big Picture" and .detached == ["steam -gamepadui"])' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v11"
+            jq '{env, apps: [.apps[] | if .name == "Steam Big Picture" and .detached == ["steam -gamepadui"] then .detached = ["/usr/local/bin/scripts/steam-bigpicture-launch.sh"] else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v11 : Big Picture lancé par steam-bigpicture-launch.sh (sauvegarde .bak-migration-v11)"
         fi
     fi
 fi

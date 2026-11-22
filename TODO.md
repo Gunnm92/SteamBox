@@ -25,4 +25,4 @@ Petits chantiers à reprendre, à compléter au fur et à mesure.
 
 ## Déjà repérés
 
-- [ ] **Steam Big Picture sans gamescope** : Steam ne reconnaît pas la fenêtre des jeux lancés par un raccourci (Heroic, wsquashfs) : sons d'interface, et Steam Input garde la manette.
+- [ ] **Steam Big Picture sans gamescope** : Steam ne reconnaît pas la fenêtre des jeux lancés par un raccourci (Heroic, wsquashfs) : sons d'interface, et Steam Input garde la manette. Cause (22/11) : Wine 11 ouvre ces jeux en Wayland natif sur wayland-1, Steam (client X11) ne voit que les fenêtres X11 — réduire Big Picture ne suffit pas, il navigue encore en fond. Contournement : `steam-bigpicture-launch.sh` impose le pilote x11 de Wine (perte de l'affichage Wayland natif dans cette session). Solution définitive à trouver pour garder Wayland.
