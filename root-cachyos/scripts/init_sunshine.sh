@@ -58,6 +58,12 @@ if [ ! -f "${CONF_DIR}/sunshine.conf" ]; then
     # DS4 ne remonte quand même pas, creuser côté client Moonlight Android
     # TV (négociation des capacités manette), pas côté ce fichier.
     #
+    # ds4_back_as_touchpad_click = disabled (22/11) : activée par défaut,
+    # cette option fait aussi cliquer le pavé tactile de la DualSense
+    # virtuelle à chaque Select — en jeu, Select déclenchait aussi le menu
+    # (Start) : relevé SDL, Select = back + touchpad. Utile seulement pour
+    # une manette sans pavé ; une DualSense transmet déjà le sien.
+    #
     # csrf_allowed_origins calculé (22/09) au lieu de l'IP 10.1.1.1 écrite
     # en dur : IP propre à CE déploiement, alors que ce script sert pour
     # toute installation neuve. network_mode: host -> l'IP source de la
@@ -71,6 +77,7 @@ system_tray = 0
 dd_hdr_option = disabled
 encoder = ${ENCODER}
 min_log_level = info
+ds4_back_as_touchpad_click = disabled
 EOF
 fi
 # NOTE : ce bloc n'écrit sunshine.conf que s'il est absent. Depuis l'audit
@@ -162,7 +169,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=13
+CURRENT_VERSION=14
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -421,6 +428,17 @@ if [ "${INSTALLED_VERSION}" -lt 13 ]; then
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v13 : EmulationStation par stream-exec.sh (sauvegarde .bak-migration-v13)"
         fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 14 ]; then
+    # v13 -> v14 (22/11) : Select ne clique plus le pavé tactile de la
+    # DualSense virtuelle (ds4_back_as_touchpad_click, activée par défaut
+    # par Sunshine : Select déclenchait aussi le menu en jeu). Ajoutée
+    # seulement si absente — une valeur réglée à la main est conservée.
+    if [ -f "${CONF_DIR}/sunshine.conf" ] && ! grep -q '^ds4_back_as_touchpad_click' "${CONF_DIR}/sunshine.conf"; then
+        echo "ds4_back_as_touchpad_click = disabled" >> "${CONF_DIR}/sunshine.conf"
+        echo "[init_sunshine] migration v14 : ds4_back_as_touchpad_click = disabled ajouté à sunshine.conf"
     fi
 fi
 

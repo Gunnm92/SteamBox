@@ -303,6 +303,11 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   qui impose le pilote x11 de Wine (contournement, au prix de l'affichage
   Wayland natif dans cette session). Inopérant si Steam tournait déjà sur le
   bureau avant l'ouverture de Big Picture.
+- **Select ouvre aussi le menu du jeu (comme Start)** → Select cliquait aussi le
+  pavé tactile de la DualSense virtuelle (option Sunshine
+  `ds4_back_as_touchpad_click`, active par défaut). Désactivée dans
+  `sunshine.conf` depuis le 22/11 (migration v14) ; vérifier qu'elle n'y a pas
+  été remise à `enabled`.
 - **Un jeu ne se lance pas depuis EmulationStation** → ES affiche la cause
   (émulateur ou BIOS absent, format non pris en charge…) dans une boîte
   d'erreur : convention Batocera, code de sortie 250 et message dans
