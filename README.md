@@ -272,6 +272,15 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une
   image plus ancienne, mettre `QT_QPA_PLATFORM=xcb %command%` dans les options
   de lancement du raccourci.
+- **Jeu Wine (.wsquashfs) qui plante aussitôt dans Steam gamepadui** (Unreal :
+  « CreateSwapChainResult failed », log Steam : « [Gamescope WSI] Failed to get
+  Wayland objects », fenêtre d'erreur visible sur noVNC) → Wine s'était ouvert
+  en Wayland sur le bureau (wayland-0) au lieu de gamescope. La session
+  gamescope a désormais son propre `XDG_RUNTIME_DIR`
+  (`/run/user/<uid>/gamescope-session`, liens vers bus, PipeWire, Pulse…, sans
+  `wayland-*`) : les jeux passent en X11 dans gamescope. Sur une image plus
+  ancienne : `WINEDLLOVERRIDES=winewayland.drv=d %command%` dans les options de
+  lancement.
 - **Un jeu ne se lance pas depuis EmulationStation** → ES affiche la cause
   (émulateur ou BIOS absent, format non pris en charge…) dans une boîte
   d'erreur : convention Batocera, code de sortie 250 et message dans

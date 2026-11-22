@@ -63,4 +63,32 @@ FPS="${SUNSHINE_CLIENT_FPS:-120}"
 # lui-même (SDL) ni sur Steam.
 export QT_QPA_PLATFORM=xcb
 
+# XDG_RUNTIME_DIR distinct pour la session gamescope (21/11), comme une
+# session de jeu Bazzite/SteamOS où aucun bureau ne tourne derrière gamescope.
+# Ici labwc (wayland-0, administration noVNC) et labwc-headless (wayland-1,
+# streamé par Sunshine) restent actifs : tout client Wayland lancé dans
+# gamescope sans WAYLAND_DISPLAY retombait sur wayland-0 et s'affichait sur le
+# bureau. Wine 11 (winewayland) y créait sa fenêtre, la couche Vulkan de
+# gamescope refusait la surface (« Failed to get Wayland objects ») et le jeu
+# plantait à la création de la swapchain (Tetris Effect Connected, .wsquashfs).
+# Le dossier de session ne reprend que bus, D-Bus, PipeWire, Pulse, dconf,
+# at-spi et doc (liens), jamais wayland-* : les clients basculent en X11,
+# dans le Xwayland de gamescope. gamescope lui-même atteint son compositeur
+# par un chemin absolu (accepté par libwayland) ; ses sockets gamescope-0 et
+# limiteurs sont créés dans le dossier de session.
+RUNTIME="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+SESSION_RUNTIME="${RUNTIME}/gamescope-session"
+mkdir -p "${SESSION_RUNTIME}"
+chmod 0700 "${SESSION_RUNTIME}"
+for entry in bus dbus-1 pipewire-0 pipewire-0-manager pulse dconf at-spi doc; do
+    ln -sfn "${RUNTIME}/${entry}" "${SESSION_RUNTIME}/${entry}"
+done
+case "${WAYLAND_DISPLAY:-wayland-0}" in
+    /*) ;;
+    *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-0}" ;;
+esac
+export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${RUNTIME}/bus}"
+
+export XDG_RUNTIME_DIR="${SESSION_RUNTIME}"
+
 exec gamescope --force-grab-cursor --backend sdl -W "${WIDTH}" -H "${HEIGHT}" -r "${FPS}" -f -e -C 0 --immediate-flips -- /usr/local/bin/steam -gamepadui
