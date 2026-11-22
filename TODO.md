@@ -4,7 +4,7 @@ Petits chantiers à reprendre, à compléter au fur et à mesure.
 
 ## Affichage
 
-- [ ] **HDR dans la session Steam** : en place le 22/11, validé en direct (HDR détecté dans les jeux, 1440p120, clavier OK) — labwc de Sunshine (`svc-labwc-stream`) en DRM sur le dongle HDMI, capture KMS, session Steam = gamescope seul en DRM HDR (bascule par `steam-gamescope-session.sh`), bureau noVNC toujours headless, `DISPLAY` des deux Xwayland notés au démarrage (plus de `:0` / `:1` en dur), modes choisis parmi ceux du dongle (NVIDIA refuse les modes sur mesure), profil Lua du dongle dans `~/.config/gamescope/scripts/steambox-dummy-hdr.lua` (hors image). Reste : **Hookshot** lancé depuis la session Steam DRM reste en arrière-plan (variable d'environnement manquante ?) ; retour de la session Steam vers Desktop à confirmer après `make push`.
+- [ ] **HDR dans la session Steam** : en place le 22/11, validé en direct (HDR détecté dans les jeux, 1440p120, clavier OK, retour vers les autres applis après la session Steam OK) — labwc de Sunshine (`svc-labwc-stream`) en DRM sur le dongle HDMI, capture KMS, session Steam = gamescope seul en DRM HDR (bascule par `steam-gamescope-session.sh`), bureau noVNC toujours headless, `DISPLAY` des deux Xwayland notés au démarrage (plus de `:0` / `:1` en dur), modes choisis parmi ceux du dongle (NVIDIA refuse les modes sur mesure), profil Lua du dongle dans `~/.config/gamescope/scripts/steambox-dummy-hdr.lua` (hors image). Reste : **Hookshot** lancé depuis la session Steam DRM reste en arrière-plan (variable d'environnement manquante ?).
 
 ## Manettes
 
