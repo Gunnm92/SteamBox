@@ -21,6 +21,10 @@ services:
       - /mnt/user/appdata/steambox:/config
       - /mnt/user/Game:/config/games       # Steam, Epic, wsquashfs, Batocera/
       - /mnt/user/Download:/config/Downloads
+      # DualSense USB/IP (ds5-usbip, 22/11) : Sunshine branche sa manette par
+      # vhci-hcd. Exige vhci-hcd chargé AVANT le démarrage du conteneur
+      # (fichier go d'Unraid), sinon la source du montage n'existe pas.
+      - /sys/devices/platform/vhci_hcd.0:/sys/devices/platform/vhci_hcd.0:rw
     # /dev/dri : injecté par le runtime nvidia (NVIDIA_VISIBLE_DEVICES).
     # GID 71 = "input" de l'hôte Unraid. init-system le détecte désormais seul
     # sur /dev/input ; gardé pour parité avec le template.

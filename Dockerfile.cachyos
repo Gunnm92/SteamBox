@@ -532,6 +532,8 @@ RUN chmod +x /usr/local/lib/steambox-build/*
 # PREBUILT_REPO : dépôt GitHub qui porte ces releases (fork : le sien).
 ARG PREBUILT_TAG=""
 ARG PREBUILT_REPO=Gunnm92/SteamBox
+# SUNSHINE_DS_TAG (22/11) : release de Gunnm92/sunshine-ds (vide = dernière).
+ARG SUNSHINE_DS_TAG=""
 
 # freeimage (24/09) : dépendance d'exécution de Batocera EmulationStation
 # (bloc 1a7), retirée des dépôts officiels Arch (AUR-only). Paquet pacman
@@ -934,9 +936,12 @@ RUN --mount=type=secret,id=github_token \
       echo "FATAL: bibliothèque manquante pour libxfce-launcher.so (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \
     fi
 
-# ── 1a7e. Sunshine en DualSense USB (02/10) — binaire précompilé (étape
-# sunshine-usb de Dockerfile.prebuilt, qui documente le pourquoi du patch) à
-# la place de celui du paquet, gardé pour ses dépendances seules. Web UI et
+# ── 1a7e. Sunshine en DualSense USB (02/10) — binaire précompilé à la place
+# de celui du paquet, gardé pour ses dépendances seules. Depuis le 22/11, il
+# vient de la release de sunshine-ds (github.com/Gunnm92/sunshine-ds, qui
+# documente ses correctifs) : DualSense USB/IP de ds5-usbip (haptiques HD,
+# repli uhid sans vhci-hcd), règle WirePlumber et oneshot s6 des droits vhci
+# dans la même archive. SUNSHINE_DS_TAG vide = dernière release. Web UI et
 # shaders viennent du même tag que le binaire : la web UI du paquet ne
 # correspondrait pas au binaire compilé (03/11), d'où l'effacement de
 # /usr/share/sunshine avant extraction. Avant le setcap de /usr/bin/sunshine
@@ -944,7 +949,8 @@ RUN --mount=type=secret,id=github_token \
 RUN --mount=type=secret,id=github_token \
     echo "Sunshine : paquet CachyOS $(pacman -Q sunshine | cut -d' ' -f2), dépendances seules" && \
     rm -rf /usr/share/sunshine && \
-    /usr/local/lib/steambox-build/prebuilt-fetch sunshine-usb && \
+    PREBUILT_REPO=Gunnm92/sunshine-ds PREBUILT_TAG="${SUNSHINE_DS_TAG}" \
+      /usr/local/lib/steambox-build/prebuilt-fetch sunshine-ds && \
     [ -f /usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI Sunshine absente de l'archive"; exit 1; } && \
     if ldd /usr/bin/sunshine | grep -q "not found"; then \
       echo "FATAL: bibliothèque manquante pour sunshine (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \

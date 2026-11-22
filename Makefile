@@ -56,16 +56,20 @@ endif
 PREBUILT_REPO ?= Gunnm92/SteamBox
 PREBUILT_TAG  ?=
 BUILD_ARGS   += --build-arg PREBUILT_REPO=$(PREBUILT_REPO)
+# Sunshine vient de la release de Gunnm92/sunshine-ds (vide = dernière).
+SUNSHINE_DS_TAG ?=
+ifneq ($(SUNSHINE_DS_TAG),)
+BUILD_ARGS   += --build-arg SUNSHINE_DS_TAG=$(SUNSHINE_DS_TAG)
+endif
 ifneq ($(PREBUILT_TAG),)
 BUILD_ARGS   += --build-arg PREBUILT_TAG=$(PREBUILT_TAG)
 endif
-# Surcharges du build précompilé : ES_REF (branche/tag d'ES), SUNSHINE_TAG
-# (tag Sunshine, vide = dernier v*), XFCE_LAUNCHER_REF (commit du lanceur,
-# vide = main).
+# Surcharges du build précompilé : ES_REF (branche/tag d'ES),
+# XFCE_LAUNCHER_REF (commit du lanceur, vide = main). Sunshine : voir
+# SUNSHINE_DS_TAG (release de Gunnm92/sunshine-ds).
 PREBUILT_ARGS = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
                 --build-arg EVDEV_REF=$(shell git log -1 --format=%h -- evdev-bridge) \
                 $(if $(ES_REF),--build-arg ES_REF=$(ES_REF)) \
-                $(if $(SUNSHINE_TAG),--build-arg SUNSHINE_TAG=$(SUNSHINE_TAG)) \
                 $(if $(XFCE_LAUNCHER_REF),--build-arg XFCE_LAUNCHER_REF=$(XFCE_LAUNCHER_REF))
 
 .PHONY: build push run stop logs clean lint help prebuilt prebuilt-publish prebuilt-check
@@ -176,4 +180,4 @@ help:
 	@echo "  GITHUB_TOKEN   (non defini si vide)"
 	@echo "  PREBUILT_REPO  $(PREBUILT_REPO)  (releases des composants precompiles)"
 	@echo "  PREBUILT_TAG   $(if $(PREBUILT_TAG),$(PREBUILT_TAG),(derniere release))"
-	@echo "  ES_REF / SUNSHINE_TAG / XFCE_LAUNCHER_REF  surcharges de make prebuilt"
+	@echo "  ES_REF / XFCE_LAUNCHER_REF  surcharges de make prebuilt ; SUNSHINE_DS_TAG : release sunshine-ds"

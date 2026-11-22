@@ -39,66 +39,6 @@ RUN make -C /src evdev-bridge-native && \
     mkdir -p /out && tar --zstd -cf /out/evdev-bridge.tar.zst -C /pkg . && \
     echo "evdev-bridge ${EVDEV_REF}" > /out/evdev-bridge.version
 
-# ── Sunshine DualSense USB (02/10) — compilé depuis le dernier tag upstream
-# (03/11 : le paquet CachyOS n'a pas de tag Git correspondant, son numéro de
-# build n'existe pas sur GitHub), avec sa DualSense virtuelle en USB au lieu
-# de Bluetooth. Les libScePad de 2022 (F1 22, The Devil in Me, KOF XV)
-# refusent la DualSense Bluetooth : énumérée, jamais ouverte, aucune touche
-# reçue. libvirtualhid a les deux profils, mais Sunshine code "ds5" en dur
-# sur dualsense() (= Bluetooth) : sous Linux, SDL2 HIDAPI ignore une
-# DualSense hidraw USB sans vrai parent USB, ce qu'est un périphérique uhid.
-# Ici, les jeux passent par Wine/Proton (hidraw direct) et Steam gère la
-# manette : validé le 02/10 sur les jeux DualSense, XInput et ES. Le paquet
-# sunshine n'est installé que pour tirer les dépendances de build ; l'image
-# principale le garde pour ses dépendances d'exécution. CUDA comme le paquet
-# CachyOS (capture NvFBC). SUNSHINE_TAG vide = dernier tag v*.
-#
-# Second patch (15/11) : latence des vibrations et effets de gâchette.
-# controlBroadcastThread (stream.cpp) ne vide la file des retours manette
-# qu'une fois par tour, et chaque tour bloque jusqu'à 150 ms dans
-# enet_host_service en attendant un paquet du client. Or Moonlight n'envoie
-# qu'un ping toutes les 100 ms, plus ses paquets de manette quand l'état
-# change : gâchette tenue (jeu de course), la vibration attendait le ping
-# suivant, jusqu'à 100 ms (~50 ms en moyenne). 5 ms ramène le pire cas à
-# 5 ms, pour ~200 réveils/s d'une boucle très légère. L'envoi lui-même est
-# déjà immédiat (enet_host_flush), comme la lecture uhid de libvirtualhid.
-FROM base AS sunshine-usb
-ARG SUNSHINE_TAG=""
-RUN --mount=type=cache,target=/var/cache/pacman/pkg \
-    pacman -S --needed --noconfirm --noprogressbar boost boost-libs \
-      nodejs npm shaderc appstream appstream-glib desktop-file-utils python-jinja cuda sunshine && \
-    pkg=$(pacman -Q sunshine | cut -d' ' -f2) && \
-    tag="${SUNSHINE_TAG}" && \
-    if [ -z "${tag}" ]; then \
-      tag=$(git ls-remote --tags --refs https://github.com/LizardByte/Sunshine.git 'v*' \
-            | sed 's|.*refs/tags/||' | sort -V | tail -1); \
-    fi && \
-    [ -n "${tag}" ] || { echo "FATAL: aucun tag Sunshine trouvé"; exit 1; } && \
-    ver="${tag#v}" && echo "Sunshine ${tag} (paquet CachyOS ${pkg})" && \
-    git clone --quiet --depth 1 --branch "${tag}" --recurse-submodules --shallow-submodules \
-      https://github.com/LizardByte/Sunshine.git /src && \
-    f=/src/src/platform/virtualhid_input.cpp && \
-    sed -i 's|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense}|{"ds5", lvh::GamepadProfileKind::dualsense, lvh::profiles::dualsense_usb}|' "$f" && \
-    { grep -q 'lvh::profiles::dualsense_usb}' "$f" || { echo "FATAL: patch DualSense USB non appliqué (Sunshine ${tag})"; exit 1; }; } && \
-    f=/src/src/stream.cpp && \
-    sed -i 's|server->iterate(150ms);|server->iterate(5ms);|' "$f" && \
-    { grep -q 'server->iterate(5ms);' "$f" || { echo "FATAL: patch latence vibrations non appliqué (Sunshine ${tag})"; exit 1; }; } && \
-    commit="$(git -C /src rev-parse HEAD)" && \
-    export BRANCH=master BUILD_VERSION="${ver}" COMMIT="${commit}" \
-           CC=gcc CXX=g++ CUDA_PATH=/opt/cuda PATH="/opt/cuda/bin:$PATH" NVCC_CCBIN=/usr/bin/g++ && \
-    cmake -S /src -B /build -Wno-dev -D BUILD_DOCS=OFF -D BUILD_WERROR=OFF -D BUILD_TESTS=OFF \
-      -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr \
-      -D SUNSHINE_EXECUTABLE_PATH=/usr/bin/sunshine -D SUNSHINE_ASSETS_DIR=share/sunshine \
-      -D SUNSHINE_PUBLISHER_NAME=LizardByte -D SUNSHINE_PUBLISHER_WEBSITE=https://app.lizardbyte.dev \
-      -D SUNSHINE_PUBLISHER_ISSUE_URL=https://app.lizardbyte.dev/support && \
-    cmake --build /build -j "$(nproc)" && \
-    DESTDIR=/root-install cmake --install /build >/dev/null && \
-    [ -f /root-install/usr/share/sunshine/web/index.html ] || { echo "FATAL: web UI absente de l'installation Sunshine ${tag}"; exit 1; } && \
-    install -Dm755 -s /build/sunshine /pkg/usr/bin/sunshine && \
-    mkdir -p /pkg/usr/share && cp -a /root-install/usr/share/sunshine /pkg/usr/share/sunshine && \
-    mkdir -p /out && tar --zstd -cf /out/sunshine-usb.tar.zst -C /pkg . && \
-    echo "sunshine-usb ${tag}" > /out/sunshine-usb.version
-
 # ── freeimage (AUR) — dépendance de build ET d'exécution de Batocera ES,
 # retirée des dépôts officiels Arch. makepkg refuse root : utilisateur
 # temporaire. Sortie = paquet pacman (installé par pacman -U dans l'image).
@@ -173,7 +113,6 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
 # lu par make prebuilt-check).
 FROM base AS collect
 COPY --from=evdev-bridge  /out/ /out/
-COPY --from=sunshine-usb  /out/ /out/
 COPY --from=freeimage     /out/ /out/
 COPY --from=batocera-es   /out/ /out/
 COPY --from=xfce-launcher /out/ /out/

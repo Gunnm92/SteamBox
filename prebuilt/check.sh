@@ -30,12 +30,6 @@ report() { # <nom> <enregistré> <amont> <à jour 0|1>
     fi
 }
 
-# Sunshine : dernier tag v* (même commande que Dockerfile.prebuilt).
-rec=$(recorded sunshine-usb)
-up=$(git ls-remote --tags --refs https://github.com/LizardByte/Sunshine.git 'v*' \
-     | sed 's|.*refs/tags/||' | sort -V | tail -1)
-report sunshine-usb "${rec}" "${up}" "$([ "${rec}" = "${up}" ] && echo 1 || echo 0)"
-
 # Batocera ES : HEAD de la branche par défaut ; enregistré "<hash court> (<date>)".
 rec=$(recorded batocera-es)
 up=$(git ls-remote https://github.com/batocera-linux/batocera-emulationstation.git HEAD | cut -f1)

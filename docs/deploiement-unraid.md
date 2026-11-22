@@ -84,6 +84,7 @@ l'image générique démarre en QWERTY, en anglais, et cherche les ROMs sous
 --device-cgroup-rule='c 226:* rmw'
 --device-cgroup-rule='c 242:* rmw'
 --device-cgroup-rule='c 116:* rmw'
+-v /sys/devices/platform/vhci_hcd.0:/sys/devices/platform/vhci_hcd.0:rw
 --security-opt apparmor=unconfined --security-opt seccomp=unconfined
 ```
 
@@ -134,6 +135,19 @@ Justification des règles cgroup — **toutes sont requises** :
   par ds5-usbip (haptiques HD des jeux). Nœuds créés par la règle udev
   `99-steambox-snd-fallback.rules` de l'image, pour une carte branchée après
   le démarrage du conteneur.
+
+**DualSense USB/IP (22/11, ds5-usbip / sunshine-ds)** — le Sunshine de
+l'image (release de Gunnm92/sunshine-ds) crée une vraie DualSense USB
+(HID + carte son 4 canaux) par vhci-hcd, pour les haptiques HD. Prérequis :
+- modules chargés **avant Docker**, dans `/boot/config/go` :
+  `modprobe vhci-hcd` et `modprobe snd-usb-audio` ; sans vhci-hcd, la source
+  du montage `-v /sys/devices/platform/vhci_hcd.0:…:rw` n'existe pas et le
+  conteneur ne démarre pas ;
+- le oneshot `init-sunshine-ds-vhci` ouvre `attach`/`detach` au groupe
+  `input` (visible côté hôte jusqu'au rechargement du module) ;
+- variable `LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=<IP du client>:46100`
+  (destination des haptiques) ; `LIBVIRTUALHID_DUALSENSE_USBIP=0` force
+  l'ancienne manette uhid.
 
 ## Réglages spécifiques au déploiement (`sunshine.conf`)
 

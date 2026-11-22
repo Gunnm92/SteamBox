@@ -86,6 +86,11 @@ while [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-display" ] && [ "${TIMEOUT}" -g
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
+# DualSense USB/IP (ds5-usbip, via le Sunshine de sunshine-ds) : activée par
+# défaut ; repli automatique sur uhid si vhci-hcd n'est pas monté en écriture.
+# Haptiques vers le client : LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=ip:port dans
+# l'environnement du conteneur (modèle Unraid / profil).
+export LIBVIRTUALHID_DUALSENSE_USBIP="${LIBVIRTUALHID_DUALSENSE_USBIP:-1}"
 exec s6-setuidgid arcade \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY="$(stream_display)" \
     sunshine /config/.config/sunshine/sunshine.conf "${CAPTURE[@]}"

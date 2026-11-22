@@ -16,3 +16,7 @@ LANGUAGE=fr_FR:fr
 
 # GPU NVIDIA : pilote VA-API (nvidia-vaapi-driver).
 LIBVA_DRIVER_NAME=nvidia
+
+# Haptiques HD de la DualSense (ds5-usbip, 22/11) : destination RTP des
+# canaux haptiques, le PC client (AIBox, réception PipeWire sur 46100).
+LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=10.10.10.1:46100
