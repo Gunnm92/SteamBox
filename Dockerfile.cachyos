@@ -98,7 +98,8 @@
 #    SDL/RetroArch indépendamment du compositeur) — seul le input Sunshine
 #    (uinput) en dépendait, et evdev-bridge/labwc règle spécifiquement ce cas.
 #
-# 7. Deuxième labwc HEADLESS dédié à Sunshine (svc-labwc-headless, wayland-1,
+# 7. Deuxième labwc dédié à Sunshine (svc-labwc-stream, wayland-1 — headless,
+#    ou en DRM sur le dongle HDMI avec capture KMS et HDR depuis le 22/11 ;
 #    30/08) — suite à une demande HDR, exploration complète de gamescope
 #    comme cible de capture Sunshine (compositeur racine, --backend drm ET
 #    headless, avec et sans --hdr-enabled/--expose-wayland) : jamais
@@ -1155,7 +1156,7 @@ RUN --mount=type=secret,id=github_token \
 # vers libei. Source vendored dans ce dépôt (ex-projet Desarso/evdev-bridge,
 # pas de licence explicite — usage privé uniquement, jamais republié), déjà
 # utilisée telle quelle sur l'ancien Dockerfile webstation/labwc. Cible
-# maintenant le labwc HEADLESS dédié au streaming (voir svc-labwc-headless
+# maintenant le labwc dédié au streaming (voir svc-labwc-stream
 # et point 7 ci-dessus), pas le bureau XFCE visible.
 #
 # Piste gamescope-racine + libei explorée puis abandonnée le 30/08 (voir

@@ -4,9 +4,7 @@
 # laisser le headless bloqué sur la résolution du dernier client connecté.
 set -uo pipefail
 
-export WAYLAND_DISPLAY=wayland-1
-XDG_RUNTIME_DIR="/run/user/$(id -u)"
-export XDG_RUNTIME_DIR
-
-wlr-randr --output HEADLESS-1 --custom-mode "1920x1080@60Hz" \
-    >/tmp/reset-resolution.log 2>&1
+# Même choix de sortie et de mode que set-resolution.sh (22/11 : HEADLESS-1
+# ou dongle HDMI en DRM), avec 1920x1080@60 comme résolution du « client ».
+SUNSHINE_CLIENT_WIDTH=1920 SUNSHINE_CLIENT_HEIGHT=1080 SUNSHINE_CLIENT_FPS=60 \
+    exec /usr/local/bin/scripts/set-resolution.sh

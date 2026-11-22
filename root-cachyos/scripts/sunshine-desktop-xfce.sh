@@ -1,6 +1,6 @@
 #!/bin/bash
 # "detached" de l'entrée Sunshine "Desktop" (apps.json) — sans lui,
-# svc-labwc-headless (wayland-1, cible de capture Sunshine) tourne nu :
+# svc-labwc-stream (wayland-1, cible de capture Sunshine) tourne nu :
 # aucun panneau/bureau n'y est jamais lancé (contrairement à wayland-0, voir
 # wayland-session.sh), donc "Desktop" sous Moonlight affichait un écran
 # vide.
@@ -24,9 +24,14 @@ set -uo pipefail
 # pris en défaut plusieurs fois par une variable supposée héritée qui ne
 # l'était pas (voir historique wayland-session.sh).
 export WAYLAND_DISPLAY=wayland-1
-export DISPLAY=:1
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
+# DISPLAY réel du Xwayland du labwc de Sunshine (22/11, stream_display) —
+# plus « :1 » codé en dur, que l'ordre de démarrage pouvait démentir.
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+DISPLAY="$(stream_display)"
+export DISPLAY
 
 PIDFILE="${XDG_RUNTIME_DIR}/sunshine-desktop-xfce.pid"
 
@@ -42,12 +47,19 @@ echo "$$" > "${PIDFILE}"
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 cd "${HOME}" || exit 1
 
+# Sortie du labwc de Sunshine (22/11) : HDMI-A-1 quand il pilote le dongle
+# en DRM (capture KMS, HDR), HEADLESS-1 en headless.
+DESKTOP_OUTPUT=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {print $1; exit}')
+export DESKTOP_OUTPUT="${DESKTOP_OUTPUT:-HEADLESS-1}"
+
 exec dbus-run-session -- bash -c '
-xfsettingsd &
 # Réglages par défaut seulement si absents (26/09, xfce-defaults.sh) : les
 # forcer ici écrasait à chaque session Moonlight les choix de lutilisateur
 # (police, fond) faits sur lun ou lautre bureau (même xfconf, même HOME).
-/usr/local/bin/scripts/xfce-defaults.sh HEADLESS-1
+# xfsettingsd lancé ENSUITE (22/11) : xfce-defaults.sh efface dabord le
+# profil daffichage enregistré pour cette sortie.
+/usr/local/bin/scripts/xfce-defaults.sh "${DESKTOP_OUTPUT}"
+xfsettingsd &
 xfdesktop &
 xfce4-panel &
 

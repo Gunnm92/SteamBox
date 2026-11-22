@@ -29,7 +29,7 @@ while [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ "${TIMEOUT}" -gt 0 ]; do
 done
 
 # Échec franc si wayland-1 n'existe toujours pas (audit M1, 05/09, même
-# pattern que svc-labwc-headless depuis l'audit C1 du 31/08) : avant ce
+# pattern que svc-labwc-stream depuis l'audit C1 du 31/08) : avant ce
 # correctif, Sunshine démarrait quand même après le timeout — s6 le
 # déclarait "started" aussitôt (aucune notification-fd sur aucun service
 # de ce projet), et Sunshine restait "up" en apparence tout en échouant
@@ -53,7 +53,7 @@ fi
 # zenity qui bloque le lancement complet de gamepadui — confirmé en direct.
 # :1 plutôt que :0 : le bureau XFCE (svc-labwc, wayland-0) démarre TOUJOURS
 # avant ce service headless — garanti depuis l'audit C1 du 31/08 :
-# svc-labwc-headless refuse désormais de démarrer (exit 1, s6 relance)
+# svc-labwc-stream refuse désormais de démarrer (exit 1, s6 relance)
 # tant que wayland-0 n'existe pas, au lieu de continuer après timeout et
 # de risquer de voler wayland-0/:0 au bureau (inversion des rôles vécue
 # en direct le 31/08). Ce service-ci est donc toujours le second, :1 est
@@ -65,6 +65,27 @@ fi
 # sous wine-tkg n'obtenaient plus leurs grosses réservations (GTI Club,
 # 450 Mo). Hérité par tout ce que lance ce service (Steam, Heroic, ES, jeux).
 ulimit -S -s 8192 2>/dev/null || true
+# Capture KMS quand le labwc de Sunshine pilote le dongle HDMI en DRM (22/11,
+# steambox-stream-output non vide) : seule capture qui transmet le HDR, et
+# elle suit la sortie quelle que soit l'appli qui la pilote (labwc, ou
+# gamescope seul pendant la session Steam). Passée en argument
+# (« name=value ») plutôt qu'écrite dans sunshine.conf : en headless, la
+# détection automatique (wlr) reste la bonne.
+CAPTURE=()
+if [ -s "${XDG_RUNTIME_DIR}/steambox-stream-output" ]; then
+    CAPTURE=(capture=kms)
+fi
+# DISPLAY réel du Xwayland du labwc de Sunshine (22/11, stream_display),
+# noté par labwc juste après wayland-1 : attendu 5 s au plus, repli :1.
+# Les entrées apps.json ne s'y fient pas (stream-exec.sh, scripts) : il
+# peut changer si ce labwc redémarre (session Steam en DRM).
+# shellcheck source=../../../../scripts/steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+TIMEOUT=10
+while [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-display" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
 exec s6-setuidgid arcade \
-    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY=:1 \
-    sunshine /config/.config/sunshine/sunshine.conf
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY="$(stream_display)" \
+    sunshine /config/.config/sunshine/sunshine.conf "${CAPTURE[@]}"

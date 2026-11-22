@@ -4,7 +4,7 @@
 # dans ce conteneur — bug non élucidé, voir point 6 de l'historique
 # Dockerfile.cachyos), et les rejoue via les protocoles wlroots
 # (zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1) — QUE le
-# labwc HEADLESS (svc-labwc-headless, wayland-1) implémente nativement,
+# labwc HEADLESS (svc-labwc-stream, wayland-1) implémente nativement,
 # contrairement à gamescope (passé à libei, jamais capturable par Sunshine
 # de toute façon — voir svc-sunshine/run). Ciblé sur ce labwc headless
 # depuis le 30/08 : c'est la session que Sunshine capture, pas le bureau
@@ -39,6 +39,15 @@ done
 # pas "input" — sans ce groupe, evdev-bridge ne peut jamais l'ouvrir, donc ne
 # le trouve jamais ("Waiting for Sunshine devices..." indéfiniment) malgré
 # le device bien présent et le protocole wlroots bien disponible côté labwc.
+# labwc de Sunshine en DRM (22/11, dongle HDMI : steambox-stream-output non
+# vide) : il lit lui-même les périphériques virtuels de Sunshine par
+# libinput (seatd) ; le pont doublerait chaque frappe et chaque mouvement.
+# Service gardé au repos plutôt qu'en échec (s6 le relancerait en boucle).
+if [ -s "${XDG_RUNTIME_DIR}/steambox-stream-output" ]; then
+    echo "[evdev-bridge] labwc de Sunshine en DRM, entrées lues par libinput : pont inutile"
+    exec sleep infinity
+fi
+
 exec runuser -u arcade -- \
   env WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
   /usr/local/bin/evdev-bridge-native

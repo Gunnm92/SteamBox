@@ -65,7 +65,7 @@ export QT_QPA_PLATFORM=xcb
 
 # XDG_RUNTIME_DIR distinct pour la session gamescope (21/11), comme une
 # session de jeu Bazzite/SteamOS où aucun bureau ne tourne derrière gamescope.
-# Ici labwc (wayland-0, administration noVNC) et labwc-headless (wayland-1,
+# Ici labwc (wayland-0, administration noVNC) et labwc-stream (wayland-1,
 # streamé par Sunshine) restent actifs : tout client Wayland lancé dans
 # gamescope sans WAYLAND_DISPLAY retombait sur wayland-0 et s'affichait sur le
 # bureau. Wine 11 (winewayland) y créait sa fenêtre, la couche Vulkan de
@@ -89,6 +89,34 @@ case "${WAYLAND_DISPLAY:-wayland-0}" in
 esac
 export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${RUNTIME}/bus}"
 
+# --stream (entrée Sunshine, 22/11) avec le dongle HDMI branché
+# (steambox-stream-output, voir svc-labwc-stream) : gamescope pilote seul
+# la sortie en DRM, HDR actif — steam-gamescope-session.sh start a arrêté le
+# labwc de Sunshine pour la libérer. Mode du dongle choisi par -W/-H/-r
+# (résolution du client). --disable-layers --force-composition : tout est
+# composé sur le plan principal, le seul que lit la capture KMS de Sunshine
+# (sinon écran noir, vu en direct). Écrans dont l'EDID n'annonce pas le HDR
+# (dongle sans colorimétrie BT.2020) : profil Lua dans
+# ~/.config/gamescope/scripts (voir README). Sans dongle ou hors Sunshine
+# (raccourci du bureau) : gamescope niché comme avant.
+CONNECTOR=$(cat "${RUNTIME}/steambox-stream-output" 2>/dev/null)
+if [ "${1:-}" = --stream ] && [ -n "${CONNECTOR}" ]; then
+    # Définition parmi les modes du dongle (fit_resolution) : le pilote
+    # NVIDIA refuse en DRM tout mode absent de son EDID.
+    # shellcheck source=steambox-env.sh
+    . /usr/local/bin/scripts/steambox-env.sh
+    read -r _ _ CONN_SYS <<<"$(stream_drm_card)"
+    RES=$(sort -u "${CONN_SYS}/modes" 2>/dev/null | fit_resolution "${WIDTH}" "${HEIGHT}")
+    if [ -n "${RES}" ]; then
+        WIDTH="${RES%x*}" HEIGHT="${RES#*x}"
+    fi
+    unset WAYLAND_DISPLAY DISPLAY
+    export LIBSEAT_BACKEND=seatd XDG_RUNTIME_DIR="${SESSION_RUNTIME}"
+    exec gamescope --backend drm --prefer-output "${CONNECTOR}" \
+        -W "${WIDTH}" -H "${HEIGHT}" -r "${FPS}" \
+        --hdr-enabled --disable-layers --force-composition -e \
+        -- /usr/local/bin/steam -gamepadui
+fi
 export XDG_RUNTIME_DIR="${SESSION_RUNTIME}"
 
 exec gamescope --force-grab-cursor --backend sdl -W "${WIDTH}" -H "${HEIGHT}" -r "${FPS}" -f -e -C 0 --immediate-flips -- /usr/local/bin/steam -gamepadui

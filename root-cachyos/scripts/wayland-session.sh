@@ -30,10 +30,13 @@ chmod 700 "${ARCADE_RUNTIME_DIR}"
 # labwc ; sans exec, un s6-svc -r ne tuait que ce script et laissait un
 # labwc orphelin garder wayland-0.
 #
-# WLR_DRM_DEVICES = premier /dev/dri/card* présent : /sys/class/drm liste les
-# GPU de l'hôte multi-GPU, mais /dev/dri/ ne contient que celui passé au
-# conteneur — sans ce forçage, wlroots essaie card1/card2 et échoue
-# ("Could not canonicalize path /dev/dri/cardN", 30/08).
+# Bureau toujours headless (22/11) : il n'est vu que par noVNC (wayvnc
+# capture labwc, pas un écran) — aucun écran réel n'est branché, seulement
+# le dongle HDMI factice. Il le prenait en DRM (WLR_DRM_DEVICES + seatd) ;
+# le dongle reste désormais libre pour la session de jeu (gamescope en DRM,
+# capture KMS de Sunshine pour le HDR), et seatd n'accepte qu'un client
+# actif par siège : LIBSEAT_BACKEND=noop, comme le labwc headless de
+# Sunshine. Résolution : DESKTOP_RESOLUTION (xdg-autostart.sh).
 # WLR_LIBINPUT_NO_DEVICES=1 : aucun périphérique libinput au démarrage du
 # conteneur ; evdev-bridge et les manettes (SDL) n'en dépendent pas.
 # Renderer par défaut (GLES2) : WLR_RENDERER=vulkan casse la capture
@@ -42,8 +45,8 @@ exec runuser -u arcade -- env \
     HOME=/home/arcade XDG_RUNTIME_DIR="${ARCADE_RUNTIME_DIR}" \
     QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_TYPE=wayland \
     SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
-    LIBSEAT_BACKEND=seatd SEATD_VTBOUND=0 \
+    LIBSEAT_BACKEND=noop WLR_BACKENDS=headless \
     KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT}" KEYBOARD_VARIANT="${KEYBOARD_VARIANT}" \
-    WLR_DRM_DEVICES="$(first_drm_card)" WLR_LIBINPUT_NO_DEVICES=1 \
+    DESKTOP_RESOLUTION="${DESKTOP_RESOLUTION}" WLR_LIBINPUT_NO_DEVICES=1 \
     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
     /usr/local/bin/scripts/labwc-session.sh

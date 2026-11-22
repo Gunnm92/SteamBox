@@ -4,4 +4,5 @@
 # seulement s'ils sont absents (xfce-defaults.sh).
 # shellcheck source=../../../../scripts/desktop-env.sh
 . /usr/local/bin/scripts/desktop-env.sh
-desktop_exec /usr/local/bin/scripts/xfce-defaults.sh HDMI-A-1 -- xfsettingsd
+# HEADLESS-1 : le bureau noVNC est headless depuis le 22/11.
+desktop_exec /usr/local/bin/scripts/xfce-defaults.sh HEADLESS-1 -- xfsettingsd

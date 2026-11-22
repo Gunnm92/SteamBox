@@ -31,16 +31,30 @@ bureau d'administration du flux de jeu :
                     └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Bureau visible** (`svc-labwc`, `wayland-0`, `DISPLAY=:0`) : session XFCE
-  complète sur le GPU via seatd, capturée par wayvnc pour l'accès navigateur.
+- **Bureau d'administration** (`svc-labwc`, `wayland-0`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-desktop-display`, en principe `:0`) :
+  session XFCE **headless** (jamais d'écran), capturée par wayvnc pour l'accès
+  navigateur (noVNC). Résolution : `DESKTOP_RESOLUTION` (1920×1080 par défaut).
   Sert à l'administration (fichiers, réglages, lancement manuel des apps).
-- **Session streaming** (`svc-labwc-headless`, `wayland-1`, `DISPLAY=:1`) :
-  compositeur headless dédié à Sunshine. Sa résolution s'adapte **au client
-  Moonlight connecté** (`prep-cmd` → [set-resolution.sh](root-cachyos/scripts/set-resolution.sh)).
-  L'invariant « headless = wayland-1 » est garanti : le service refuse de
-  démarrer tant que le bureau n'a pas créé `wayland-0`.
-- **Entrées Moonlight** : clavier/souris passent par
-  [evdev-bridge](evdev-bridge/bridge.c) (protocoles wlroots) ; les manettes
+- **Session streaming** (`svc-labwc-stream`, `wayland-1`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
+  compositeur dédié à Sunshine. Avec un **dongle HDMI factice** branché sur le
+  GPU (détecté, ou `STREAM_OUTPUT`), il pilote cette sortie en DRM et Sunshine
+  la capture en **KMS** (seule capture qui transmet le HDR) ; sans dongle, il
+  reste headless (capture wlr). Sa résolution s'adapte **au client Moonlight
+  connecté** (`prep-cmd` → [set-resolution.sh](root-cachyos/scripts/set-resolution.sh),
+  parmi les modes du dongle : la plus grande définition qui tient dans celle
+  du client, le pilote NVIDIA refusant les modes sur mesure). L'invariant « wayland-1 » est garanti : le
+  service refuse de démarrer tant que le bureau n'a pas créé `wayland-0`.
+- **Session Steam HDR** (« Mode SteamOS (Gamescope) », dongle branché) : le
+  `prep-cmd` ([steam-gamescope-session.sh](root-cachyos/scripts/steam-gamescope-session.sh))
+  arrête le labwc de Sunshine et gamescope pilote seul le dongle en DRM, HDR
+  actif ; à la fermeture, labwc reprend la sortie. Sunshine capture en KMS
+  dans les deux cas. Dongle dont l'EDID n'annonce pas le BT.2020 : profil
+  Lua dans `~/.config/gamescope/scripts/` (`supported = true`,
+  `eotf = gamescope.eotf.pq`, colorimétrie BT.2020, `matches` sur
+  marque/modèle de l'EDID).
+- **Entrées Moonlight** : clavier/souris lus par libinput quand le labwc de
+  Sunshine pilote le dongle, sinon par [evdev-bridge](evdev-bridge/bridge.c)
+  (protocoles wlroots, session headless) ; les manettes
   par les devices virtuels uinput/uhid de Sunshine, lus par SDL et par Steam
   Input (hidraw — voir la règle udev
   [99-steambox-hidraw-fallback.rules](root-cachyos/etc/udev/rules.d/99-steambox-hidraw-fallback.rules)).
@@ -61,7 +75,7 @@ Définies dans `apps.json` (généré/migré par
 |---|---|
 | **Desktop** | La session headless nue — lancer Steam depuis le menu |
 | **Steam Big Picture** | `steam -gamepadui` directement sur wayland-1/Xwayland (`steam-bigpicture-launch.sh`, jeux Wine en X11) |
-| **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope 2560×1440@120 (scaling FSR, changement de résolution in-game) |
+| **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope à la résolution du client (scaling FSR, changement de résolution in-game), avec son propre `XDG_RUNTIME_DIR` sans socket Wayland du bureau |
 
 Chaque app applique la résolution du client à la connexion et revient à
 1920×1080 à la déconnexion. Jaquettes Moonlight dans le style de Wolf
@@ -308,4 +322,4 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   session depuis le 31/08.
 - **Bureau et flux Moonlight inversés** → course wayland-0/1, impossible
   depuis l'audit C1 ; si observé quand même, `docker restart` et ouvrir un
-  ticket avec les logs `svc-labwc-headless`.
+  ticket avec les logs `svc-labwc-stream`.

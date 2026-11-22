@@ -62,9 +62,14 @@
 set -uo pipefail
 
 export WAYLAND_DISPLAY=wayland-1
-export DISPLAY=:1
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
+# DISPLAY réel du Xwayland du labwc de Sunshine (22/11, stream_display) —
+# plus « :1 » codé en dur, que l'ordre de démarrage pouvait démentir.
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+DISPLAY="$(stream_display)"
+export DISPLAY
 export XDG_CURRENT_DESKTOP=XFCE
 
 PIDFILE="${XDG_RUNTIME_DIR}/steam-link-launch.pid"

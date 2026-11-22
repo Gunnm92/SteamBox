@@ -14,6 +14,9 @@ ROMS_DIR="${GAMES_ROMS_DIR:-${GAMES_DIR}/roms}"
 BIOS_DIR="${GAMES_BIOS_DIR:-${GAMES_DIR}/bios}"
 SAVES_DIR="${GAMES_SAVES_DIR:-${GAMES_DIR}/saves}"
 
+# Résolution du bureau headless (noVNC), LARGEURxHAUTEUR[@Hz] (22/11).
+DESKTOP_RESOLUTION="${DESKTOP_RESOLUTION:-1920x1080}"
+
 # Clavier (XKB) : bureau labwc, clavier virtuel Sunshine (evdev-bridge) et
 # VNC (wayvnc). Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-us}"
@@ -69,12 +72,74 @@ gpu_vendor() {
     echo unknown
 }
 
-# Premier /dev/dri/card* présent dans le conteneur (wlroots, voir
-# wayland-session.sh : card0 n'est pas garanti).
-first_drm_card() {
-    local card
-    for card in /dev/dri/card*; do
-        [[ -e "${card}" ]] && { echo "${card}"; return; }
+# Sortie streamée par Sunshine (22/11) : le labwc de Sunshine (wayland-1)
+# pilote en DRM une sortie branchée du GPU du conteneur — un dongle HDMI
+# factice, aucun écran — et Sunshine la capture en KMS (seule capture qui
+# transmet le HDR) ; la session Steam y passe gamescope seul, en DRM HDR.
+# Sans sortie branchée, labwc reste headless et Sunshine capture par wlr
+# (comportement d'avant). STREAM_OUTPUT : auto (défaut), headless, ou le nom
+# d'un connecteur (HDMI-A-1, DP-1…).
+STREAM_OUTPUT="${STREAM_OUTPUT:-auto}"
+
+# stream_drm_card : /dev/dri/cardN du conteneur dont dépend une sortie
+# branchée, le connecteur et son dossier /sys (modes), sur une ligne
+# (« /dev/dri/card0 HDMI-A-1 /sys/class/drm/card0-HDMI-A-1 ») ;
+# rien si aucune ou si STREAM_OUTPUT=headless. /sys/class/drm liste les
+# cartes de l'hôte (numérotation différente) : rapprochées de /dev/dri par
+# leur numéro de périphérique (226:N).
+stream_drm_card() {
+    local dev majmin sys conn name
+    [[ "${STREAM_OUTPUT}" == headless ]] && return
+    for dev in /dev/dri/card*; do
+        [[ -e "${dev}" ]] || continue
+        majmin="$((16#$(stat -c %t "${dev}"))):$((16#$(stat -c %T "${dev}")))"
+        for sys in /sys/class/drm/card*; do
+            [[ "$(cat "${sys}/dev" 2>/dev/null)" == "${majmin}" ]] || continue
+            for conn in "${sys}"-*; do
+                name="${conn##*/}"; name="${name#"${sys##*/}"-}"
+                if [[ "${STREAM_OUTPUT}" == auto ]]; then
+                    [[ "$(cat "${conn}/status" 2>/dev/null)" == connected ]] || continue
+                elif [[ "${name}" != "${STREAM_OUTPUT}" ]]; then
+                    continue
+                fi
+                echo "${dev} ${name} ${conn}"
+                return
+            done
+        done
     done
-    echo /dev/dri/card0
+}
+
+# DISPLAY des deux Xwayland (22/11) : labwc réserve le premier numéro libre
+# à son démarrage, et le donne à sa commande -s, qui le note dans
+# $XDG_RUNTIME_DIR (steambox-desktop-display : bureau noVNC, par
+# xdg-autostart.sh ; steambox-stream-display : labwc de Sunshine). Lus au
+# lancement de chaque appli plutôt que codés en dur (:0 / :1) : l'ordre de
+# démarrage, ou un redémarrage d'un des labwc, pouvait inverser les numéros
+# (vu en direct : bureau sur :2, Sunshine sur :0, EmulationStation sur un :1
+# inexistant). Repli sur l'ancienne valeur si le fichier manque.
+desktop_display() {
+    local d
+    d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-desktop-display" 2>/dev/null)
+    echo "${d:-:0}"
+}
+stream_display() {
+    local d
+    d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-display" 2>/dev/null)
+    echo "${d:-:1}"
+}
+
+# fit_resolution <largeur> <hauteur> : parmi les définitions « LxH » lues
+# sur l'entrée standard (modes d'une sortie DRM), la plus grande qui tient
+# dans celle du client — à surface égale, le format le plus proche ; aucune
+# ne tient : la plus petite. Le pilote NVIDIA refuse en DRM tout mode absent
+# de l'EDID (essayé le 22/11 : 2560x1600, 1920x1200, 3440x1440 refusés sur
+# le dongle) ; Moonlight affiche alors l'image avec de fines bandes.
+fit_resolution() {
+    awk -v cw="$1" -v ch="$2" '
+        { split($1, r, "x"); w = r[1] + 0; h = r[2] + 0; if (!w || !h) next
+          ar = w / h - cw / ch; if (ar < 0) ar = -ar
+          if (w <= cw && h <= ch) {
+              if (fit == "" || w * h > fa || (w * h == fa && ar < far)) { fit = $1; fa = w * h; far = ar }
+          } else if (small == "" || w * h < sa) { small = $1; sa = w * h } }
+        END { print (fit != "" ? fit : small) }'
 }

@@ -21,7 +21,7 @@ while [ ! -S "${SOCKET_PATH}" ] && [ "${TIMEOUT}" -gt 0 ]; do
 done
 
 # Échec franc si le socket n'existe toujours pas (audit M1, 05/09, même
-# pattern que svc-sunshine/svc-labwc-headless) : sans ça wayvnc démarrait
+# pattern que svc-sunshine/svc-labwc-stream) : sans ça wayvnc démarrait
 # quand même après le timeout et échouait à se connecter en silence,
 # laissant le VNC mort jusqu'à un redémarrage manuel du service.
 if [ ! -S "${SOCKET_PATH}" ]; then

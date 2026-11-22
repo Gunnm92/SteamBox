@@ -21,4 +21,5 @@
 # déconnexion.
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+${WINEDLLOVERRIDES};}winewayland.drv=d"
 
-exec steam -gamepadui
+# Session streamée avec le DISPLAY réel de son Xwayland (stream-exec.sh).
+exec /usr/local/bin/scripts/stream-exec.sh steam -gamepadui

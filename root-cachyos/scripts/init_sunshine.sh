@@ -84,12 +84,12 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
     # "Desktop" avait jusque-là un "cmd"/"detached" absent (05/09) — Sunshine
     # capture alors juste la sortie du labwc headless (wayland-1) telle
     # quelle. Or ce compositeur ne lance jamais rien lui-même (voir
-    # svc-labwc-headless/run) : contrairement au bureau visible (wayland-0,
+    # svc-labwc-stream/run) : contrairement au bureau visible (wayland-0,
     # session XFCE complète démarrée par wayland-session.sh), rien n'y
     # affichait le moindre panneau/bureau — "Desktop" sous Moonlight donnait
     # un écran vide. sunshine-desktop-xfce.sh lance le même panneau/bureau
     # XFCE que la session visible, mais directement sur wayland-1 (pas de
-    # second labwc à démarrer, svc-labwc-headless le fournit déjà) ; il est
+    # second labwc à démarrer, svc-labwc-stream le fournit déjà) ; il est
     # idempotent (garde par PID file) pour supporter une reconnexion sans
     # empiler un second xfdesktop/xfce4-panel.
     #
@@ -143,9 +143,9 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop-xfce.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["/usr/local/bin/scripts/steam-bigpicture-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-bigpicture.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
-    { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-gamescope.png",
-      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] },
-    { "name": "EmulationStation", "detached": ["env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"], "image-path": "/usr/share/steambox/sunshine/emulationstation.png",
+    { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh --stream"], "image-path": "/usr/share/steambox/sunshine/steam-gamescope.png",
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/steam-gamescope-session.sh start", "undo": "/usr/local/bin/scripts/steam-gamescope-session.sh stop" } ] },
+    { "name": "EmulationStation", "detached": ["/usr/local/bin/scripts/stream-exec.sh /opt/batocera-es/emulationstation"], "image-path": "/usr/share/steambox/sunshine/emulationstation.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/reset-resolution.sh" } ] }
   ]
 }
@@ -162,7 +162,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=11
+CURRENT_VERSION=13
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -221,7 +221,7 @@ fi
 if [ "${INSTALLED_VERSION}" -lt 4 ]; then
     # v3 -> v4 (06/09) : l'entrée "Desktop" n'avait ni "cmd" ni "detached" —
     # Sunshine capturait alors le labwc headless (wayland-1) tel quel, qui
-    # ne lance jamais lui-même de panneau/bureau (voir svc-labwc-headless/
+    # ne lance jamais lui-même de panneau/bureau (voir svc-labwc-stream/
     # run) : écran vide sous Moonlight. Ajoute sunshine-desktop-xfce.sh en
     # "detached" pour y lancer la même session XFCE que le bureau visible.
     # Ne touche QUE l'entrée "Desktop" sans détaché existant — jamais une
@@ -380,6 +380,46 @@ if [ "${INSTALLED_VERSION}" -lt 11 ]; then
                 "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
                 && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
                 && echo "[init_sunshine] migration v11 : Big Picture lancé par steam-bigpicture-launch.sh (sauvegarde .bak-migration-v11)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 12 ]; then
+    # v11 -> v12 (22/11) : « Mode SteamOS (Gamescope) » passe par
+    # steam-gamescope-session.sh (prep-cmd) et steam-gamescope-launch.sh
+    # --stream : avec le dongle HDMI branché, gamescope pilote seul la sortie
+    # en DRM (HDR, capture KMS) le temps de la session ; sans dongle, même
+    # comportement qu'avant. Ne remplace QUE la configuration d'origine de
+    # cette entrée, jamais une commande personnalisée.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_PREP='[{"do":"/usr/local/bin/scripts/set-resolution.sh","undo":"/usr/local/bin/scripts/reset-resolution.sh"}]'
+        SEL='.name == "Mode SteamOS (Gamescope)" and .detached == ["/usr/local/bin/scripts/steam-gamescope-launch.sh"] and .["prep-cmd"] == ($old | fromjson)'
+        if jq -e --arg old "${OLD_PREP}" ".apps[] | select(${SEL})" "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v12"
+            jq --arg old "${OLD_PREP}" "{env, apps: [.apps[] | if ${SEL} then .detached = [\"/usr/local/bin/scripts/steam-gamescope-launch.sh --stream\"] | .[\"prep-cmd\"] = [{\"do\": \"/usr/local/bin/scripts/steam-gamescope-session.sh start\", \"undo\": \"/usr/local/bin/scripts/steam-gamescope-session.sh stop\"}] else . end]}" \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v12 : session Steam en DRM sur le dongle HDMI (sauvegarde .bak-migration-v12)"
+        fi
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 13 ]; then
+    # v12 -> v13 (22/11) : EmulationStation lancé par stream-exec.sh, qui lui
+    # donne le DISPLAY réel du Xwayland du labwc de Sunshine (stream_display)
+    # au lieu de « env DISPLAY=:1 » codé en dur — numéro que l'ordre de
+    # démarrage pouvait démentir (vu en direct : :1 inexistant, scan d'ES
+    # bloqué). Ne remplace QUE la commande d'origine.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_ES="env DISPLAY=:1 WAYLAND_DISPLAY=wayland-1 /opt/batocera-es/emulationstation"
+        NEW_ES="/usr/local/bin/scripts/stream-exec.sh /opt/batocera-es/emulationstation"
+        if jq -e --arg old "${OLD_ES}" '.apps[] | select(.detached == [$old])' "${CONF_DIR}/apps.json" >/dev/null 2>&1; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v13"
+            jq --arg old "${OLD_ES}" --arg new "${NEW_ES}" \
+                '{env, apps: [.apps[] | if .detached == [$old] then .detached = [$new] else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v13 : EmulationStation par stream-exec.sh (sauvegarde .bak-migration-v13)"
         fi
     fi
 fi

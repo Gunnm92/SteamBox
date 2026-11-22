@@ -6,8 +6,9 @@
 # suivant (vu en direct : dossier du fond d'écran en défilement, police).
 #
 # Usage : xfce-defaults.sh <sortie> [-- <commande...>]
-#   <sortie>    : nom du moniteur pour le fond (HDMI-A-1 bureau visible,
-#                 HEADLESS-1 bureau Moonlight)
+#   <sortie>    : nom du moniteur (HEADLESS-1 bureau noVNC, HDMI-A-1 bureau
+#                 Moonlight sur le dongle HDMI — HEADLESS-1 aussi s'il
+#                 tourne en headless)
 #   <commande>  : exécutée à la place de ce script ensuite (ex. xfsettingsd)
 #
 # Réglages dans xfconf, pas seulement gtk-3.0/settings.ini : une fois
@@ -60,6 +61,13 @@ case "$(xfconf-query -c xsettings -p /Gtk/MonospaceFontName 2>/dev/null)" in
     "JetBrainsMono Nerd Font"*)
         xfconf-query -c xsettings -p /Gtk/MonospaceFontName -s "JetBrains Mono 10" 2>/dev/null || true ;;
 esac
+
+# Profil d'affichage XFCE de cette sortie effacé (22/11) : la résolution est
+# pilotée par SteamBox (DESKTOP_RESOLUTION pour noVNC, set-resolution.sh
+# selon le client Moonlight). xfsettingsd réappliquait au démarrage un mode
+# enregistré (dongle en 1280x800) par-dessus celui du client. Appelé AVANT
+# xfsettingsd.
+xfconf-query -c displays -p "/Default/${output}" -r -R 2>/dev/null || true
 
 # Fond : clé du moniteur réel, celle que lit xfdesktop (le dialogue
 # "Réglages du bureau" a parfois écrit sous monitorUnknown, vu le 30/08).

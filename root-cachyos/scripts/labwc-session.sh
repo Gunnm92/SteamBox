@@ -126,4 +126,5 @@ unset WAYLAND_DISPLAY DISPLAY
 # les lance par dex, avec WAYLAND_DISPLAY/DISPLAY du bureau.
 # Par -s et NON par ~/.config/labwc/autostart : ce dossier est partagé avec
 # le labwc headless de Sunshine (même HOME), qui lancerait tout en double.
+rm -f "${XDG_RUNTIME_DIR}/steambox-desktop-display"
 exec labwc -s /usr/local/bin/scripts/xdg-autostart.sh

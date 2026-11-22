@@ -1,6 +1,7 @@
 #!/command/with-contenv bash
-# Deuxième compositeur labwc, headless (aucun vrai écran, DRM jamais
-# touché) — dédié à Sunshine/Moonlight, indépendant du bureau XFCE visible
+# Deuxième compositeur labwc — dédié à Sunshine/Moonlight. Headless à
+# l'origine (svc-labwc-headless, renommé svc-labwc-stream le 22/11) ; en DRM
+# sur le dongle HDMI s'il est branché (voir plus bas), indépendant du bureau XFCE visible
 # en local/VNC (svc-labwc, wayland-0). Ajouté le 30/08 suite à l'échec
 # confirmé de gamescope comme cible de capture Sunshine (portail D-Bus
 # absent, XDG_OUTPUT manquant, EGL_BAD_ACCESS — testé avec ET sans HDR,
@@ -14,8 +15,8 @@
 # implémente zwlr_virtual_pointer/zwp_virtual_keyboard nativement, pas
 # besoin du bridge libei exploré pour gamescope).
 #
-# LIBSEAT_BACKEND=noop : pas de vrai accès DRM/VT nécessaire ici (aucune
-# sortie physique) — seatd resterait bloqué à attribuer un VT à un
+# En headless, LIBSEAT_BACKEND=noop : pas de vrai accès DRM/VT nécessaire
+# (aucune sortie physique) — seatd resterait bloqué à attribuer un VT à un
 # compositeur qui n'en a pas besoin. WLR_BACKENDS=headless force wlroots à
 # créer un backend de rendu hors écran au lieu de chercher un GPU/VT réel.
 #
@@ -50,7 +51,7 @@ done
 # ce que le bureau soit réellement up : l'invariant "headless = wayland-1"
 # ne peut plus être violé, quel que soit l'ordre réel de démarrage.
 if [ ! -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
-    echo "[labwc-headless] wayland-0 absent après 15s — refus de démarrer" \
+    echo "[labwc-stream] wayland-0 absent après 15s — refus de démarrer" \
          "(sinon ce compositeur volerait wayland-0 au bureau), s6 va relancer."
     exit 1
 fi
@@ -62,7 +63,35 @@ fi
 # sous wine-tkg n'obtenaient plus leurs grosses réservations (GTI Club,
 # 450 Mo). Hérité par tout ce que lance ce service (Steam, Heroic, ES, jeux).
 ulimit -S -s 8192 2>/dev/null || true
+
+# Sortie streamée (22/11, steambox-env.sh : stream_drm_card) : si une sortie
+# est branchée sur le GPU du conteneur (dongle HDMI factice), ce labwc la
+# pilote en DRM (seatd) et Sunshine la capture en KMS — HDR possible, et la
+# session Steam y met gamescope seul en DRM. Sinon, headless comme avant
+# (Sunshine en capture wlr). Le connecteur retenu est noté dans
+# $XDG_RUNTIME_DIR/steambox-stream-output (vide en headless), lu par
+# svc-sunshine, svc-evdev-bridge, set-resolution.sh et la session Steam.
+# shellcheck source=../../../../scripts/steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+read -r STREAM_CARD STREAM_CONNECTOR _ <<<"$(stream_drm_card)"
+printf '%s' "${STREAM_CONNECTOR:-}" > "${XDG_RUNTIME_DIR}/steambox-stream-output"
+chown arcade "${XDG_RUNTIME_DIR}/steambox-stream-output"
+
+# Session Steam en DRM : son prep-cmd Sunshine (lancé en arcade) arrête ce
+# labwc pour libérer la sortie, puis le relance (steam-gamescope-session.sh).
+s6-svperms -O arcade -E arcade . 2>/dev/null || true
+
+if [ -n "${STREAM_CONNECTOR:-}" ]; then
+    echo "[labwc-stream] sortie ${STREAM_CONNECTOR} pilotée en DRM (${STREAM_CARD}), capture KMS"
+    BACKEND_ENV=(LIBSEAT_BACKEND=seatd WLR_DRM_DEVICES="${STREAM_CARD}" WLR_LIBINPUT_NO_DEVICES=1)
+else
+    echo "[labwc-stream] aucune sortie branchée : headless, capture wlr"
+    BACKEND_ENV=(LIBSEAT_BACKEND=noop WLR_BACKENDS=headless)
+fi
+# DISPLAY de son Xwayland noté par note-display.sh (22/11, stream_display) ;
+# l'ancien fichier est retiré d'abord pour qu'aucune appli ne lise un
+# numéro périmé.
+rm -f "${XDG_RUNTIME_DIR}/steambox-stream-display"
 exec runuser -u arcade -- \
-    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-        LIBSEAT_BACKEND=noop WLR_BACKENDS=headless \
-    bash -c 'unset WAYLAND_DISPLAY DISPLAY; exec labwc'
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" "${BACKEND_ENV[@]}" \
+    bash -c 'unset WAYLAND_DISPLAY DISPLAY; exec labwc -s "/usr/local/bin/scripts/note-display.sh stream"'

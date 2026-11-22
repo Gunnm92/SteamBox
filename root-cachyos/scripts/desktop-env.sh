@@ -29,12 +29,20 @@ desktop_exec() {
     # "Ajouter à Steam" de Heroic, audit 01/09).
     cd /home/arcade || exit 1
     # DISPLAY/WAYLAND_DISPLAY explicites (18/09) : les applis lancées depuis
-    # le panneau doivent s'ouvrir sur ce bureau (VNC), pas sur le headless
-    # wayland-1 de Moonlight.
+    # le panneau doivent s'ouvrir sur ce bureau (VNC), pas sur la session
+    # wayland-1 de Moonlight. DISPLAY réel du Xwayland du bureau (22/11,
+    # desktop_display) : noté par labwc à son démarrage, attendu 5 s au plus.
+    # shellcheck source=steambox-env.sh
+    . /usr/local/bin/scripts/steambox-env.sh
+    timeout=10
+    while [ ! -s "${runtime}/steambox-desktop-display" ] && [ "${timeout}" -gt 0 ]; do
+        sleep 0.5
+        timeout=$((timeout - 1))
+    done
     exec runuser -u arcade -- env \
         HOME=/home/arcade XDG_RUNTIME_DIR="${runtime}" \
         DBUS_SESSION_BUS_ADDRESS="unix:path=${runtime}/bus" \
-        WAYLAND_DISPLAY=wayland-0 DISPLAY=:0 \
+        WAYLAND_DISPLAY=wayland-0 DISPLAY="$(XDG_RUNTIME_DIR="${runtime}" desktop_display)" \
         QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=XFCE XDG_SESSION_TYPE=wayland \
         SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
         PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
