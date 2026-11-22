@@ -146,7 +146,9 @@ l'image (release de Gunnm92/sunshine-ds) crée une vraie DualSense USB
 - le oneshot `init-sunshine-ds-vhci` ouvre `attach`/`detach` au groupe
   `input` (visible côté hôte jusqu'au rechargement du module) ;
 - variable `LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=<IP du client>:46100`
-  (destination des haptiques) ; `LIBVIRTUALHID_DUALSENSE_USBIP=0` force
+  (destination des haptiques) ; `LIBVIRTUALHID_DUALSENSE_RTP_CHANNELS=4`
+  (haut-parleur de la manette en plus des haptiques, récepteur en 4 canaux) ;
+  `LIBVIRTUALHID_DUALSENSE_USBIP=0` force
   l'ancienne manette uhid.
 
 ## Réglages spécifiques au déploiement (`sunshine.conf`)
