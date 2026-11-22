@@ -1204,7 +1204,11 @@ RUN --mount=type=secret,id=github_token \
 # (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
 # — redirection en JS avec l'hôte déduit dynamiquement (window.location.hostname)
 # et le port websockify (même port que la page grâce à --web).
-RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/png" href="steam.png">\n<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=scale&reconnect=true");</script>\n' \
+# resize=remote (22/11) : le bureau, headless, prend la taille de la fenêtre
+# du navigateur (wayvnc redimensionne une sortie headless à la demande du
+# client) — net, sans mise à l'échelle ; DESKTOP_RESOLUTION n'est que la
+# taille de départ. resize=scale ne faisait qu'étirer l'image.
+RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/png" href="steam.png">\n<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=remote&reconnect=true");</script>\n' \
       > /usr/share/webapps/novnc/index.html
 
 # Habillage SteamBox (01/11) : l'onglet affichait « WayVNC - noVNC » (noVNC

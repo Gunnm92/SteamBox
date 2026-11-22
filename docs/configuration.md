@@ -38,7 +38,7 @@ facultatives :
 | `GAMES_ROMS_DIR`, `GAMES_BIOS_DIR`, `GAMES_SAVES_DIR` | `$GAMES_DIR/…` | Chaque dossier séparément |
 | `KEYBOARD_LAYOUT`, `KEYBOARD_VARIANT` | `us`, vide | Disposition XKB (ex. `fr` + `mac`) |
 | `STREAM_OUTPUT` | `auto` | Sortie streamée par Sunshine : `auto` (première sortie branchée du GPU, ex. dongle HDMI → DRM + capture KMS + HDR), `headless` (comportement d'avant), ou un connecteur (`HDMI-A-1`) |
-| `DESKTOP_RESOLUTION` | `1920x1080` | Résolution du bureau d'administration (noVNC, headless), `LARGEURxHAUTEUR[@Hz]` |
+| `DESKTOP_RESOLUTION` | `1920x1080` | Taille de départ du bureau d'administration (noVNC, headless), `LARGEURxHAUTEUR[@Hz]` ; il suit ensuite la fenêtre du navigateur |
 | `VNC_MAC_ISO_KEYS` | `1` si variante `mac`, sinon `0` | noVNC depuis un Mac à clavier ISO : remet « @ » et « < » à leur place (VNC seul) |
 | `LANG`, `LANGUAGE` | `en_US.UTF-8` | Langue du bureau, d'EmulationStation et de Sunshine |
 | `GPU_VENDOR` | `auto` | `nvidia` / `amd` / `intel` — choisit l'encodeur Sunshine (nvenc / vaapi) |

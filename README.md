@@ -19,12 +19,12 @@ bureau d'administration du flux de jeu :
 ```
                     ┌────────────────────────── conteneur SteamBox ─────────────────────────┐
                     │                                                                       │
- Navigateur ──────► │ noVNC/websockify :6080 ─► wayvnc ─► labwc BUREAU (wayland-0, DRM/GPU) │
+ Navigateur ──────► │ noVNC/websockify :6080 ─► wayvnc ─► labwc BUREAU (wayland-0, headless)│
  (admin LAN)        │                                     └─ XFCE : panel, Thunar, menu     │
                     │                                                                       │
- Moonlight ───────► │ Sunshine :47984-48010 ──► capture ─► labwc HEADLESS (wayland-1)       │
+ Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► labwc STREAM (wayland-1, dongle)     │
  (jeu)              │      │                               └─ Steam gamepadui, jeux, Proton │
-                    │      └─ evdev-bridge : clavier/souris virtuels ─► wayland-1           │
+                    │      └─ clavier/souris virtuels ─► libinput (evdev-bridge sans dongle)│
                     │      └─ uinput/uhid : manettes virtuelles ─► SDL/hidraw (Steam Input) │
                     │                                                                       │
                     │ s6-overlay supervise le tout (voir root-cachyos/etc/s6-overlay/)      │
@@ -33,7 +33,9 @@ bureau d'administration du flux de jeu :
 
 - **Bureau d'administration** (`svc-labwc`, `wayland-0`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-desktop-display`, en principe `:0`) :
   session XFCE **headless** (jamais d'écran), capturée par wayvnc pour l'accès
-  navigateur (noVNC). Résolution : `DESKTOP_RESOLUTION` (1920×1080 par défaut).
+  navigateur (noVNC). Il prend la taille de la fenêtre du navigateur
+  (redimensionnement distant de noVNC) ; `DESKTOP_RESOLUTION` (1920×1080 par
+  défaut) n'est que sa taille de départ.
   Sert à l'administration (fichiers, réglages, lancement manuel des apps).
 - **Session streaming** (`svc-labwc-stream`, `wayland-1`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
   compositeur dédié à Sunshine. Avec un **dongle HDMI factice** branché sur le
