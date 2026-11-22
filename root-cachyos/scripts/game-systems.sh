@@ -167,10 +167,12 @@ SYSTEMS["segaer"]="Sega Europa-R|wsquashfs,squashfs,windowsloader|${SCRIPTS}/gam
 SYSTEMS["seganu"]="Sega Nu|wsquashfs,squashfs,windowsloader|${SCRIPTS}/game-launch-arcade.sh \"{file.path}\""
 SYSTEMS["segare"]="Sega RingEdge|wsquashfs,squashfs,windowsloader|${SCRIPTS}/game-launch-arcade.sh \"{file.path}\""
 SYSTEMS["segarw"]="Sega RingWide|wsquashfs,squashfs,windowsloader|${SCRIPTS}/game-launch-arcade.sh \"{file.path}\""
-# Windows : seuls les .wsquashfs de ce dossier sont lançables (les dossiers
-# .pc ne sont pas pris en charge par wsquashfs-launcher, et ces jeux passent
-# par Heroic de toute façon).
-SYSTEMS["win"]="Windows|wsquashfs|${WSQUASHFS} \"{file.path}\""
+# Windows : images .wsquashfs et dossiers .pc (22/11), comme Batocera —
+# wsquashfs-launcher lance un .pc monté en overlay (jeu à l'essai avant
+# --pack). Déclarer .pc fait aussi d'un dossier .pc UN jeu pour ES : sans
+# ça, il parcourait chacun fichier par fichier (Civilization VII 83 000
+# fichiers, F1 25 64 000…) et le chargement des systèmes ne finissait plus.
+SYSTEMS["win"]="Windows|wsquashfs,pc|${WSQUASHFS} \"{file.path}\""
 # konamilcd : jeux LCD Konami = romsets MAME (.zip), pas des wsquashfs comme
 # le supposait l'ancien mapping (vérifié le 22/09 : 19 .zip sur 20).
 SYSTEMS["konamilcd"]="Konami LCD|zip,7z|${RA} ${CORES}/mame_libretro.so \"{file.path}\""
