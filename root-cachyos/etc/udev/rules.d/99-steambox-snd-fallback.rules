@@ -1,0 +1,25 @@
+# Carte son de la DualSense USB émulée par ds5-usbip (22/11) : haptiques HD.
+#
+# La DualSense de Sunshine (uhid) n'a ni carte son ni parent USB, les jeux ne
+# lui trouvent aucune sortie haptique. ds5-usbip l'émule en vrai périphérique
+# USB (vhci-hcd sur l'hôte) : HID + carte son 4 canaux sous le même parent,
+# ce qui donne à Wine le ContainerId qui lie la carte son à la manette.
+#
+# Même problème que pour hidraw (voir 99-steambox-hidraw-fallback.rules) :
+# /dev n'est pas le devtmpfs de l'hôte, la carte apparaît après le démarrage
+# du conteneur et udevd ne crée pas ses nœuds. On les crée ici, groupe audio
+# (arcade en est membre). Accès noyau : règle cgroup « c 116:* rmw » (ALSA),
+# à ajouter dans le modèle Unraid (Extra Parameters) ou le compose.
+#
+# Le parent USB étant réel, ATTRS{idVendor} fonctionne (contrairement aux
+# périphériques uhid). Suppression à « remove » : les numéros de carte et
+# mineurs sont réattribués à chaque attache, un nœud resté en place
+# pointerait sur un autre périphérique.
+#
+# Ne vaut que pour une carte branchée APRÈS le démarrage du conteneur : /sys
+# y est en lecture seule, « udevadm trigger » ne peut pas rejouer l'uevent
+# d'un périphérique déjà présent (vérifié le 22/11). Même limite que hidraw.
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="controlC*|pcmC*", ATTRS{idVendor}=="054c", TEST!="/dev/snd/%k", RUN+="/usr/bin/sh -c 'mkdir -p /dev/snd && mknod -m 0660 /dev/snd/%k c $env{MAJOR} $env{MINOR} && chgrp audio /dev/snd/%k'"
+ACTION=="remove", SUBSYSTEM=="sound", KERNEL=="controlC*|pcmC*", RUN+="/usr/bin/rm -f /dev/snd/%k"
+# Minuterie ALSA (116:33), créée au chargement de snd-timer, sans parent USB.
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="timer", TEST!="/dev/snd/timer", RUN+="/usr/bin/sh -c 'mkdir -p /dev/snd && mknod -m 0660 /dev/snd/timer c $env{MAJOR} $env{MINOR} && chgrp audio /dev/snd/timer'"

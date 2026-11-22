@@ -47,6 +47,9 @@ services:
       - 'c 226:* rmw'                      # /dev/dri/*
       - 'c 242:* rmw'                      # /dev/hidraw* — sans elle, Steam Input ne reçoit
                                            # aucun bouton des manettes PlayStation virtuelles
+      - 'c 116:* rmw'                      # /dev/snd/* — carte son de la DualSense USB émulée
+                                           # (ds5-usbip, haptiques HD) ; nœuds créés par
+                                           # 99-steambox-snd-fallback.rules
     ipc: host
     cap_add:
       - SYS_NICE                           # priorité temps réel audio/vidéo (sunshine, pipewire)

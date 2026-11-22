@@ -83,6 +83,7 @@ l'image générique démarre en QWERTY, en anglais, et cherche les ROMs sous
 --device-cgroup-rule='c 13:* rmw'
 --device-cgroup-rule='c 226:* rmw'
 --device-cgroup-rule='c 242:* rmw'
+--device-cgroup-rule='c 116:* rmw'
 --security-opt apparmor=unconfined --security-opt seccomp=unconfined
 ```
 
@@ -120,7 +121,7 @@ nice -20 sans privilège. Vérification après recréation :
 `grep "setpriority failed" /config/.config/sunshine/sunshine.log` ne doit
 plus rien renvoyer pour la nouvelle session.
 
-Justification des trois règles cgroup — **les trois sont requises** :
+Justification des règles cgroup — **toutes sont requises** :
 
 - `c 13:*` — `/dev/input/*` (clavier/souris/manettes, réels et virtuels).
 - `c 226:*` — `/dev/dri/*`. Redondante avec le runtime nvidia mais gardée
@@ -129,6 +130,10 @@ Justification des trois règles cgroup — **les trois sont requises** :
   bouton** des manettes PlayStation (DualShock/DualSense) alors que Sunshine
   les détecte — vécu le 31/08. Fonctionne de pair avec la règle udev
   `99-steambox-hidraw-fallback.rules` de l'image (mknod explicite du nœud).
+- `c 116:*` (22/11) — `/dev/snd/*`. Carte son de la DualSense USB émulée
+  par ds5-usbip (haptiques HD des jeux). Nœuds créés par la règle udev
+  `99-steambox-snd-fallback.rules` de l'image, pour une carte branchée après
+  le démarrage du conteneur.
 
 ## Réglages spécifiques au déploiement (`sunshine.conf`)
 
