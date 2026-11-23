@@ -56,8 +56,12 @@ endif
 PREBUILT_REPO ?= Gunnm92/SteamBox
 PREBUILT_TAG  ?=
 BUILD_ARGS   += --build-arg PREBUILT_REPO=$(PREBUILT_REPO)
-# Sunshine vient de la release de Gunnm92/sunshine-ds (vide = dernière).
-SUNSHINE_DS_TAG ?=
+# Sunshine vient de la release de Gunnm92/sunshine-ds. Dernière release
+# résolue ici (23/11) et passée en argument : vide, l'étape d'installation de
+# Sunshine restait identique d'un build à l'autre et pouvait être reprise du
+# cache avec l'ancien binaire. make push SUNSHINE_DS_TAG=<tag> pour en fixer
+# une autre.
+SUNSHINE_DS_TAG ?= $(shell git ls-remote --tags --refs https://github.com/Gunnm92/sunshine-ds.git 'sunshine-ds-*' 2>/dev/null | sed 's|.*refs/tags/||' | sort -V | tail -1)
 ifneq ($(SUNSHINE_DS_TAG),)
 BUILD_ARGS   += --build-arg SUNSHINE_DS_TAG=$(SUNSHINE_DS_TAG)
 endif
