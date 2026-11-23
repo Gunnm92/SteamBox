@@ -48,8 +48,10 @@ bureau d'administration du flux de jeu :
   service refuse de démarrer tant que le bureau n'a pas créé `wayland-0`.
 - **Session Steam HDR** (« Mode SteamOS (Gamescope) », dongle branché) : le
   `prep-cmd` ([steam-gamescope-session.sh](root-cachyos/scripts/steam-gamescope-session.sh))
-  arrête le labwc de Sunshine et gamescope pilote seul le dongle en DRM, HDR
-  actif ; à la fermeture, labwc reprend la sortie. Sunshine capture en KMS
+  arrête le labwc de Sunshine, lance gamescope, qui pilote seul le dongle en
+  DRM, HDR actif, et attend qu'il y affiche une image
+  ([drm-output-fb.py](root-cachyos/scripts/drm-output-fb.py)) avant que
+  Sunshine ne commence la capture ; à la fermeture, labwc reprend la sortie. Sunshine capture en KMS
   dans les deux cas. Dongle dont l'EDID n'annonce pas le BT.2020 : profil
   Lua dans `~/.config/gamescope/scripts/` (`supported = true`,
   `eotf = gamescope.eotf.pq`, colorimétrie BT.2020, `matches` sur

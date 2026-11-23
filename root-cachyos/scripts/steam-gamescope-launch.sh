@@ -101,6 +101,12 @@ export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${RUNTIME
 # (raccourci du bureau) : gamescope niché comme avant.
 CONNECTOR=$(cat "${RUNTIME}/steambox-stream-output" 2>/dev/null)
 if [ "${1:-}" = --stream ] && [ -n "${CONNECTOR}" ]; then
+    # gamescope déjà lancé par steam-gamescope-session.sh start (23/11), qui
+    # attend qu'il affiche une image avant que Sunshine ne capture : la
+    # commande « detached » de l'appli n'a plus rien à faire.
+    if pgrep -x gamescope-wl >/dev/null; then
+        exit 0
+    fi
     # Définition parmi les modes du dongle (fit_resolution) : le pilote
     # NVIDIA refuse en DRM tout mode absent de son EDID.
     # shellcheck source=steambox-env.sh
