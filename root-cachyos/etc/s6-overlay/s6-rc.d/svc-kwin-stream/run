@@ -12,7 +12,7 @@
 # boucler (sleep infinity), et svc-sunshine fait de même.
 #
 # Socket wayland-stream (24/11), plus wayland-1 : un nom non numéroté.
-# Selkies (bureau navigateur, wayland-0) cherche le compositeur de ses
+# Selkies (bureau navigateur, wayland-1) cherche le compositeur de ses
 # applis parmi les autres sockets wayland-<chiffres> et n'en accepte qu'un
 # (le KWin de Plasma) ; avec deux candidats il injecte dans son propre
 # compositeur et perd toutes les touches non ASCII. Et le wrapper KWin de

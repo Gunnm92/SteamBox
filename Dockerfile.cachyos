@@ -150,7 +150,7 @@
 #    streaming (24/11) — labwc, XFCE, wayvnc/noVNC et evdev-bridge retirés.
 #    wayvnc sur labwc headless donnait deux pointeurs dans le navigateur
 #    (pointeur peint dans l'image + pointeur du navigateur). Selkies fait
-#    tourner son compositeur (pixelflux, wayland-0) et Plasma s'y imbrique
+#    tourner son compositeur (pixelflux, wayland-1) et Plasma s'y imbrique
 #    (startplasma-wayland) : le blocage du point 1 a disparu, Plasma 6.8
 #    retombe sur ksmserver sans systemd (il manquait seulement plasma-desktop,
 #    sans lequel plasmashell quitte : « invalid corona »). Le compositeur de
@@ -1386,17 +1386,17 @@ RUN pacman -Q > /etc/steambox-packages.txt
 # LC_ALL absent volontairement (audit F5, 05/09) : primait auparavant sur
 # TOUTE variable LC_*, empêchant de passer un jeu/outil précis en anglais
 # sans le retirer globalement.
-# WAYLAND_DISPLAY=wayland-1 et XDG_CURRENT_DESKTOP=KDE (24/11) : le bureau
-# Plasma, pour ce qui est lancé hors session (docker exec). wayland-0 est le
-# compositeur de Selkies (sans gestion de fenêtres ni Xwayland) ; le KWin de
-# Plasma prend toujours le premier nom libre suivant (wayland-1), le
-# streaming ayant un nom non numéroté (wayland-stream).
+# WAYLAND_DISPLAY retiré de l'ENV (24/11) : wayland-1 est le compositeur de
+# Selkies (sans gestion de fenêtres ni Xwayland), et le KWin de Plasma prend
+# le premier nom libre que choisit son wrapper (wayland-2 au premier essai) :
+# aucun nom fixe à donner. Hors session (docker exec), lire
+# $XDG_RUNTIME_DIR/steambox-desktop-session.env (desktop_session_env).
+# XDG_CURRENT_DESKTOP=KDE : seul bureau de l'image.
 # LANG en_US par défaut et LIBVA_DRIVER_NAME retiré (25/09) : langue et
 # pilote VA-API NVIDIA se règlent au lancement (LANG/LANGUAGE,
 # LIBVA_DRIVER_NAME=nvidia dans l'env du profil, voir profiles/) — l'image
 # sert aussi aux GPU AMD/Intel, où libva trouve seule son pilote.
-ENV WAYLAND_DISPLAY=wayland-1 \
-    SEATD_VTBOUND=0 \
+ENV SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
     QT_QPA_PLATFORM=wayland \
     SDL_VIDEODRIVER=wayland,x11 \

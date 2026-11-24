@@ -19,8 +19,8 @@ du flux de jeu :
 ```
                     ┌────────────────────────── conteneur SteamBox ─────────────────────────┐
                     │                                                                       │
- Navigateur ──────► │ Selkies :6080 (HTTPS) ─► compositeur Selkies (wayland-0)              │
- (admin LAN)        │                            └─ KWin imbriqué (wayland-1) ─► Plasma     │
+ Navigateur ──────► │ Selkies :6080 (HTTPS) ─► compositeur Selkies (wayland-1)              │
+ (admin LAN)        │                            └─ KWin imbriqué (wayland-N) ─► Plasma     │
                     │                                                                       │
  Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin STREAM (wayland-stream, dongle) │
  (jeu)              │      │                               └─ Steam gamepadui, jeux, Proton │
@@ -33,8 +33,8 @@ du flux de jeu :
 
 - **Bureau d'administration** (`svc-selkies` + `svc-plasma`) : Selkies sert le
   bureau sur `https://<hôte>:6080` (certificat auto-signé à accepter une fois)
-  et fait tourner son propre compositeur (`wayland-0`, encodage NVENC) ;
-  **Plasma** s'y imbrique (`startplasma-wayland`, son KWin sur `wayland-1`,
+  et fait tourner son propre compositeur (`wayland-1`, encodage NVENC) ;
+  **Plasma** s'y imbrique (`startplasma-wayland`, son KWin sur le premier `wayland-N` libre,
   Xwayland à la demande). Le bureau prend la taille de la fenêtre du
   navigateur, et le pointeur est dessiné par le navigateur (un seul pointeur,
   sans latence). L'environnement de la session (`DISPLAY`, `WAYLAND_DISPLAY`,
@@ -324,7 +324,7 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Deux pointeurs, ou touches non ASCII perdues (« @ », « € », accents) dans
   le navigateur** → Selkies n'a pas trouvé le KWin de Plasma : son journal
   (`docker logs`) dit « Multiple candidate app-compositor sockets ». Il ne
-  doit y avoir que `wayland-0` (Selkies) et `wayland-1` (Plasma) comme
+  doit y avoir que `wayland-1` (Selkies) et celui de Plasma comme
   sockets `wayland-<chiffres>` dans `/run/user/<uid>` ; le streaming est sur
   `wayland-stream`.
 - **Bureau navigateur vide ou figé** → `s6-svc -r /run/service/svc-plasma`

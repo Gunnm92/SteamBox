@@ -1,9 +1,9 @@
 #!/bin/bash
 # Session Plasma du bureau navigateur (24/11), en arcade — lancée par
 # svc-plasma. Prépare la configuration puis se REMPLACE par
-# startplasma-wayland, imbriqué dans le compositeur de Selkies (wayland-0) :
+# startplasma-wayland, imbriqué dans le compositeur de Selkies (wayland-1) :
 # son KWin (kwin_wayland_wrapper, Xwayland à la demande) prend le premier
-# socket libre, wayland-1. Sans systemd, startplasma retombe tout seul sur
+# socket libre (choisi par le wrapper, wayland-2 au premier essai). Sans systemd, startplasma retombe tout seul sur
 # le démarrage classique (ksmserver) ; validé à la main le 24/11.
 # Remplace labwc-session.sh (labwc + XFCE, retirés le 24/11).
 set -euo pipefail
@@ -92,7 +92,7 @@ rm -f "${XDG_RUNTIME_DIR}/steambox-desktop-session.env" \
 # KWin imbriqué : WAYLAND_DISPLAY désigne son hôte (Selkies) ; DISPLAY est
 # celui que KWin créera pour son Xwayland, jamais un hérité.
 unset DISPLAY
-export WAYLAND_DISPLAY=wayland-0 XDG_SESSION_TYPE=wayland \
+export WAYLAND_DISPLAY=wayland-1 XDG_SESSION_TYPE=wayland \
     XDG_SESSION_DESKTOP=plasma DESKTOP_SESSION=plasma \
     KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
 exec startplasma-wayland

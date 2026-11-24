@@ -1,6 +1,6 @@
 #!/command/with-contenv bash
 # Selkies arrêté ou mort (24/11, relecture) : le KWin de Plasma vient de
-# perdre son hôte (wayland-0). s6-rc ne propage pas une relance à ses
-# dépendants : on relance svc-plasma, qui attendra le nouveau wayland-0 et
+# perdre son hôte (wayland-1). s6-rc ne propage pas une relance à ses
+# dépendants : on relance svc-plasma, qui attendra le nouveau wayland-1 et
 # nettoiera les restes de l'ancienne session.
-s6-svc -r /run/service/svc-plasma 2>/dev/null || true
+/command/s6-svc -r /run/service/svc-plasma 2>/dev/null || true

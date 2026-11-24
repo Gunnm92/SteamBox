@@ -40,8 +40,10 @@ Date : 24/11/2026. Remplace la phase 2 de
 
 ## Conception
 
-- Sockets : Selkies démarre le premier et prend `wayland-0` ; Plasma (wrapper)
-  prend le premier libre, `wayland-1` ; le KWin du streaming passe de
+- Sockets : Selkies prend `wayland-1` (smithay commence à 1, jamais 0 — vu au
+  premier démarrage de l'image, 24/11) ; Plasma (wrapper) prend le premier
+  libre qu'il choisit (`wayland-2` au premier essai : le wrapper ne commence
+  pas non plus à 0), nom jamais écrit en dur — publié par desktop-session.sh ; le KWin du streaming passe de
   `wayland-1` à **`wayland-stream`** (nom non numéroté, ignoré par la
   détection de Selkies, et que le wrapper de Plasma ne peut pas prendre).
 - Plasma sur le bus de session principal (`/run/user/99/bus`, svc-dbus-session) :

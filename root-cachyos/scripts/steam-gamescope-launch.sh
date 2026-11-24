@@ -65,7 +65,7 @@ export QT_QPA_PLATFORM=xcb
 
 # XDG_RUNTIME_DIR distinct pour la session gamescope (21/11), comme une
 # session de jeu Bazzite/SteamOS où aucun bureau ne tourne derrière gamescope.
-# Ici le bureau navigateur (Selkies wayland-0, Plasma wayland-1) et le KWin de
+# Ici le bureau navigateur (Selkies wayland-1, Plasma sur le premier libre) et le KWin de
 # streaming (wayland-stream) restent actifs : tout client Wayland lancé dans
 # gamescope sans WAYLAND_DISPLAY retombait sur wayland-0 et s'affichait sur le
 # bureau. Wine 11 (winewayland) y créait sa fenêtre, la couche Vulkan de
@@ -83,9 +83,14 @@ chmod 0700 "${SESSION_RUNTIME}"
 for entry in bus dbus-1 pipewire-0 pipewire-0-manager pulse dconf at-spi doc; do
     ln -sfn "${RUNTIME}/${entry}" "${SESSION_RUNTIME}/${entry}"
 done
-case "${WAYLAND_DISPLAY:-wayland-1}" in
+# Sans WAYLAND_DISPLAY : celui du bureau Plasma, publié par desktop-session.sh
+# (son nom n'est pas fixe : premier libre choisi par le wrapper KWin).
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    WAYLAND_DISPLAY=$(sed -n 's/^WAYLAND_DISPLAY=//p' "${RUNTIME}/steambox-desktop-session.env" 2>/dev/null)
+fi
+case "${WAYLAND_DISPLAY:-wayland-0}" in
     /*) ;;
-    *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-1}" ;;
+    *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-0}" ;;
 esac
 # Forcés (24/11) : lancé depuis Sunshine sous KWin, le script hériterait du bus
 # bus-stream et de XDG_CURRENT_DESKTOP=KDE, ceux d'un KWin arrêté pendant la

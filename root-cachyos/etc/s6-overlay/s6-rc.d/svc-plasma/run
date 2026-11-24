@@ -1,16 +1,16 @@
 #!/command/with-contenv bash
 # Bureau Plasma du navigateur (24/11) : startplasma-wayland imbriqué dans le
-# compositeur de Selkies (wayland-0, svc-selkies). Remplace svc-labwc et les
+# compositeur de Selkies (wayland-1, svc-selkies). Remplace svc-labwc et les
 # services XFCE (xfsettingsd, xfdesktop, xfce4-panel), retirés le 24/11.
 # Si Selkies redémarre, KWin perd son hôte et la session s'arrête : s6 la
-# relance ici, une fois le nouveau wayland-0 prêt.
+# relance ici, une fois le nouveau wayland-1 prêt.
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 # shellcheck source=../../../../scripts/steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 
 # Restes d'une session Plasma précédente (24/11, relecture) : un
 # kwin_wayland_wrapper, ksmserver, kded6 ou plasmashell orphelin garderait
-# wayland-1 et ses noms sur le bus principal — la nouvelle session prendrait
+# wayland-0 et ses noms sur le bus principal — la nouvelle session prendrait
 # wayland-2, Selkies verrait deux candidats et perdrait les touches non ASCII.
 # Ciblés par nom exact ET par leur bus (celui du bureau, jamais bus-stream :
 # le KWin et le plasmashell de Moonlight ne sont pas touchés). Jamais de
@@ -39,12 +39,12 @@ fi
 # attendre que son compositeur accepte des connexions. Échec franc après
 # 30 s, s6 relance.
 TIMEOUT=60
-until socket_live "${XDG_RUNTIME_DIR}/wayland-0" || [ "${TIMEOUT}" -le 0 ]; do
+until socket_live "${XDG_RUNTIME_DIR}/wayland-1" || [ "${TIMEOUT}" -le 0 ]; do
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
-if ! socket_live "${XDG_RUNTIME_DIR}/wayland-0"; then
-    echo "[plasma] compositeur de Selkies (wayland-0) absent après 30 s — s6 va relancer."
+if ! socket_live "${XDG_RUNTIME_DIR}/wayland-1"; then
+    echo "[plasma] compositeur de Selkies (wayland-1) absent après 30 s — s6 va relancer."
     exit 1
 fi
 

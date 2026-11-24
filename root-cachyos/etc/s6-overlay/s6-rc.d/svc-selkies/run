@@ -1,6 +1,6 @@
 #!/command/with-contenv bash
 # Bureau navigateur (24/11) : Selkies sert le bureau sur le port 6080 et fait
-# tourner son propre compositeur Wayland (pixelflux, wayland-0), dans lequel
+# tourner son propre compositeur Wayland (pixelflux, wayland-1), dans lequel
 # Plasma s'imbrique (svc-plasma). Remplace wayvnc + noVNC sur labwc headless :
 # le pointeur y était peint dans l'image capturée ET dessiné par le navigateur
 # (deux pointeurs, essai du 24/11). Ici KWin donne la forme du curseur à
@@ -10,15 +10,17 @@ XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 # shellcheck source=../../../../scripts/steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 
-# wayland-0 réservé à Selkies : pixelflux prend le premier wayland-N libre, et
-# svc-plasma attend wayland-0. Un socket resté d'un compositeur mort est
+# wayland-1 réservé à Selkies : pixelflux (smithay) prend le premier
+# wayland-N libre À PARTIR DE 1 — jamais wayland-0, que le wrapper KWin de
+# Plasma prend (vu au premier démarrage du 24/11) — et svc-plasma attend
+# wayland-1. Un socket resté d'un compositeur mort est
 # retiré ; un socket vivant (autre compositeur) : refus, s6 relance.
-if [ -e "${XDG_RUNTIME_DIR}/wayland-0" ]; then
-    if socket_live "${XDG_RUNTIME_DIR}/wayland-0"; then
-        echo "[selkies] wayland-0 déjà tenu par un autre compositeur — refus de démarrer, s6 va relancer."
+if [ -e "${XDG_RUNTIME_DIR}/wayland-1" ]; then
+    if socket_live "${XDG_RUNTIME_DIR}/wayland-1"; then
+        echo "[selkies] wayland-1 déjà tenu par un autre compositeur — refus de démarrer, s6 va relancer."
         exit 1
     fi
-    rm -f "${XDG_RUNTIME_DIR}/wayland-0" "${XDG_RUNTIME_DIR}/wayland-0.lock"
+    rm -f "${XDG_RUNTIME_DIR}/wayland-1" "${XDG_RUNTIME_DIR}/wayland-1.lock"
 fi
 
 # Certificat auto-signé créé au premier démarrage (persistant dans /config) :
