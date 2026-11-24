@@ -155,3 +155,23 @@ jour).
   portail.
 - Détail de la session Steam gamescope en DRM (arrêt/relance du KWin de
   streaming à la place de labwc).
+
+## Résultats de la phase 0 (essai du 24/11)
+
+| Essai | Résultat |
+|---|---|
+| T1 KWin `--drm` sur le dongle + Sunshine `capture=kwin` | ✅ image Moonlight, NVENC H.264/HEVC |
+| T1 résolution | ✅ `kscreen-doctor` (il faut l'**id** du mode, pas son nom) |
+| T2 entrées Moonlight | ✅ libinput de KWin (session « noop », DRM uniquement) |
+| T3 Steam Link | ✅ après UNE autorisation de partage (fenêtre KDE) ; capture « Desktop PipeWire NV12 + NVENC HEVC », `dmabuf: 0` (copie mémoire) |
+| T4 KWin `--virtual` sur wayland-1 | ❌ non fait : KWin 6.8 en virtuel ne lit **aucune** entrée (plus d'option `--libinput`) → labwc headless gardé sans dongle |
+| T5 bureau noVNC : KWin `--virtual` + krfb | ✅ image, souris, clavier via le portail (`kde-authorized`/`remote-desktop`) ; mot de passe aléatoire injecté dans `mandatory.json` de noVNC (6080 inchangé) ; ❌ **résolution dynamique** : krfb ignore SetDesktopSize ; essai `/resize` dans websockify + `steambox-resize.js` → le mode KWin change côté serveur mais l'ensemble ne suit pas encore côté navigateur (à reprendre) |
+| T6 HDR | ✅ KWin HDR seulement avec `KWIN_FORCE_ASSUME_HDR_SUPPORT=1` (EDID du dongle sans BT.2020) ; Moonlight HDR en `capture=kms` ; `capture=kwin` reste 8 bits SDR |
+
+Constats annexes :
+- `kde-authorized` ne sert qu'au bureau à distance ; la capture d'écran (ScreenCast) exige un jeton de restauration obtenu une fois à la main.
+- krfb écoute en dur sur `0.0.0.0` et exige un mot de passe ; accepté par l'utilisateur (même exposition que noVNC sur 6080).
+- Jeux Proton : HDR seulement en Wayland natif (`PROTON_ENABLE_WAYLAND=1 PROTON_ENABLE_HDR=1`), non testé.
+
+Phase 1 (bureau de streaming sous KWin avec dongle) : fusionnée le 24/11 (`918c3e7`).
+Phase 2 restante : bureau noVNC sous KWin + krfb, avec résolution dynamique à finir.
