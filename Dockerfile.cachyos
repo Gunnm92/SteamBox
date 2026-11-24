@@ -156,7 +156,7 @@
 # dans local.mk.
 ARG CACHYOS_BASE=cachyos/cachyos-v3:latest
 
-# Composants précompilés (15/11) — evdev-bridge, Sunshine DualSense USB,
+# Composants précompilés (15/11) — Sunshine DualSense USB,
 # Batocera EmulationStation, xfce-panel-launcher et freeimage ne sont plus
 # compilés ici : Dockerfile.prebuilt les construit à la demande (make
 # prebuilt, quand make prebuilt-check signale une nouvelle version) et les
@@ -1191,32 +1191,9 @@ RUN --mount=type=secret,id=github_token \
     install -Dm755 flips /usr/local/bin/flips && \
     rm -rf /tmp/flips.zip /tmp/flips
 
-# ── 1b. evdev-bridge — injection input Wayland pour Sunshine (voir point 6
-# de l'historique en tête de fichier). Lit les périphériques uinput virtuels
-# de Sunshine (souris/clavier) en direct, indépendant d'udev, et les rejoue
-# via zwlr_virtual_pointer_manager_v1/zwp_virtual_keyboard_manager_v1 — QUE
-# labwc (wlroots) implémente, pas KWin, plus gamescope depuis sa bascule
-# vers libei. Source vendored dans ce dépôt (ex-projet Desarso/evdev-bridge,
-# pas de licence explicite — usage privé uniquement, jamais republié), déjà
-# utilisée telle quelle sur l'ancien Dockerfile webstation/labwc. Cible
-# maintenant le labwc dédié au streaming (voir svc-labwc-stream
-# et point 7 ci-dessus), pas le bureau XFCE visible.
-#
-# Piste gamescope-racine + libei explorée puis abandonnée le 30/08 (voir
-# point 7) : input fonctionnel, mais capture Sunshine impossible contre
-# gamescope quel que soit le mode (portail D-Bus absent, XDG_OUTPUT
-# manquant, EGL_BAD_ACCESS) — confirmé aussi par le projet Wolf (games-on-
-# whales), qui a abandonné gamescope pour la même raison. Bridge libei
-# retiré : code mort sans cible fonctionnelle.
-#
-# Précompilé (15/11) dans Dockerfile.prebuilt depuis evdev-bridge/ : après
-# une modification de bridge.c, relancer make prebuilt + make prebuilt-publish
-# (make prebuilt-check compare le dernier commit du dossier à la release).
-RUN --mount=type=secret,id=github_token \
-    /usr/local/lib/steambox-build/prebuilt-fetch evdev-bridge && \
-    if ldd /usr/local/bin/evdev-bridge-native | grep -q "not found"; then \
-      echo "FATAL: bibliothèque manquante pour evdev-bridge-native (relancer make prebuilt)"; exit 1; \
-    fi
+# ── 1b. evdev-bridge retiré (24/11) : il injectait les entrées Moonlight
+# dans le labwc headless de Sunshine. Le KWin de streaming (seul depuis le
+# 24/11, dongle obligatoire) les lit lui-même par libinput.
 
 # ── 1c. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
 # wayvnc sert le RFB brut (5900, interne, voir svc-wayvnc) ; websockify (pip,
@@ -1306,20 +1283,9 @@ RUN git clone --depth 1 https://codeberg.org/fabiscafe/game-devices-udev.git /tm
     cp /tmp/gdu/src/*.rules /etc/udev/rules.d/ && \
     rm -rf /tmp/gdu
 
-# ── 3b. Règle udev anti-double-saisie clavier/souris (30/08) — sans elle,
-# libinput (labwc) lit les périphériques uinput virtuels de Sunshine EN
-# PARALLÈLE d'evdev-bridge via son propre hotplug udev temps réel (qui
-# fonctionne, contrairement à l'énumération initiale basée sur la base
-# persistée cassée — voir point 6 de l'historique) : chaque touche/clic
-# était traité deux fois, confirmé en direct. NOTE (audit B2, 31/08) :
-# depuis le 30/08 evdev-bridge fait AUSSI un EVIOCGRAB exclusif de son côté
-# (bridge.c, non fiable à 100% seul car le tag udev ne survit pas à un
-# redémarrage de labwc) — les deux protections coexistent volontairement,
-# ceinture et bretelles : cette règle couvre le cas où le grab échoue, le
-# grab couvre le cas où labwc redémarre et ré-énumère sans repasser par
-# le hotplug.
-RUN printf 'ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="*passthrough*", ENV{LIBINPUT_IGNORE_DEVICE}="1"\n' \
-      > /etc/udev/rules.d/99-sunshine-passthrough-no-libinput.rules
+# ── 3b. Règle udev anti-double-saisie retirée (24/11) : elle faisait ignorer
+# à libinput les périphériques « passthrough » de Sunshine pour qu'evdev-bridge
+# soit seul à les lire ; le KWin de streaming les lit désormais par libinput.
 
 # ── 4. Utilisateur non-root pour la session bureau ────────────────────────────
 ARG PUID=1000
@@ -1490,7 +1456,7 @@ RUN pacman -Q > /etc/steambox-packages.txt
 # "/run/user/1000", qui ne correspond JAMAIS à l'UID réel d'arcade en
 # production (99 côté Unraid/PUID, voir docker-compose.yml) —
 # fausse pour tout ce qui l'hériterait sans la recalculer. Au moins trois
-# services de ce dépôt (svc-wayvnc, svc-evdev-bridge, svc-sunshine)
+# services de ce dépôt (svc-sunshine et ses voisins)
 # documentent déjà le bug exact que cette valeur causait et la
 # recalculent eux-mêmes via $(id -u arcade) — et c'est ce calcul qui
 # compte : l'export de init-system/run vers /run/s6/container_environment/

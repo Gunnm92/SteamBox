@@ -72,13 +72,13 @@ gpu_vendor() {
     echo unknown
 }
 
-# Sortie streamée par Sunshine (22/11) : le labwc de Sunshine (wayland-1)
-# pilote en DRM une sortie branchée du GPU du conteneur — un dongle HDMI
-# factice, aucun écran — et Sunshine la capture en KMS (seule capture qui
-# transmet le HDR) ; la session Steam y passe gamescope seul, en DRM HDR.
-# Sans sortie branchée, labwc reste headless et Sunshine capture par wlr
-# (comportement d'avant). STREAM_OUTPUT : auto (défaut), headless, ou le nom
-# d'un connecteur (HDMI-A-1, DP-1…).
+# Sortie streamée par Sunshine (22/11) : le KWin de streaming
+# (wayland-stream) pilote en DRM une sortie branchée du GPU du conteneur — un
+# dongle HDMI factice, aucun écran — et Sunshine la capture en KMS (seule
+# capture qui transmet le HDR) ; la session Steam y passe gamescope seul, en
+# DRM HDR. Sans sortie branchée (24/11) : ni KWin de streaming ni Sunshine,
+# le dongle est obligatoire. STREAM_OUTPUT : auto (défaut), headless (aucune
+# sortie : streaming désactivé), ou le nom d'un connecteur (HDMI-A-1, DP-1…).
 STREAM_OUTPUT="${STREAM_OUTPUT:-auto}"
 
 # stream_drm_card : /dev/dri/cardN du conteneur dont dépend une sortie
@@ -109,14 +109,14 @@ stream_drm_card() {
     done
 }
 
-# DISPLAY des deux Xwayland (22/11) : labwc réserve le premier numéro libre
-# à son démarrage, et le donne à sa commande -s, qui le note dans
-# $XDG_RUNTIME_DIR (steambox-desktop-display : bureau noVNC, par
-# xdg-autostart.sh ; steambox-stream-display : labwc de Sunshine). Lus au
-# lancement de chaque appli plutôt que codés en dur (:0 / :1) : l'ordre de
-# démarrage, ou un redémarrage d'un des labwc, pouvait inverser les numéros
-# (vu en direct : bureau sur :2, Sunshine sur :0, EmulationStation sur un :1
-# inexistant). Repli sur l'ancienne valeur si le fichier manque.
+# DISPLAY des deux Xwayland (22/11) : chaque session note le sien dans
+# $XDG_RUNTIME_DIR (steambox-desktop-display : bureau Plasma, par
+# desktop-session.sh ; steambox-stream-display : KWin de streaming, par
+# kwin-stream-session.sh). Lus au lancement de chaque appli plutôt que codés
+# en dur : l'ordre de démarrage, ou un redémarrage d'un compositeur, change
+# les numéros (vu en direct : bureau sur :2, Sunshine sur :0,
+# EmulationStation sur un :1 inexistant). Repli sur :0 / :1 si le fichier
+# manque.
 desktop_display() {
     local d
     d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-desktop-display" 2>/dev/null)
@@ -128,25 +128,22 @@ stream_display() {
     echo "${d:-:1}"
 }
 
-# stream_compositor : compositeur du streaming en cours, « kwin » ou « labwc »
-# (24/11, phase 1 KWin). Écrit au démarrage de svc-labwc-stream dans le
-# marqueur steambox-stream-compositor ; labwc si le marqueur manque (avant
-# KWin, ou service jamais démarré depuis le redémarrage).
+# stream_compositor : « kwin » si le KWin de streaming tourne sur le dongle,
+# vide sans dongle (24/11 : labwc retiré). Écrit au démarrage de
+# svc-kwin-stream dans le marqueur steambox-stream-compositor.
 stream_compositor() {
-    local c
-    c=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-compositor" 2>/dev/null)
-    echo "${c:-labwc}"
+    cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-compositor" 2>/dev/null
 }
 
 # stream_session_env : exporte les variables de la session KWin de streaming
 # (steambox-stream-session.env, écrit par kwin-stream-session.sh). Retour 1
-# s'il n'existe pas, ou si le socket wayland-1 manque (24/11 : session gamescope
+# s'il n'existe pas, ou si le socket wayland-stream manque (24/11 : session gamescope
 # en cours, KWin arrêté, fichier d'environnement périmé). Lu ligne à ligne,
 # sans évaluation du contenu.
 stream_session_env() {
     local d="${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}" k v
     local f="${d}/steambox-stream-session.env"
-    [[ -r "${f}" && -S "${d}/wayland-1" ]] || return 1
+    [[ -r "${f}" && -S "${d}/wayland-stream" ]] || return 1
     while IFS='=' read -r k v; do
         if [[ -n "${k}" ]]; then
             export "${k}=${v}"

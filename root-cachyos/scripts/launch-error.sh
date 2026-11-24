@@ -5,7 +5,7 @@
 # quand la commande d'un jeu sort avec le code 250, ES lit
 # /tmp/launch_error.log, le supprime et affiche son texte dans une boîte
 # « UNE ERREUR S'EST PRODUITE ». C'est l'interface d'ES elle-même : le
-# message s'affiche aussi dans le flux Moonlight (wayland-1), alors qu'une
+# message s'affiche aussi dans le flux Moonlight (wayland-stream), alors qu'une
 # notification irait sur le bus de session du bureau visible (wayland-0).
 # Mécanisme vérifié dans le binaire /opt/batocera-es/emulationstation le
 # 01/11.

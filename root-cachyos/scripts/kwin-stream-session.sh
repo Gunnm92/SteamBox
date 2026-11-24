@@ -1,10 +1,10 @@
 #!/bin/bash
 # Session du compositeur KWin de streaming (24/11, phase 1 KWin) : lancée en
 # arcade par kwin_wayland (--exit-with-session) quand KWin a fini de démarrer
-# (wayland-1 et Xwayland prêts). Elle publie ce dont les autres services ont
+# (wayland-stream et Xwayland prêts). Elle publie ce dont les autres services ont
 # besoin — l'environnement de la session (steambox-stream-session.env, lu par
 # stream_session_env), le DISPLAY du Xwayland (steambox-stream-display, lu par
-# stream_display, comme note-display.sh stream pour labwc) — puis pré-autorise
+# stream_display, via note-display.sh stream) — puis pré-autorise
 # le bureau à distance du portail, pour que Moonlight/Remote Play n'ouvre pas
 # de fenêtre de confirmation dans ce conteneur sans écran.
 #
@@ -22,7 +22,7 @@ R="${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR absent}"
 } > "${R}/steambox-stream-session.env.tmp" \
     && mv -f "${R}/steambox-stream-session.env.tmp" "${R}/steambox-stream-session.env"
 
-# DISPLAY du Xwayland de KWin, noté comme labwc le fait via note-display.sh.
+# DISPLAY du Xwayland de KWin (note-display.sh stream).
 /usr/local/bin/scripts/note-display.sh stream
 
 # Activation D-Bus : les services lancés par le bus (portails, applis

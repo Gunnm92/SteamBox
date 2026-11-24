@@ -4,7 +4,7 @@
 # 1920x1080, mais Steam (-gamepadui) reste "detached" — Sunshine ne le tue
 # jamais lui-même à la fin du stream, par design pour les apps "detached".
 # Résultat confirmé en direct : Steam continue d'afficher/animer son UI
-# gamepadui sur le compositeur headless (wayland-1) bien après la
+# gamepadui sur le compositeur de streaming (alors wayland-1) bien après la
 # déconnexion Moonlight, ce qui maintient le GPU à ~30% d'utilisation et le
 # CPU du labwc headless chargé indéfiniment jusqu'au prochain redémarrage
 # du conteneur.

@@ -1,117 +1,67 @@
 #!/command/with-contenv bash
-# WAYLAND_DISPLAY=wayland-1 (socket du labwc HEADLESS, voir svc-labwc-
-# headless/run) au lieu de wayland-0 (bureau XFCE visible) — 30/08, suite à
-# l'audit HDR/gamescope : gamescope ne peut jamais être capturé par Sunshine
-# (portail D-Bus absent, XDG_OUTPUT manquant, EGL_BAD_ACCESS, testé sous
-# toutes ses formes), alors qu'un second labwc dédié, headless, fonctionne
-# nativement (labwc implémente les protocoles de capture modernes que
-# gamescope n'a pas). Sunshine tourne donc maintenant contre une session
-# séparée du bureau visible en local/VNC — Steam lancé depuis cette session
-# (voir apps.json, "detached" hérite de cet environnement) est ce que
-# Moonlight affiche ; le bureau XFCE local reste inchangé et indépendant.
+# Sunshine contre le KWin de streaming (svc-kwin-stream, socket
+# wayland-stream), séparé du bureau navigateur (Selkies + Plasma). Steam
+# lancé depuis cette session (apps.json, "detached" hérite de cet
+# environnement) est ce que Moonlight affiche. Historique : labwc headless
+# du 30/08 au 24/11 (gamescope ne peut pas être capturé), KWin en DRM sur le
+# dongle depuis le 24/11, seul depuis le 24/11 (Selkies + Plasma).
 #
-# s6-setuidgid change l'UID/GID mais PAS HOME — contrairement à runuser/su,
-# il ne fait rien de plus (pas de vraie session utilisateur). Sans le
-# préciser, Sunshine hérite du HOME=/root ambiant et tente d'écrire sa
-# config dans /root/.config/sunshine, inaccessible à arcade — confirmé en
-# direct : "Failed to apply config: filesystem error: status: Permission
-# denied [/root/.config/sunshine]" en boucle jusqu'à ce crash-loop soit fixé.
+# s6-setuidgid change l'UID/GID mais PAS HOME — contrairement à runuser/su.
+# Sans le préciser, Sunshine hérite du HOME=/root ambiant et tente d'écrire
+# sa config dans /root/.config/sunshine, inaccessible à arcade (crash-loop
+# vu en direct).
 XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 
-# Attend que le socket Wayland du labwc headless existe réellement (le
-# service le lance mais ne le signale pas comme "up" avant la fin du
-# script) — Sunshine échouerait sa capture s'il démarre avant que le
-# compositeur n'accepte de connexions.
-TIMEOUT=30
-while [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ] && [ "${TIMEOUT}" -gt 0 ]; do
+# Dongle HDMI obligatoire (24/11) : sans sortie branchée, svc-kwin-stream ne
+# lance pas de compositeur — Sunshine attend sans boucler. Le fichier est
+# écrit par svc-kwin-stream (dépendance) avant tout le reste.
+TIMEOUT=20
+while [ ! -e "${XDG_RUNTIME_DIR}/steambox-stream-output" ] && [ "${TIMEOUT}" -gt 0 ]; do
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
+if [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-output" ]; then
+    echo "[sunshine] aucune sortie branchée : dongle HDMI requis, Sunshine non démarré"
+    exec sleep infinity
+fi
 
-# Échec franc si wayland-1 n'existe toujours pas (audit M1, 05/09, même
-# pattern que svc-labwc-stream depuis l'audit C1 du 31/08) : avant ce
-# correctif, Sunshine démarrait quand même après le timeout — s6 le
-# déclarait "started" aussitôt (aucune notification-fd sur aucun service
-# de ce projet), et Sunshine restait "up" en apparence tout en échouant
-# silencieusement CHAQUE tentative de capture jusqu'à un redémarrage
-# manuel du service, si le labwc headless tardait plus de 15s (seatd lent,
-# crash-loop). exit 1 + s6 qui relance ce service jusqu'à ce que le socket
-# existe réellement : plus jamais de démarrage "réussi" sans cible de
-# capture valide.
-if [ ! -S "${XDG_RUNTIME_DIR}/wayland-1" ]; then
-    echo "[sunshine] wayland-1 absent après 15s — refus de démarrer, s6 va relancer."
+# Attend que le socket de KWin existe réellement (s6 déclare le service
+# "up" dès le fork du script) — Sunshine échouerait sa capture sinon.
+# Échec franc (audit M1, 05/09) : exit 1 et s6 relance, jamais de démarrage
+# "réussi" sans cible de capture.
+TIMEOUT=30
+while [ ! -S "${XDG_RUNTIME_DIR}/wayland-stream" ] && [ "${TIMEOUT}" -gt 0 ]; do
+    sleep 0.5
+    TIMEOUT=$((TIMEOUT - 1))
+done
+if [ ! -S "${XDG_RUNTIME_DIR}/wayland-stream" ]; then
+    echo "[sunshine] wayland-stream absent après 15s — refus de démarrer, s6 va relancer."
     exit 1
 fi
 
-# DISPLAY=:1 (30/08, audit "Steam Big Picture" cassé) : labwc démarre son
-# Xwayland interne PARESSEUSEMENT, seulement quand un premier client en a
-# besoin (confirmé en direct : rien ne l'annonce à l'avance, pas de
-# protocole/variable à interroger avant coup) — mais une fois démarré, il
-# reste vivant tant que le compositeur tourne. Steam a besoin de ce DISPLAY
-# pour son petit écran "vérification des mises à jour" (Xlib brut, pas
-# Wayland) : sans lui, "XOpenDisplay failed" puis un dialogue d'erreur
-# zenity qui bloque le lancement complet de gamepadui — confirmé en direct.
-# :1 plutôt que :0 : le bureau XFCE (svc-labwc, wayland-0) démarre TOUJOURS
-# avant ce service headless — garanti depuis l'audit C1 du 31/08 :
-# svc-labwc-stream refuse désormais de démarrer (exit 1, s6 relance)
-# tant que wayland-0 n'existe pas, au lieu de continuer après timeout et
-# de risquer de voler wayland-0/:0 au bureau (inversion des rôles vécue
-# en direct le 31/08). Ce service-ci est donc toujours le second, :1 est
-# fiable tant qu'aucune troisième session Xwayland ne s'intercale.
 # Pile limitée à 8 Mo (30/09) : Docker sur Unraid hérite d'une pile
 # ILLIMITÉE, et Linux passe alors à la disposition mémoire « legacy » (libs
 # vers 0x14…). proton-cachyos (émulation seccomp) tuait ses processus enfants
 # chargés sous 0x7001_0000_0000 (wineboot : SIGSYS), et les jeux 32 bits
 # sous wine-tkg n'obtenaient plus leurs grosses réservations (GTI Club,
-# 450 Mo). Hérité par tout ce que lance ce service (Steam, Heroic, ES, jeux).
+# 450 Mo). Hérité par tout ce que lance ce service (Steam, ES, jeux).
 ulimit -S -s 8192 2>/dev/null || true
-# Capture KMS quand le labwc de Sunshine pilote le dongle HDMI en DRM (22/11,
-# steambox-stream-output non vide) : seule capture qui transmet le HDR, et
-# elle suit la sortie quelle que soit l'appli qui la pilote (labwc, ou
-# gamescope seul pendant la session Steam). Passée en argument
-# (« name=value ») plutôt qu'écrite dans sunshine.conf : en headless, la
-# détection automatique (wlr) reste la bonne.
-CAPTURE=()
-if [ -s "${XDG_RUNTIME_DIR}/steambox-stream-output" ]; then
-    CAPTURE=(capture=kms)
-fi
-# DISPLAY réel du Xwayland du labwc de Sunshine (22/11, stream_display),
-# noté par labwc juste après wayland-1 : attendu 5 s au plus, repli :1.
-# Les entrées apps.json ne s'y fient pas (stream-exec.sh, scripts) : il
-# peut changer si ce labwc redémarre (session Steam en DRM).
+
+# Environnement de la session KWin (24/11) : Sunshine et les applis qu'il
+# lance (Steam, EmulationStation) doivent voir le bus bus-stream, le
+# Xwayland de KWin et ses portails. kwin-stream-session.sh publie
+# steambox-stream-session.env puis steambox-stream-display (signal de
+# disponibilité) ; sans eux après 10 s : refus de démarrer, s6 relance.
 # shellcheck source=../../../../scripts/steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
-TIMEOUT=10
+TIMEOUT=20
 while [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-display" ] && [ "${TIMEOUT}" -gt 0 ]; do
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
-# Sous KWin de streaming (24/11, phase 1 KWin) : Sunshine et les applis qu'il
-# lance (Steam, EmulationStation) doivent voir le bus et l'environnement de la
-# session KWin, pas ceux du labwc headless — sinon elles s'ouvrent sur un bus
-# sans KWin ni portail. stream_session_env relit ce que kwin-stream-session.sh
-# a publié (écrit avant steambox-stream-display, donc déjà attendu plus haut ;
-# 10 s au plus ici). Sans ce fichier : refus de démarrer, s6 relance. Sous
-# labwc, KWIN_ENV reste vide : la commande finale est alors inchangée.
-KWIN_ENV=()
-if [ "$(stream_compositor)" = kwin ]; then
-    TIMEOUT=20
-    while [ ! -r "${XDG_RUNTIME_DIR}/steambox-stream-session.env" ] && [ "${TIMEOUT}" -gt 0 ]; do
-        sleep 0.5
-        TIMEOUT=$((TIMEOUT - 1))
-    done
-    if ! stream_session_env; then
-        echo "[sunshine] steambox-stream-session.env absent après 10s — refus de démarrer, s6 va relancer."
-        exit 1
-    fi
-    # DBUS_SESSION_BUS_ADDRESS vient du fichier (bus-stream) ; XDG_CURRENT_DESKTOP=KDE
-    # comme la session validée à la main le 24/11 ; KWIN_WAYLAND_NO_PERMISSION_CHECKS
-    # pour que KWin ne demande pas d'autorisation de capture à une appli sans écran.
-    KWIN_ENV=(
-        "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
-        XDG_CURRENT_DESKTOP=KDE
-        KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
-    )
+if ! stream_session_env; then
+    echo "[sunshine] steambox-stream-session.env absent après 10s — refus de démarrer, s6 va relancer."
+    exit 1
 fi
 
 # DualSense USB/IP (ds5-usbip, via le Sunshine de sunshine-ds) : activée par
@@ -119,7 +69,14 @@ fi
 # Haptiques vers le client : LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=ip:port dans
 # l'environnement du conteneur (modèle Unraid / profil).
 export LIBVIRTUALHID_DUALSENSE_USBIP="${LIBVIRTUALHID_DUALSENSE_USBIP:-1}"
+# capture=kms (22/11) : seule capture qui transmet le HDR, et elle suit la
+# sortie quelle que soit l'appli qui la pilote (KWin, ou gamescope seul
+# pendant la session Steam). XDG_CURRENT_DESKTOP=KDE et
+# KWIN_WAYLAND_NO_PERMISSION_CHECKS : session validée à la main le 24/11,
+# sans demande d'autorisation de capture (personne pour répondre).
 exec s6-setuidgid arcade \
-    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY="$(stream_display)" \
-    "${KWIN_ENV[@]}" \
-    sunshine /config/.config/sunshine/sunshine.conf "${CAPTURE[@]}"
+    env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    WAYLAND_DISPLAY=wayland-stream DISPLAY="$(stream_display)" \
+    DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS}" \
+    XDG_CURRENT_DESKTOP=KDE KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 \
+    sunshine /config/.config/sunshine/sunshine.conf capture=kms

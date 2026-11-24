@@ -27,18 +27,6 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     echo "build ${BUILD_DATE}" && \
     pacman -Syu --needed --noconfirm --noprogressbar base-devel git cmake zstd
 
-# ── evdev-bridge — pont uinput→Wayland (source vendored dans evdev-bridge/).
-# EVDEV_REF : dernier commit touchant evdev-bridge/ (passé par le Makefile).
-FROM base AS evdev-bridge
-ARG EVDEV_REF=unknown
-RUN --mount=type=cache,target=/var/cache/pacman/pkg \
-    pacman -S --needed --noconfirm --noprogressbar wayland libxkbcommon
-COPY evdev-bridge /src
-RUN make -C /src evdev-bridge-native && \
-    install -Dm755 /src/evdev-bridge-native /pkg/usr/local/bin/evdev-bridge-native && \
-    mkdir -p /out && tar --zstd -cf /out/evdev-bridge.tar.zst -C /pkg . && \
-    echo "evdev-bridge ${EVDEV_REF}" > /out/evdev-bridge.version
-
 # ── freeimage (AUR) — dépendance de build ET d'exécution de Batocera ES,
 # retirée des dépôts officiels Arch. makepkg refuse root : utilisateur
 # temporaire. Sortie = paquet pacman (installé par pacman -U dans l'image).
@@ -112,7 +100,6 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
 # ── Export : tous les /out/* + versions.txt (notes de la release GitHub,
 # lu par make prebuilt-check).
 FROM base AS collect
-COPY --from=evdev-bridge  /out/ /out/
 COPY --from=freeimage     /out/ /out/
 COPY --from=batocera-es   /out/ /out/
 COPY --from=xfce-launcher /out/ /out/

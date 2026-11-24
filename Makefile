@@ -45,14 +45,14 @@ ifdef GITHUB_TOKEN
 BUILD_ARGS  += --secret id=github_token,env=GITHUB_TOKEN
 endif
 
-# Composants précompilés (15/11) — evdev-bridge, Sunshine DualSense USB,
+# Composants précompilés (15/11) — Sunshine DualSense USB,
 # Batocera ES, xfce-panel-launcher, freeimage : construits par
 # Dockerfile.prebuilt (make prebuilt, à la demande), publiés en release
 # GitHub de PREBUILT_REPO (make prebuilt-publish), téléchargés par make
 # build/push au lieu d'être recompilés. PREBUILT_TAG vide = dernière release ;
 # make push PREBUILT_TAG=prebuilt-AAAAMMJJ-HHMM pour revenir en arrière.
 # make prebuilt-check dit s'il faut relancer make prebuilt (nouvelle version
-# amont, ou evdev-bridge/ modifié).
+# amont).
 PREBUILT_REPO ?= Gunnm92/SteamBox
 PREBUILT_TAG  ?=
 BUILD_ARGS   += --build-arg PREBUILT_REPO=$(PREBUILT_REPO)
@@ -72,7 +72,6 @@ endif
 # XFCE_LAUNCHER_REF (commit du lanceur, vide = main). Sunshine : voir
 # SUNSHINE_DS_TAG (release de Gunnm92/sunshine-ds).
 PREBUILT_ARGS = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
-                --build-arg EVDEV_REF=$(shell git log -1 --format=%h -- evdev-bridge) \
                 $(if $(ES_REF),--build-arg ES_REF=$(ES_REF)) \
                 $(if $(XFCE_LAUNCHER_REF),--build-arg XFCE_LAUNCHER_REF=$(XFCE_LAUNCHER_REF))
 

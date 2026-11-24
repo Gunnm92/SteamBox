@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrée Sunshine « Steam Big Picture » (22/11, contournement) : Steam
-# gamepadui directement sur le labwc headless (wayland-1 / Xwayland :1),
+# gamepadui directement sur le compositeur de streaming (labwc headless à l'époque, wayland-1 / Xwayland :1),
 # avec le pilote x11 de Wine imposé aux jeux qu'il lance.
 #
 # Wine 11 (wine-tkg, jeux .wsquashfs) choisit son pilote Wayland

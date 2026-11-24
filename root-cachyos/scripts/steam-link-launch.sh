@@ -4,16 +4,16 @@
 # quelle : elle fonctionne déjà bien pour jouer via Moonlight. Ce script
 # répond à un besoin différent (demande utilisateur, 07/09) : pouvoir
 # utiliser Steam Link EN PLUS de Moonlight (meilleur support manette dans
-# certains cas), donc lancer Steam sur le compositeur headless (wayland-1)
-# d'une manière compatible avec le flux vidéo propre à Steam Link.
+# certains cas), donc lancer Steam sur le compositeur de streaming
+# (wayland-stream) d'une manière compatible avec le flux vidéo propre à Steam Link.
 #
 # ÉTAT CONNU (24/11) : Steam Link MARCHE sous KWin (le compositeur de streaming
 # en DRM, phase 1 KWin) — essai validé à la main le 24/11 : Steam lancé sur le
 # bus de streaming (bus-stream, portail KDE) avec XDG_CURRENT_DESKTOP=KDE. Ce
-# script reproduit cette session quand stream_compositor vaut kwin (pas de
-# dbus-run-session : le bus est celui de KWin, publié dans
-# steambox-stream-session.env). Sous labwc, le comportement ci-dessous, daté du
-# 07/09, est inchangé. Le noir du 07/09 concernait le labwc headless.
+# script reproduit cette session (pas de dbus-run-session : le bus est celui
+# de KWin, publié dans steambox-stream-session.env). Les notes du 07/09
+# ci-dessous concernent l'ancien labwc headless (retiré le 24/11), gardées
+# pour l'historique.
 #
 # ÉTAT CONNU (07/09) : la connexion Steam Link, l'audio et le protocole de
 # stream fonctionnent (bitrate adaptatif, pas de perte de frames anormale —
@@ -69,47 +69,34 @@
 #      et n'enregistre jamais l'interface ScreenCast du tout.
 set -uo pipefail
 
-export WAYLAND_DISPLAY=wayland-1
+export WAYLAND_DISPLAY=wayland-stream
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
-# DISPLAY réel du Xwayland du labwc de Sunshine (22/11, stream_display) —
-# plus « :1 » codé en dur, que l'ordre de démarrage pouvait démentir.
+# DISPLAY réel du Xwayland du KWin de streaming (22/11, stream_display).
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 DISPLAY="$(stream_display)"
 export DISPLAY
-# Bureau annoncé à Steam : KDE sous KWin de streaming (24/11, le portail KDE
-# répond sur le bus de streaming), XFCE sous labwc comme avant.
-COMPOSITOR="$(stream_compositor)"
-if [ "${COMPOSITOR}" = kwin ]; then
-    export XDG_CURRENT_DESKTOP=KDE
-else
-    export XDG_CURRENT_DESKTOP=XFCE
-fi
 
 PIDFILE="${XDG_RUNTIME_DIR}/steam-link-launch.pid"
 
 # Idempotent : un double-clic sur le raccourci (ou un second lancement
-# pendant que Steam tourne déjà) ne doit pas empiler un nouveau
-# dbus-run-session (et donc un xdg-desktop-portal/-wlr redondant) — Steam
+# pendant que Steam tourne déjà) ne doit pas relancer Steam — Steam
 # lui-même refuse une deuxième instance et se contente de refocus.
 if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}" 2>/dev/null)" 2>/dev/null; then
     exit 0
 fi
 echo "$$" > "${PIDFILE}"
 
-# Sous KWin de streaming (24/11) : Steam part directement sur le bus de KWin.
-# dbus-run-session créerait un bus privé, sans le portail KDE ni la session
-# publiée par kwin-stream-session.sh. stream_session_env fixe
-# DBUS_SESSION_BUS_ADDRESS (bus-stream) ; refus franc si le fichier manque, pour
-# ne pas lancer Steam sur un bus périmé.
-if [ "${COMPOSITOR}" = kwin ]; then
-    if ! stream_session_env; then
-        echo "[steam-link] session KWin absente (steambox-stream-session.env) — relance après le démarrage du compositeur." >&2
-        exit 1
-    fi
-    export XDG_CURRENT_DESKTOP=KDE
-    exec steam -gamepadui
+# Steam part directement sur le bus de KWin (24/11). dbus-run-session
+# créerait un bus privé, sans le portail KDE ni la session publiée par
+# kwin-stream-session.sh. stream_session_env fixe DBUS_SESSION_BUS_ADDRESS
+# (bus-stream) ; refus franc si le fichier manque (pas de dongle, ou KWin
+# arrêté par une session Mode SteamOS), pour ne pas lancer Steam sur un bus
+# périmé.
+if ! stream_session_env; then
+    echo "[steam-link] session KWin de streaming absente (steambox-stream-session.env) : dongle HDMI branché ? Relance après le démarrage du compositeur." >&2
+    exit 1
 fi
-
-exec dbus-run-session -- steam -gamepadui
+export XDG_CURRENT_DESKTOP=KDE
+exec steam -gamepadui

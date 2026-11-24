@@ -56,7 +56,7 @@ FPS="${SUNSHINE_CLIENT_FPS:-120}"
 # Applis Qt (Lichii, Eden, PCSX2, RPCS3, DuckStation…) en X11 dans gamescope
 # (15/11) : l'image exporte QT_QPA_PLATFORM=wayland, mais gamescope ne donne
 # pas de WAYLAND_DISPLAY à ses clients. Qt retombait alors sur wayland-0 (le
-# bureau labwc), hors de gamescope : la surface Vulkan échouait (Lichii :
+# bureau), hors de gamescope : la surface Vulkan échouait (Lichii :
 # « Failed to initialize Wayland surface », VK_ERROR_INITIALIZATION_FAILED)
 # et le jeu se fermait aussitôt. En xcb, elles s'affichent dans le Xwayland
 # de gamescope (DISPLAY fourni par gamescope). Sans effet sur gamescope
@@ -65,8 +65,8 @@ export QT_QPA_PLATFORM=xcb
 
 # XDG_RUNTIME_DIR distinct pour la session gamescope (21/11), comme une
 # session de jeu Bazzite/SteamOS où aucun bureau ne tourne derrière gamescope.
-# Ici labwc (wayland-0, administration noVNC) et labwc-stream (wayland-1,
-# streamé par Sunshine) restent actifs : tout client Wayland lancé dans
+# Ici le bureau navigateur (Selkies wayland-0, Plasma wayland-1) et le KWin de
+# streaming (wayland-stream) restent actifs : tout client Wayland lancé dans
 # gamescope sans WAYLAND_DISPLAY retombait sur wayland-0 et s'affichait sur le
 # bureau. Wine 11 (winewayland) y créait sa fenêtre, la couche Vulkan de
 # gamescope refusait la surface (« Failed to get Wayland objects ») et le jeu
@@ -89,14 +89,14 @@ case "${WAYLAND_DISPLAY:-wayland-0}" in
 esac
 # Forcés (24/11) : lancé depuis Sunshine sous KWin, le script hériterait du bus
 # bus-stream et de XDG_CURRENT_DESKTOP=KDE, ceux d'un KWin arrêté pendant la
-# session gamescope. Valeurs d'avant la branche : bus du bureau, XFCE.
+# session gamescope. Bus du bureau (Plasma, 24/11 ; XFCE avant).
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus"
-export XDG_CURRENT_DESKTOP=XFCE
+export XDG_CURRENT_DESKTOP=KDE
 
 # --stream (entrée Sunshine, 22/11) avec le dongle HDMI branché
-# (steambox-stream-output, voir svc-labwc-stream) : gamescope pilote seul
+# (steambox-stream-output, voir svc-kwin-stream) : gamescope pilote seul
 # la sortie en DRM, HDR actif — steam-gamescope-session.sh start a arrêté le
-# labwc de Sunshine pour la libérer. Mode du dongle choisi par -W/-H/-r
+# KWin de streaming pour la libérer. Mode du dongle choisi par -W/-H/-r
 # (résolution du client). --disable-layers --force-composition : tout est
 # composé sur le plan principal, le seul que lit la capture KMS de Sunshine
 # (sinon écran noir, vu en direct). Écrans dont l'EDID n'annonce pas le HDR

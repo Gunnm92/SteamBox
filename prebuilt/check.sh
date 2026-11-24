@@ -8,7 +8,6 @@
 set -euo pipefail
 
 repo="${1:?usage: prebuilt/check.sh <owner/repo>}"
-root="$(cd "$(dirname "$0")/.." && pwd)"
 
 if ! current=$(gh release download --repo "${repo}" --pattern versions.txt --output - 2>/dev/null); then
     echo "Aucune release précompilée sur ${repo} : lancer make prebuilt puis make prebuilt-publish."
@@ -35,12 +34,6 @@ rec=$(recorded batocera-es)
 up=$(git ls-remote https://github.com/batocera-linux/batocera-emulationstation.git HEAD | cut -f1)
 h=${rec%% *}
 report batocera-es "${rec}" "${up:0:7}" "$([ -n "${h}" ] && [ "${up#"${h}"}" != "${up}" ] && echo 1 || echo 0)"
-
-# evdev-bridge : dernier commit du dossier dans ce dépôt (modifications non
-# commitées ignorées, comme pour make prebuilt).
-rec=$(recorded evdev-bridge)
-up=$(git -C "${root}" log -1 --format=%H -- evdev-bridge)
-report evdev-bridge "${rec}" "${up:0:7}" "$([ -n "${rec}" ] && [ "${up#"${rec}"}" != "${up}" ] && echo 1 || echo 0)"
 
 # xfce-launcher : HEAD de main ; enregistré = hash complet.
 rec=$(recorded xfce-launcher)

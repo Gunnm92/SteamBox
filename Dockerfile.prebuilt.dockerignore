@@ -1,4 +1,4 @@
-# Ignore par-Dockerfile (BuildKit) de Dockerfile.prebuilt : seul evdev-bridge
-# (source vendored) est copié, tout le reste est cloné depuis l'amont.
+# Ignore par-Dockerfile (BuildKit) de Dockerfile.prebuilt : rien n'est copié
+# du dépôt, tout est cloné depuis l'amont (evdev-bridge, seule source
+# vendored, retiré le 24/11).
 *
-!evdev-bridge/
