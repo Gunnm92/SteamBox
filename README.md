@@ -114,6 +114,17 @@ Au premier lancement de Steam dans la session streamée, une seule fois :
 2. Quand Steam demande le partage d'écran, choisir l'écran HDMI (le dongle)
    et autoriser la restauration de la session de partage.
 
+Précisions (24/11, KWin) :
+
+- Steam doit être lancé par l'entrée **Steam (Steam Link)** (`steam-link-launch.sh`,
+  le seul lanceur sur le bus de KWin) ou par une application Sunshine ; lancé
+  autrement, il ne trouve pas le portail KDE.
+- La fenêtre de partage d'écran apparaît sur l'écran du dongle : elle se voit
+  via Moonlight, application **Bureau**.
+- Cocher la restauration de la session, sinon la question revient à chaque lancement.
+- Le jeton de restauration est gardé dans `~/.local/share/flatpak/db/screencast`
+  (sous `/config`, donc persistant). Pour le réinitialiser, supprimer ce fichier.
+
 ## Contenu de l'image
 
 - **Jeux** : Steam (+ gamescope), Heroic (Epic/GOG/Amazon, AppImage via AppManager), Wine-tkg +

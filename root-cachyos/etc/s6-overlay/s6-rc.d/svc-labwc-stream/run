@@ -66,8 +66,9 @@ fi
 ulimit -S -s 8192 2>/dev/null || true
 
 # Sortie streamée (22/11, steambox-env.sh : stream_drm_card) : si une sortie
-# est branchée sur le GPU du conteneur (dongle HDMI factice), ce labwc la
-# pilote en DRM (seatd) et Sunshine la capture en KMS — HDR possible, et la
+# est branchée sur le GPU du conteneur (dongle HDMI factice), le compositeur
+# la pilote en DRM (KWin depuis le 24/11, labwc/seatd avant) et Sunshine la
+# capture en KMS — HDR possible, et la
 # session Steam y met gamescope seul en DRM. Sinon, headless comme avant
 # (Sunshine en capture wlr). Le connecteur retenu est noté dans
 # $XDG_RUNTIME_DIR/steambox-stream-output (vide en headless), lu par
@@ -79,7 +80,7 @@ printf '%s' "${STREAM_CONNECTOR:-}" > "${XDG_RUNTIME_DIR}/steambox-stream-output
 chown arcade "${XDG_RUNTIME_DIR}/steambox-stream-output"
 
 # Session Steam en DRM : son prep-cmd Sunshine (lancé en arcade) arrête ce
-# labwc pour libérer la sortie, puis le relance (steam-gamescope-session.sh).
+# compositeur (KWin avec le dongle, 24/11) pour libérer la sortie, puis le relance (steam-gamescope-session.sh).
 s6-svperms -O arcade -E arcade . 2>/dev/null || true
 
 # Sortie branchée : KWin la pilote en DRM au lieu de labwc (24/11, phase 1 KWin),
@@ -119,7 +120,10 @@ if [ -n "${STREAM_CONNECTOR:-}" ]; then
     # prochaine relance.
     runuser -u arcade -- env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
         dbus-daemon --session --address="unix:path=${XDG_RUNTIME_DIR}/bus-stream" --fork --print-pid \
-        > "${XDG_RUNTIME_DIR}/bus-stream.pid"
+        > "${XDG_RUNTIME_DIR}/bus-stream.pid" || {
+        echo "[kwin-stream] dbus-daemon du bus de streaming non démarré — s6 va relancer."
+        exit 1
+    }
     # env -u : WAYLAND_DISPLAY et DISPLAY hérités de l'ENV du Dockerfile
     # feraient croire à KWin qu'il est un client (même piège que labwc, voir
     # plus haut) ; KWIN_*_NO_PERMISSION_CHECKS : KWin ne demande pas

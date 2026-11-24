@@ -336,8 +336,8 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # de streaming avec le dongle (svc-labwc-stream, kwin-stream-session.sh), pas au
 # bureau d'administration. systemsettings (module kcm_kscreen) et kscreen-doctor
 # (set-resolution.sh) y règlent la sortie ; xdg-desktop-portal-kde fournit le
-# portail RemoteDesktop/ScreenCast de ce bus, que Steam Link et Moonlight
-# utilisent. xdg-desktop-portal-wlr reste pour labwc, sans dongle.
+# portail RemoteDesktop/ScreenCast de ce bus, que Steam Link utilise
+# (ScreenCast) ; Moonlight passe par la capture KMS de Sunshine. xdg-desktop-portal-wlr reste pour labwc, sans dongle.
 # dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
 # labwc, qui ne le fait pas lui-même (voir xdg-autostart.sh).
 # pavucontrol (18/11) : volume par canal des sorties Sunshine (dosage du

@@ -140,10 +140,13 @@ stream_compositor() {
 
 # stream_session_env : exporte les variables de la session KWin de streaming
 # (steambox-stream-session.env, écrit par kwin-stream-session.sh). Retour 1
-# s'il n'existe pas. Lu ligne à ligne, sans évaluation du contenu.
+# s'il n'existe pas, ou si le socket wayland-1 manque (24/11 : session gamescope
+# en cours, KWin arrêté, fichier d'environnement périmé). Lu ligne à ligne,
+# sans évaluation du contenu.
 stream_session_env() {
-    local f="${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-session.env" k v
-    [[ -r "${f}" ]] || return 1
+    local d="${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}" k v
+    local f="${d}/steambox-stream-session.env"
+    [[ -r "${f}" && -S "${d}/wayland-1" ]] || return 1
     while IFS='=' read -r k v; do
         if [[ -n "${k}" ]]; then
             export "${k}=${v}"

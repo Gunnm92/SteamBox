@@ -49,7 +49,7 @@ kwin_set_resolution() {
         echo "[$(date '+%F %T')] KWin : pas de session de streaming (steambox-stream-session.env absent), résolution inchangée" >>/tmp/set-resolution.log
         return 0
     fi
-    info=$(kscreen-doctor -o 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    info=$(timeout 10 kscreen-doctor -o 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
     # 3e champ de la ligne « Output: <n> <nom> <uuid> »
     output=$(awk '/^Output:/ {print $3; exit}' <<<"${info}")
     if [[ -z "${output}" ]]; then
@@ -71,7 +71,7 @@ kwin_set_resolution() {
     fi
     # Sortie de kscreen-doctor journalisée : une erreur D-Bus ou un refus du
     # KWin y est visible sans rejouer le script.
-    out=$(kscreen-doctor "output.${output}.mode.${modeid}" "output.${output}.scale.1" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    out=$(timeout 10 kscreen-doctor "output.${output}.mode.${modeid}" "output.${output}.scale.1" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
     {
         echo "[$(date '+%F %T')] client=${WIDTH}x${HEIGHT}@${FPS} -> ${mode} sur ${output} (kscreen-doctor)"
         echo "${out}"

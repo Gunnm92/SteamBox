@@ -14,8 +14,13 @@
 . /usr/local/bin/scripts/steambox-env.sh
 
 if [[ "$(stream_compositor)" == kwin ]]; then
-    stream_session_env
-    exec systemsettings kcm_kscreen
+    if stream_session_env; then
+        exec systemsettings kcm_kscreen
+    fi
+    # KWin arrêté (session « Mode SteamOS » en cours, 24/11) : pas de bon bus.
+    timeout 5 notify-send -a SteamBox "Réglages de l'écran" \
+        "KWin est arrêté (session Mode SteamOS en cours)" >/dev/null 2>&1 || true
+    exit 1
 fi
 
 # timeout : sans démon de notification joignable, notify-send peut attendre
