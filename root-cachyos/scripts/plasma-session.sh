@@ -22,12 +22,18 @@ for _ in $(seq 1 60); do
 done
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
-# Disposition clavier (KEYBOARD_LAYOUT/VARIANT, steambox-env.sh) écrite à
-# chaque démarrage dans kxkbrc, lu par les deux KWin (bureau et streaming,
-# même HOME). Le modèle (Model) reste celui choisi dans les Paramètres.
-kwriteconfig6 --file kxkbrc --group Layout --key Use true
-kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "${KEYBOARD_LAYOUT:-us}"
-kwriteconfig6 --file kxkbrc --group Layout --key VariantList "${KEYBOARD_VARIANT:-}"
+# Disposition clavier (KEYBOARD_LAYOUT/VARIANT) écrite à chaque démarrage
+# dans kxkbrc (write_kxkbrc, steambox-env.sh).
+# shellcheck source=steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+write_kxkbrc
+
+# Verrouillage d'écran coupé (24/11, relecture) : kscreenlocker verrouille
+# après 5 min par défaut, et arcade n'a pas de mot de passe — le bureau
+# navigateur resterait verrouillé sans issue. L'accès se protège par
+# DESKTOP_PASSWORD (Selkies), pas par l'écran de verrouillage.
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
+kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockOnResume false
 
 # Fallbacks GTK3/4 (thème, icônes et curseur WhiteSur) pour les applis GTK,
 # écrits SEULEMENT s'ils manquent : sous Plasma, les Paramètres

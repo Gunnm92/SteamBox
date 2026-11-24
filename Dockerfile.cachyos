@@ -1318,7 +1318,7 @@ COPY root-cachyos/scripts/ /usr/local/bin/scripts/
 # dans apps.json (voir init_sunshine.sh, migration v10).
 COPY root-cachyos/usr/share/steambox/ /usr/share/steambox/
 RUN chmod +x /usr/local/bin/scripts/*.sh /usr/local/bin/scripts/*.py && \
-    find /etc/s6-overlay/s6-rc.d -name run -exec chmod +x {} \; && \
+    find /etc/s6-overlay/s6-rc.d \( -name run -o -name finish \) -exec chmod +x {} \; && \
     ln -sf /usr/local/bin/scripts/steamos-session-select.sh /usr/bin/steamos-session-select && \
     ln -sf /usr/local/bin/scripts/os-session-select.sh /usr/lib/os-session-select
 

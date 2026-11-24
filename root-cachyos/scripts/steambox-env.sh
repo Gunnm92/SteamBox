@@ -134,6 +134,18 @@ stream_display() {
     echo "${d:-:1}"
 }
 
+# write_kxkbrc : écrit KEYBOARD_LAYOUT/VARIANT dans ~/.config/kxkbrc (24/11),
+# lu par les deux KWin (même HOME). Appelée par chacun avant de démarrer —
+# ils démarrent en parallèle, aucun ne doit dépendre de l'autre. En arcade
+# (runuser si root). Le modèle (Model) reste celui choisi dans les Paramètres.
+write_kxkbrc() {
+    local run=()
+    [[ "$(id -u)" == 0 ]] && run=(runuser -u arcade -- env HOME=/home/arcade)
+    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key Use true
+    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "${KEYBOARD_LAYOUT:-us}"
+    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key VariantList "${KEYBOARD_VARIANT:-}"
+}
+
 # socket_live <chemin> : vrai si un socket Unix accepte une connexion
 # maintenant (24/11) — un wayland-N resté après la mort de son compositeur
 # n'est qu'un fichier, que -S ne distingue pas d'un socket vivant.

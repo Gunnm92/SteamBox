@@ -34,8 +34,12 @@ ulimit -S -s 8192 2>/dev/null || true
 # shellcheck source=../../../../scripts/steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 read -r STREAM_CARD STREAM_CONNECTOR _ <<<"$(stream_drm_card)"
-printf '%s' "${STREAM_CONNECTOR:-}" > "${XDG_RUNTIME_DIR}/steambox-stream-output"
-chown arcade "${XDG_RUNTIME_DIR}/steambox-stream-output"
+# Écrit dans un .tmp puis renommé (24/11, relecture) : svc-sunshine, lancé en
+# parallèle, ne doit jamais lire un fichier créé mais encore vide (il en
+# conclurait « pas de dongle » et attendrait pour toujours).
+printf '%s' "${STREAM_CONNECTOR:-}" > "${XDG_RUNTIME_DIR}/steambox-stream-output.tmp"
+chown arcade "${XDG_RUNTIME_DIR}/steambox-stream-output.tmp"
+mv -f "${XDG_RUNTIME_DIR}/steambox-stream-output.tmp" "${XDG_RUNTIME_DIR}/steambox-stream-output"
 
 if [ -z "${STREAM_CONNECTOR:-}" ]; then
     rm -f "${XDG_RUNTIME_DIR}/steambox-stream-compositor"
@@ -49,6 +53,9 @@ fi
 s6-svperms -O arcade -E arcade . 2>/dev/null || true
 
 echo "[kwin-stream] sortie ${STREAM_CONNECTOR} pilotée en DRM par KWin (${STREAM_CARD}), capture KMS"
+# Disposition clavier de Moonlight (24/11, relecture) : kxkbrc écrit ici
+# aussi, ce KWin démarrant en parallèle du bureau Plasma.
+write_kxkbrc
 printf '%s' kwin > "${XDG_RUNTIME_DIR}/steambox-stream-compositor"
 # dbus-daemon --fork se détache : s6-svc -d ne l'atteint pas, et chaque
 # relance en laissait un orphelin (environnement d'activation, portails

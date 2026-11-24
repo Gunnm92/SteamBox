@@ -8,6 +8,33 @@ XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
 # shellcheck source=../../../../scripts/steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
 
+# Restes d'une session Plasma précédente (24/11, relecture) : un
+# kwin_wayland_wrapper, ksmserver, kded6 ou plasmashell orphelin garderait
+# wayland-1 et ses noms sur le bus principal — la nouvelle session prendrait
+# wayland-2, Selkies verrait deux candidats et perdrait les touches non ASCII.
+# Ciblés par nom exact ET par leur bus (celui du bureau, jamais bus-stream :
+# le KWin et le plasmashell de Moonlight ne sont pas touchés). Jamais de
+# pkill -f, qui se trouverait lui-même.
+# Adresse exacte, ou suivie de « ,guid=… » (services activés par le bus).
+BUS="^DBUS_SESSION_BUS_ADDRESS=unix:path=${XDG_RUNTIME_DIR}/bus(,|$)"
+ARCADE_UID=$(id -u arcade)
+STALE=()
+for d in /proc/[0-9]*; do
+    [ "$(stat -c %u "${d}" 2>/dev/null)" = "${ARCADE_UID}" ] || continue
+    case "$(cat "${d}/comm" 2>/dev/null)" in
+        kwin_wayland_wr|kwin_wayland|startplasma-way|plasma_session|ksmserver|kded6|plasmashell|Xwayland) ;;
+        *) continue ;;
+    esac
+    tr '\0' '\n' < "${d}/environ" 2>/dev/null | grep -qE "${BUS}" || continue
+    STALE+=("${d#/proc/}")
+done
+if [ "${#STALE[@]}" -gt 0 ]; then
+    echo "[plasma] restes de la session précédente arrêtés : ${STALE[*]}"
+    kill -TERM "${STALE[@]}" 2>/dev/null
+    sleep 2
+    kill -KILL "${STALE[@]}" 2>/dev/null
+fi
+
 # Le run est lancé dès le fork de svc-selkies (pas de notification-fd) :
 # attendre que son compositeur accepte des connexions. Échec franc après
 # 30 s, s6 relance.

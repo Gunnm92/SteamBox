@@ -38,9 +38,27 @@ echo "$$" > "${PIDFILE}"
 # Configuration à part (24/11) : le bureau navigateur fait tourner un autre
 # plasmashell avec le même HOME, et deux instances qui réécrivent le même
 # plasma-org.kde.plasma.desktop-appletsrc se marchent dessus (panneaux,
-# disposition par écran).
-export XDG_CONFIG_HOME="${HOME}/.config/steambox-stream-plasma"
-mkdir -p "${XDG_CONFIG_HOME}" "${HOME}/.local/share"
+# disposition par écran). Seul plasmashell est séparé, par un paquet de shell
+# copié sous un autre identifiant (org.steambox.stream → fichier
+# plasma-org.steambox.stream-appletsrc) : les applis lancées depuis ce bureau
+# gardent le ~/.config commun (pas de XDG_CONFIG_HOME à part, qu'elles
+# hériteraient). Copie refaite si celle du système a changé (mise à jour de
+# Plasma).
+SRC=/usr/share/plasma/shells/org.kde.plasma.desktop
+SHELL_DIR="${HOME}/.local/share/plasma/shells/org.steambox.stream"
+SRC_SUM=$(sha256sum "${SRC}/metadata.json" 2>/dev/null | cut -d' ' -f1)
+if [ ! -e "${SHELL_DIR}/metadata.json" ] || [ "$(cat "${SHELL_DIR}/.steambox-src" 2>/dev/null)" != "${SRC_SUM}" ]; then
+    rm -rf "${SHELL_DIR}"
+    mkdir -p "$(dirname "${SHELL_DIR}")"
+    cp -r "${SRC}" "${SHELL_DIR}"
+    printf '%s' "${SRC_SUM}" > "${SHELL_DIR}/.steambox-src"
+    python3 -I -c 'import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["KPlugin"]["Id"] = "org.steambox.stream"
+json.dump(d, open(p, "w"), indent=4)' "${SHELL_DIR}/metadata.json"
+fi
+mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 cd "${HOME}" || exit 1
 
-exec plasmashell
+exec plasmashell --shell-plugin org.steambox.stream
