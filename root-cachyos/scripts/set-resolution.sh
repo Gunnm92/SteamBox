@@ -32,6 +32,58 @@ export XDG_RUNTIME_DIR
 # proche.
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
+
+# kwin_set_resolution (24/11, phase 1 KWin) : sous le KWin de streaming
+# (stream_compositor = kwin), wlr-randr ne sert à rien — la sortie se règle
+# par kscreen-doctor, qui parle au KWin par D-Bus : il faut donc la session
+# (stream_session_env : bus-stream, DISPLAY, WAYLAND_DISPLAY). kscreen-doctor
+# veut l'id du mode (« output.<sortie>.mode.<id> ») : le nom « LxH@F.00 » est
+# refusé (essai du 24/11). Mêmes règles que la branche labwc : définition
+# retenue par fit_resolution, puis fréquence la plus proche de FPS. Échec
+# (pas de session, pas de sortie, mode absent) : journalisé et sortie 0, le
+# stream reste à la résolution courante — un code d'erreur empêcherait le
+# lancement de l'appli (prep-cmd Sunshine).
+kwin_set_resolution() {
+    local info output modes res best mode modeid out
+    if ! stream_session_env; then
+        echo "[$(date '+%F %T')] KWin : pas de session de streaming (steambox-stream-session.env absent), résolution inchangée" >>/tmp/set-resolution.log
+        return 0
+    fi
+    info=$(kscreen-doctor -o 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    # 3e champ de la ligne « Output: <n> <nom> <uuid> »
+    output=$(awk '/^Output:/ {print $3; exit}' <<<"${info}")
+    if [[ -z "${output}" ]]; then
+        echo "[$(date '+%F %T')] KWin : aucune sortie listée par kscreen-doctor, résolution inchangée" >>/tmp/set-resolution.log
+        return 0
+    fi
+    # Ligne « Modes: » : éléments « id:LxH@F » (* = actuel, ! = préféré, à
+    # retirer). Sortie « LxH@F id », une par mode.
+    modes=$(awk '/Modes:/ { for (i = 2; i <= NF; i++) { gsub(/[*!]/, "", $i); split($i, m, ":"); print m[2], m[1] } }' <<<"${info}")
+    res=$(cut -d' ' -f1 <<<"${modes}" | cut -d@ -f1 | sort -u | fit_resolution "${WIDTH}" "${HEIGHT}")
+    best=$(awk -v res="${res}" -v fps="${FPS}" '
+        { split($1, m, "@") }
+        m[1] == res { d = m[2] - fps; if (d < 0) d = -d; if (pick == "" || d < bd) { pick = $0; bd = d } }
+        END { print pick }' <<<"${modes}")
+    read -r mode modeid <<<"${best}"
+    if [[ -z "${modeid}" ]]; then
+        echo "[$(date '+%F %T')] client=${WIDTH}x${HEIGHT}@${FPS} : aucun mode utilisable sur ${output} (kscreen-doctor), résolution inchangée" >>/tmp/set-resolution.log
+        return 0
+    fi
+    # Sortie de kscreen-doctor journalisée : une erreur D-Bus ou un refus du
+    # KWin y est visible sans rejouer le script.
+    out=$(kscreen-doctor "output.${output}.mode.${modeid}" "output.${output}.scale.1" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    {
+        echo "[$(date '+%F %T')] client=${WIDTH}x${HEIGHT}@${FPS} -> ${mode} sur ${output} (kscreen-doctor)"
+        echo "${out}"
+    } >>/tmp/set-resolution.log
+    return 0
+}
+
+if [[ "$(stream_compositor)" == kwin ]]; then
+    kwin_set_resolution
+    exit 0
+fi
+
 OUTPUT=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {print $1; exit}')
 OUTPUT="${OUTPUT:-HEADLESS-1}"
 
