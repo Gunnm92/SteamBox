@@ -44,7 +44,9 @@ Date : 24/11/2026. Remplace la phase 2 de
   premier démarrage de l'image, 24/11) ; Plasma (wrapper) prend le premier
   libre qu'il choisit (`wayland-2` au premier essai : le wrapper ne commence
   pas non plus à 0), nom jamais écrit en dur — publié par desktop-session.sh ; le KWin du streaming passe de
-  `wayland-1` à **`wayland-stream`** (nom non numéroté, ignoré par la
+  `wayland-1` à **`$XDG_RUNTIME_DIR/stream/wayland-stream`** (25/11 : dans un
+  sous-dossier, que Selkies ne parcourt pas — à la racine, il l'adoptait au
+  démarrage avant que Plasma n'existe ; ignoré par la
   détection de Selkies, et que le wrapper de Plasma ne peut pas prendre).
 - Plasma sur le bus de session principal (`/run/user/99/bus`, svc-dbus-session) :
   le streaming a déjà son bus (`bus-stream`).

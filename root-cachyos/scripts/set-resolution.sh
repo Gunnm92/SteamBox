@@ -11,9 +11,9 @@ WIDTH="${SUNSHINE_CLIENT_WIDTH:-1920}"
 HEIGHT="${SUNSHINE_CLIENT_HEIGHT:-1080}"
 FPS="${SUNSHINE_CLIENT_FPS:-60}"
 
-export WAYLAND_DISPLAY=wayland-stream
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
+export WAYLAND_DISPLAY="${XDG_RUNTIME_DIR}/stream/wayland-stream"
 
 # Trace des valeurs recues (audit B6, 31/08) : le repli silencieux sur
 # 1920x1080 quand Sunshine ne fournit pas SUNSHINE_CLIENT_* a deja coute

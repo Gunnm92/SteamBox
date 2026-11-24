@@ -69,9 +69,9 @@
 #      et n'enregistre jamais l'interface ScreenCast du tout.
 set -uo pipefail
 
-export WAYLAND_DISPLAY=wayland-stream
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export XDG_RUNTIME_DIR
+export WAYLAND_DISPLAY="${XDG_RUNTIME_DIR}/stream/wayland-stream"
 # DISPLAY réel du Xwayland du KWin de streaming (22/11, stream_display).
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh

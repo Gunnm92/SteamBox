@@ -22,7 +22,7 @@ du flux de jeu :
  Navigateur ──────► │ Selkies :6080 (HTTPS) ─► compositeur Selkies (wayland-1)              │
  (admin LAN)        │                            └─ KWin imbriqué (wayland-N) ─► Plasma     │
                     │                                                                       │
- Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin STREAM (wayland-stream, dongle) │
+ Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin STREAM (stream/wayland-stream) │
  (jeu)              │      │                               └─ Steam gamepadui, jeux, Proton │
                     │      └─ clavier/souris virtuels ─► libinput de KWin                   │
                     │      └─ uinput/uhid : manettes virtuelles ─► SDL/hidraw (Steam Input) │
@@ -40,7 +40,7 @@ du flux de jeu :
   sans latence). L'environnement de la session (`DISPLAY`, `WAYLAND_DISPLAY`,
   bus, `XAUTHORITY`) est publié dans `$XDG_RUNTIME_DIR/steambox-desktop-session.env`.
   Sert à l'administration (fichiers, réglages, lancement manuel des apps).
-- **Session streaming** (`svc-kwin-stream`, `wayland-stream`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
+- **Session streaming** (`svc-kwin-stream`, socket `$XDG_RUNTIME_DIR/stream/wayland-stream`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
   **KWin** (`kwin_wayland --drm`) sur un **dongle HDMI factice** branché sur
   le GPU (détecté, ou `STREAM_OUTPUT`). **Le dongle est obligatoire** : sans
   sortie branchée, ni KWin de streaming ni Sunshine (KWin en `--virtual` ne
@@ -102,7 +102,7 @@ factice (détecté au démarrage de `svc-kwin-stream`, marqueur
 
 | | |
 |---|---|
-| Compositeur | `kwin_wayland --drm` par `kwin-launch.py`, socket `wayland-stream` |
+| Compositeur | `kwin_wayland --drm` par `kwin-launch.py`, socket `$XDG_RUNTIME_DIR/stream/wayland-stream` (sous-dossier : invisible pour Selkies) |
 | Capture Sunshine | KMS (transmet le HDR) |
 | D-Bus | bus dédié `bus-stream`, noté dans `steambox-stream-session.env` |
 | Portails | `xdg-desktop-portal-kde` (RemoteDesktop pré-autorisé, ScreenCast) |
@@ -321,12 +321,14 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Manette PlayStation détectée mais boutons morts** → vérifier la règle
   cgroup `c 242:* rmw` (voir docker-compose.yml) et l'existence de
   `/dev/hidrawN` dans le conteneur.
-- **Deux pointeurs, ou touches non ASCII perdues (« @ », « € », accents) dans
-  le navigateur** → Selkies n'a pas trouvé le KWin de Plasma : son journal
-  (`docker logs`) dit « Multiple candidate app-compositor sockets ». Il ne
-  doit y avoir que `wayland-1` (Selkies) et celui de Plasma comme
-  sockets `wayland-<chiffres>` dans `/run/user/<uid>` ; le streaming est sur
-  `wayland-stream`.
+- **Clavier faux (pas AZERTY), presse-papiers muet ou touches non ASCII
+  perdues dans le navigateur** → Selkies n'envoie pas les entrées au KWin de
+  Plasma. Son journal (`docker logs`) doit dire « Wayland app compositor
+  'wayland-N' (auto-detected) » avec le socket de Plasma (celui de
+  `steambox-desktop-session.env`). Il ne doit y avoir à la racine de
+  `/run/user/<uid>` que `wayland-1` (Selkies) et celui de Plasma : le
+  streaming est rangé dans `stream/wayland-stream`, sinon Selkies l'adopte
+  au démarrage (vu le 25/11).
 - **Bureau navigateur vide ou figé** → `s6-svc -r /run/service/svc-plasma`
   (la session Plasma) ; `svc-selkies` relance aussi Plasma derrière lui.
 - **Appli de `~/.config/autostart` jamais lancée** → Plasma lit l'autostart
@@ -379,5 +381,5 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   verrou `SingletonLock` d'un ancien hostname, nettoyé à chaque démarrage de
   session depuis le 31/08.
 - **Bureau et flux Moonlight inversés** → impossible depuis le 24/11 : le
-  streaming a un nom de socket fixe (`wayland-stream`), le bureau ceux de
+  streaming a un socket fixe (`stream/wayland-stream`), le bureau ceux de
   Selkies et de Plasma.

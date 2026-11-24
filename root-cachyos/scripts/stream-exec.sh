@@ -5,7 +5,7 @@
 # (EmulationStation) au lieu d'un « env DISPLAY=:1 » codé en dur.
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
-export WAYLAND_DISPLAY=wayland-stream
+export WAYLAND_DISPLAY="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/stream/wayland-stream"
 DISPLAY="$(stream_display)"
 export DISPLAY
 exec "$@"

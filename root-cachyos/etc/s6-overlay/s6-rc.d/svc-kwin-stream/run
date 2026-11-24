@@ -11,7 +11,13 @@
 # n'y a ni compositeur de streaming ni Sunshine — le service attend sans
 # boucler (sleep infinity), et svc-sunshine fait de même.
 #
-# Socket wayland-stream (24/11), plus wayland-1 : un nom non numéroté.
+# Socket $XDG_RUNTIME_DIR/stream/wayland-stream (24/11, plus wayland-1),
+# HORS de la racine du dossier runtime (25/11) : Selkies y cherche le
+# compositeur de ses applis parmi les wayland-* et, au démarrage, avant que
+# Plasma n'existe, avait adopté ce socket — clavier et presse-papiers du
+# navigateur envoyés au KWin de Moonlight, choix gardé ensuite. Rangé dans
+# un sous-dossier, il lui est invisible (chemin absolu accepté par KWin et
+# par libwayland côté clients, essai du 25/11).
 # Selkies (bureau navigateur, wayland-1) cherche le compositeur de ses
 # applis parmi les autres sockets wayland-<chiffres> et n'en accepte qu'un
 # (le KWin de Plasma) ; avec deux candidats il injecte dans son propre
@@ -82,6 +88,8 @@ rm -f "${XDG_RUNTIME_DIR}/steambox-stream-session.env" \
       "${XDG_RUNTIME_DIR}/steambox-stream-display" \
       "${XDG_RUNTIME_DIR}/bus-stream" \
       "${XDG_RUNTIME_DIR}/bus-stream.pid"
+# Dossier du socket Wayland (voir en tête), à arcade seul.
+install -d -o arcade -g arcade -m 0700 "${XDG_RUNTIME_DIR}/stream"
 # Bus de session propre à ce compositeur (24/11) : KWin et les applis
 # lancées depuis Sunshine s'y connectent, et non au bus du bureau.
 # --print-pid écrit le PID du démon forké dans le fichier, pour la
@@ -104,5 +112,5 @@ exec runuser -u arcade -- \
     XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland \
     KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 \
     KWIN_DRM_DEVICES="${STREAM_CARD}" KWIN_FORCE_ASSUME_HDR_SUPPORT=1 \
-    /usr/local/bin/scripts/kwin-launch.py --drm --xwayland --socket wayland-stream \
+    /usr/local/bin/scripts/kwin-launch.py --drm --xwayland --socket "${XDG_RUNTIME_DIR}/stream/wayland-stream" \
     --no-lockscreen --exit-with-session /usr/local/bin/scripts/kwin-stream-session.sh

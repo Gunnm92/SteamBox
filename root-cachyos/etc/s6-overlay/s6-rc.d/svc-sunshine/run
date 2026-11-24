@@ -30,11 +30,11 @@ fi
 # Échec franc (audit M1, 05/09) : exit 1 et s6 relance, jamais de démarrage
 # "réussi" sans cible de capture.
 TIMEOUT=30
-while [ ! -S "${XDG_RUNTIME_DIR}/wayland-stream" ] && [ "${TIMEOUT}" -gt 0 ]; do
+while [ ! -S "${XDG_RUNTIME_DIR}/stream/wayland-stream" ] && [ "${TIMEOUT}" -gt 0 ]; do
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
-if [ ! -S "${XDG_RUNTIME_DIR}/wayland-stream" ]; then
+if [ ! -S "${XDG_RUNTIME_DIR}/stream/wayland-stream" ]; then
     echo "[sunshine] wayland-stream absent après 15s — refus de démarrer, s6 va relancer."
     exit 1
 fi
@@ -76,7 +76,7 @@ export LIBVIRTUALHID_DUALSENSE_USBIP="${LIBVIRTUALHID_DUALSENSE_USBIP:-1}"
 # sans demande d'autorisation de capture (personne pour répondre).
 exec s6-setuidgid arcade \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
-    WAYLAND_DISPLAY=wayland-stream DISPLAY="$(stream_display)" \
+    WAYLAND_DISPLAY="${XDG_RUNTIME_DIR}/stream/wayland-stream" DISPLAY="$(stream_display)" \
     DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS}" \
     XDG_CURRENT_DESKTOP=KDE KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 \
     sunshine /config/.config/sunshine/sunshine.conf capture=kms
