@@ -22,7 +22,7 @@ bureau d'administration du flux de jeu :
  Navigateur ──────► │ noVNC/websockify :6080 ─► wayvnc ─► labwc BUREAU (wayland-0, headless)│
  (admin LAN)        │                                     └─ XFCE : panel, Thunar, menu     │
                     │                                                                       │
- Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► labwc STREAM (wayland-1, dongle)     │
+ Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin/labwc STREAM (wayland-1)        │
  (jeu)              │      │                               └─ Steam gamepadui, jeux, Proton │
                     │      └─ clavier/souris virtuels ─► libinput (evdev-bridge sans dongle)│
                     │      └─ uinput/uhid : manettes virtuelles ─► SDL/hidraw (Steam Input) │
@@ -38,10 +38,11 @@ bureau d'administration du flux de jeu :
   défaut) n'est que sa taille de départ.
   Sert à l'administration (fichiers, réglages, lancement manuel des apps).
 - **Session streaming** (`svc-labwc-stream`, `wayland-1`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
-  compositeur dédié à Sunshine. Avec un **dongle HDMI factice** branché sur le
-  GPU (détecté, ou `STREAM_OUTPUT`), il pilote cette sortie en DRM et Sunshine
-  la capture en **KMS** (seule capture qui transmet le HDR) ; sans dongle, il
-  reste headless (capture wlr). Sa résolution s'adapte **au client Moonlight
+  compositeur dédié à Sunshine, **KWin** (`kwin_wayland --drm`) avec un
+  **dongle HDMI factice** branché sur le GPU (détecté, ou `STREAM_OUTPUT`),
+  **labwc** headless sans dongle (voir [Session streaming](#session-streaming)).
+  Avec le dongle, il pilote la sortie en DRM et Sunshine la capture en **KMS**
+  (seule capture qui transmet le HDR). Sa résolution s'adapte **au client Moonlight
   connecté** (`prep-cmd` → [set-resolution.sh](root-cachyos/scripts/set-resolution.sh),
   parmi les modes du dongle : la plus grande définition qui tient dans celle
   du client, le pilote NVIDIA refusant les modes sur mesure). L'invariant « wayland-1 » est garanti : le
@@ -84,6 +85,34 @@ Définies dans `apps.json` (généré/migré par
 Chaque app applique la résolution du client à la connexion et revient à
 1920×1080 à la déconnexion. Jaquettes Moonlight dans le style de Wolf
 (Games on Whales, MIT) : `/usr/share/steambox/sunshine/`.
+
+## Session streaming
+
+Le compositeur de la session streamée dépend du dongle HDMI factice (détecté
+au démarrage de `svc-labwc-stream`, marqueur `steambox-stream-compositor`) :
+
+| | Avec le dongle | Sans dongle |
+|---|---|---|
+| Compositeur | `kwin_wayland --drm` (KWin, 24/11) | labwc headless (`WLR_BACKENDS=headless`) |
+| Capture Sunshine | KMS (transmet le HDR) | wlr |
+| D-Bus | bus dédié `bus-stream`, noté dans `steambox-stream-session.env` | inchangé |
+| Portails | `xdg-desktop-portal-kde` (RemoteDesktop pré-autorisé, ScreenCast) | `xdg-desktop-portal-wlr` |
+| Réglages d'écran | « Réglages de l'écran (KDE) » (`systemsettings kcm_kscreen`), `kscreen-doctor` pour la résolution | notification (`kde-settings.sh`), `wlr-randr` pour la résolution |
+
+Sous KWin, Sunshine et Steam Link utilisent le bus de KWin ; `set-resolution.sh`
+règle la résolution du dongle avec `kscreen-doctor`. Le HDR du dongle passe
+par `KWIN_FORCE_ASSUME_HDR_SUPPORT=1` : son EDID (« LLV F0501-4K ») annonce le
+PQ sans le BT.2020 qu'exige KWin. Les jeux Proton ne proposent le HDR que
+si `PROTON_ENABLE_WAYLAND=1` et `PROTON_ENABLE_HDR=1` sont posés (en X11, pas
+de HDR).
+
+### Steam Remote Play / Steam Link
+
+Au premier lancement de Steam dans la session streamée, une seule fois :
+
+1. Se connecter en Moonlight sur l'application **Bureau**.
+2. Quand Steam demande le partage d'écran, choisir l'écran HDMI (le dongle)
+   et autoriser la restauration de la session de partage.
 
 ## Contenu de l'image
 

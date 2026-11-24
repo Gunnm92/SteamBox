@@ -129,6 +129,22 @@
 #    sans cible de capture viable). Pas de HDR dans cette architecture non
 #    plus (toujours WLR_RENDERER par défaut/GLES2) — le seul gain réel est
 #    l'isolation bureau/streaming, pas le HDR, qui reste hors de portée.
+#
+# 8. KWin (Wayland, `kwin_wayland --drm`) pour le seul bureau de streaming,
+#    avec dongle HDMI ; labwc reste sans dongle et pour le bureau
+#    d'administration (24/11). Les causes du renoncement à KWin (point 3 et 5)
+#    sont levées ou ne le concernent plus : Plasma complet n'est pas lancé, on
+#    démarre kwin_wayland seul (svc-labwc-stream, kwin-stream-session.sh) ;
+#    udevd est supervisé et libinput lit les entrées virtuelles de Sunshine en
+#    mode DRM (22/11), donc la souris Sunshine passe sans evdev-bridge ;
+#    wayvnc n'est pas en cause, il ne sert qu'au bureau d'administration, qui
+#    reste sous labwc. Steam Link validé en direct (24/11) après une
+#    autorisation de partage d'écran donnée une fois. HDR : l'EDID du dongle
+#    (« LLV F0501-4K ») annonce le PQ sans le BT.2020 qu'exige KWin, d'où
+#    KWIN_FORCE_ASSUME_HDR_SUPPORT=1 ; les jeux Proton ne proposent le HDR que
+#    si PROTON_ENABLE_WAYLAND=1 et PROTON_ENABLE_HDR=1 sont posés (en X11, pas
+#    de HDR).
+#    Réglages d'écran KDE : systemsettings/kscreen-doctor sous KWin seulement.
 
 # Base "latest" (15/11), plus épinglée par digest (audit H2, 05/09) : le
 # build fait de toute façon un pacman -Syyu complet (Mesa, wlroots…), le
@@ -315,6 +331,13 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # rsync + rclone (14/11) : mise à jour du pack RGS (rgs-update.sh) — rclone
 # lit le serveur HTTP de RGS comme son rgs_theme_upgrade, rsync fusionne le
 # loader d'arcade en gardant les réglages SteamBox.
+# kwin + xdg-desktop-portal-kde + libkscreen + systemsettings + kscreen
+# (24/11, demande utilisateur — réglages d'écran KDE) : KWin ne sert qu'au bureau
+# de streaming avec le dongle (svc-labwc-stream, kwin-stream-session.sh), pas au
+# bureau d'administration. systemsettings (module kcm_kscreen) et kscreen-doctor
+# (set-resolution.sh) y règlent la sortie ; xdg-desktop-portal-kde fournit le
+# portail RemoteDesktop/ScreenCast de ce bus, que Steam Link et Moonlight
+# utilisent. xdg-desktop-portal-wlr reste pour labwc, sans dongle.
 # dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
 # labwc, qui ne le fait pas lui-même (voir xdg-autostart.sh).
 # pavucontrol (18/11) : volume par canal des sorties Sunshine (dosage du
@@ -326,6 +349,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip dex \
       gvfs gvfs-smb smbclient \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
+      kwin xdg-desktop-portal-kde libkscreen systemsettings kscreen \
       wayvnc python-pip wlr-randr \
       gtk3 \
       xorg-xwayland wayland libxkbcommon \
@@ -689,7 +713,12 @@ RUN mkdir -p /etc/xdg-desktop-portal && \
 # virtuelle à CHAQUE session Moonlight, donc Steam recrée un profil vierge
 # à chaque fois) est un bug amont non résolu de Sunshine, sans correctif
 # connu côté udev/config — voir LizardByte/Sunshine#3404.
-RUN printf '#!/bin/sh\nexec env SDL_JOYSTICK_HIDAPI_PS5_RUMBLE=1 /usr/bin/steam -pipewire -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
+# -pipewire-dmabuf (24/11) : ajouté à côté de -pipewire pour la capture de
+# Steam Link/Remote Play sous KWin (portail ScreenCast, buffers GPU). Même
+# réglage que Steam Headless v2 (josh5/steam-headless:2, analysé le 24/11).
+# Essai du 24/11 : Steam Link OK sous KWin, capture « Desktop PipeWire NV12 +
+# NVENC HEVC » après une autorisation de partage d'écran donnée une fois.
+RUN printf '#!/bin/sh\nexec env SDL_JOYSTICK_HIDAPI_PS5_RUMBLE=1 /usr/bin/steam -pipewire -pipewire-dmabuf -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
 
 # ── 1a3d. xfdesktop-settings forcé sur Xwayland (30/08) — sous labwc/
@@ -857,6 +886,14 @@ RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Bureau)\nExec=env QT_
 # requis) et sa confirmation en direct.
 RUN printf '[Desktop Entry]\nType=Application\nName=Steam (Steam Link)\nExec=/usr/local/bin/scripts/steam-link-launch.sh\nIcon=steam\nTerminal=false\nCategories=Game;\n' \
       > /usr/share/applications/steam-link.desktop
+
+# « Réglages de l'écran (KDE) » (24/11, demande utilisateur) : systemsettings
+# est marqué OnlyShowIn=KDE, donc invisible dans le menu XFCE ; cette entrée
+# le rend accessible. Exec passe par kde-settings.sh, qui n'ouvre la fenêtre
+# que sous KWin (dongle) et notifie sinon. Les paquets KDE sont dans la
+# liste de paquets pacman plus haut (kwin, systemsettings, kscreen).
+RUN printf "[Desktop Entry]\nType=Application\nName=Réglages de l'écran (KDE)\nExec=/usr/local/bin/scripts/kde-settings.sh\nIcon=preferences-desktop-display\nTerminal=false\nCategories=Settings;\n" \
+      > /usr/share/applications/steambox-reglages-ecran.desktop
 
 # "Retour au bureau" — ferme gamescope (et Steam avec) pour retrouver XFCE/
 # labwc en dessous, sans dépendre du menu Quitter de Steam.
