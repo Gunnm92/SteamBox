@@ -1,22 +1,21 @@
 #!/bin/bash
 # Contrepartie "undo" de l'entrée apps.json "Desktop" (29/09) : même motif
-# que stop-steam-bigpicture.sh. reset-resolution.sh seul laissait tourner la
-# session XFCE lancée par sunshine-desktop-xfce.sh ("detached", jamais
-# arrêtée par Sunshine) sur le compositeur headless (wayland-1) — quitter
-# « Desktop » dans Moonlight puis lancer « Steam Big Picture » affichait le
-# bureau, toujours là (constaté par l'utilisateur).
+# que stop-steam-bigpicture.sh. reset-resolution.sh seul laissait tourner le
+# bureau lancé par sunshine-desktop.sh ("detached", jamais arrêté par
+# Sunshine) sur le compositeur de streaming — quitter « Desktop » dans
+# Moonlight puis lancer « Steam Big Picture » affichait le bureau, toujours
+# là (constaté par l'utilisateur, 29/09).
 #
-# Arrête l'arbre de processus de cette session (dbus-run-session et ses
-# descendants : xfsettingsd, xfdesktop, xfce4-panel et ce qui a
-# été lancé depuis le panneau), retrouvé par le fichier PID du script de
-# lancement — jamais par nom : le bureau de la TV (wayland-0) fait tourner
-# les mêmes programmes et ne doit pas être touché.
+# Arrête l'arbre de processus de ce bureau (plasmashell depuis le 24/11, XFCE
+# avant, et ce qui a été lancé depuis son panneau), retrouvé par le fichier
+# PID du script de lancement — jamais par nom : le bureau navigateur fait
+# tourner les mêmes programmes et ne doit pas être touché.
 set -uo pipefail
 
 /usr/local/bin/scripts/reset-resolution.sh
 
 XDG_RUNTIME_DIR="/run/user/$(id -u)"
-PIDFILE="${XDG_RUNTIME_DIR}/sunshine-desktop-xfce.pid"
+PIDFILE="${XDG_RUNTIME_DIR}/sunshine-desktop.pid"
 [ -f "${PIDFILE}" ] || exit 0
 ROOT_PID=$(cat "${PIDFILE}" 2>/dev/null)
 

@@ -570,10 +570,9 @@ RUN --mount=type=secret,id=github_token \
 # to gui", son vrai menu se fermait sans jamais s'afficher). Un détour par
 # un script x11-wrap.sh choisissant :0 ou :1 selon le WAYLAND_DISPLAY
 # hérité a été essayé le même jour (18/09) puis abandonné : plus
-# nécessaire depuis que wayland-session.sh exporte DISPLAY/WAYLAND_DISPLAY
-# explicitement pour tout le bureau visible avant de lancer XFCE,
-# symétrique à sunshine-desktop-xfce.sh côté headless (voir
-# wayland-session.sh). Les .desktop upstream (paquets AUR/pacman) restent
+# nécessaire depuis que chaque session exporte DISPLAY/WAYLAND_DISPLAY pour
+# tout ce qu'elle lance (Plasma et son KWin pour le bureau navigateur depuis
+# le 24/11, le KWin de streaming côté Moonlight). Les .desktop upstream (paquets AUR/pacman) restent
 # donc intacts, sans aucun patch.
 
 # Steam (gamepadui) interroge NetworkManager via D-Bus pour son statut réseau

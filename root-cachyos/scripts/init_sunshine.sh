@@ -88,24 +88,18 @@ fi
 # doit passer par une nouvelle étape de migration là-bas, pas seulement ici.
 
 if [ ! -f "${CONF_DIR}/apps.json" ]; then
-    # "Desktop" avait jusque-là un "cmd"/"detached" absent (05/09) — Sunshine
-    # capture alors juste la sortie du labwc headless (wayland-1) telle
-    # quelle. Or ce compositeur ne lance jamais rien lui-même (voir
-    # svc-labwc-stream/run) : contrairement au bureau visible (wayland-0,
-    # session XFCE complète démarrée par wayland-session.sh), rien n'y
-    # affichait le moindre panneau/bureau — "Desktop" sous Moonlight donnait
-    # un écran vide. sunshine-desktop-xfce.sh lance le même panneau/bureau
-    # XFCE que la session visible, mais directement sur wayland-1 (pas de
-    # second labwc à démarrer, svc-labwc-stream le fournit déjà) ; il est
-    # idempotent (garde par PID file) pour supporter une reconnexion sans
-    # empiler un second xfdesktop/xfce4-panel.
+    # "Desktop" : le compositeur de streaming ne lance rien lui-même (écran
+    # vide sous Moonlight sans "detached", 05/09). sunshine-desktop.sh y lance
+    # plasmashell (24/11 ; XFCE avant), idempotent (garde par PID file) pour
+    # supporter une reconnexion sans empiler une seconde instance ;
+    # stop-desktop.sh l'arrête en quittant l'appli.
     #
     # "EmulationStation" (24/09, remplace l'entrée "Pegasus" du 06/09) :
     # frontend des jeux rétro/arcade (wsquashfs-launcher, MAME/RetroArch,
-    # voir init_emulationstation.sh) sous Moonlight. DISPLAY=:1 /
-    # WAYLAND_DISPLAY=wayland-1 : le labwc headless du stream, pas le bureau
-    # visible — tout jeu lancé depuis ES hérite du même affichage et
-    # s'affiche donc sous Moonlight sans configuration supplémentaire.
+    # voir init_emulationstation.sh) sous Moonlight. stream-exec.sh : le
+    # compositeur de streaming (wayland-stream), pas le bureau navigateur —
+    # tout jeu lancé depuis ES hérite du même affichage et s'affiche donc
+    # sous Moonlight sans configuration supplémentaire.
     #
     # -gamepadui (pas "steam steam://open/bigpicture") : confirmé en direct
     # très tôt dans ce projet — l'ancien Big Picture (CEF) capturait en écran
@@ -146,8 +140,8 @@ if [ ! -f "${CONF_DIR}/apps.json" ]; then
   "env": {},
   "apps": [
     { "name": "Desktop", "image-path": "/usr/share/steambox/sunshine/desktop-xfce.png",
-      "detached": ["/usr/local/bin/scripts/sunshine-desktop-xfce.sh"],
-      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop-xfce.sh" } ] },
+      "detached": ["/usr/local/bin/scripts/sunshine-desktop.sh"],
+      "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-desktop.sh" } ] },
     { "name": "Steam Big Picture", "detached": ["/usr/local/bin/scripts/steam-bigpicture-launch.sh"], "image-path": "/usr/share/steambox/sunshine/steam-bigpicture.png",
       "prep-cmd": [ { "do": "/usr/local/bin/scripts/set-resolution.sh", "undo": "/usr/local/bin/scripts/stop-steam-bigpicture.sh" } ] },
     { "name": "Mode SteamOS (Gamescope)", "detached": ["/usr/local/bin/scripts/steam-gamescope-launch.sh --stream"], "image-path": "/usr/share/steambox/sunshine/steam-gamescope.png",
@@ -169,7 +163,7 @@ fi
 # idempotentes appliquées par étape — chacune ne touche QUE ce qui manque,
 # jamais ce que l'utilisateur a personnalisé.
 VERSION_FILE="${CONF_DIR}/.config-version"
-CURRENT_VERSION=14
+CURRENT_VERSION=15
 INSTALLED_VERSION=$(cat "${VERSION_FILE}" 2>/dev/null || echo 1)
 
 if [ "${INSTALLED_VERSION}" -lt 2 ]; then
@@ -439,6 +433,28 @@ if [ "${INSTALLED_VERSION}" -lt 14 ]; then
     if [ -f "${CONF_DIR}/sunshine.conf" ] && ! grep -q '^ds4_back_as_touchpad_click' "${CONF_DIR}/sunshine.conf"; then
         echo "ds4_back_as_touchpad_click = disabled" >> "${CONF_DIR}/sunshine.conf"
         echo "[init_sunshine] migration v14 : ds4_back_as_touchpad_click = disabled ajouté à sunshine.conf"
+    fi
+fi
+
+if [ "${INSTALLED_VERSION}" -lt 15 ]; then
+    # v14 -> v15 (24/11) : XFCE retiré, le bureau Moonlight est plasmashell —
+    # sunshine-desktop-xfce.sh / stop-desktop-xfce.sh renommés
+    # sunshine-desktop.sh / stop-desktop.sh. Ne remplace QUE ces deux chemins
+    # d'origine, dans toutes les entrées qui les citent.
+    if [ -f "${CONF_DIR}/apps.json" ] && command -v jq >/dev/null 2>&1; then
+        OLD_D="/usr/local/bin/scripts/sunshine-desktop-xfce.sh"
+        OLD_U="/usr/local/bin/scripts/stop-desktop-xfce.sh"
+        if grep -q -e "${OLD_D}" -e "${OLD_U}" "${CONF_DIR}/apps.json"; then
+            cp "${CONF_DIR}/apps.json" "${CONF_DIR}/apps.json.bak-migration-v15"
+            jq --arg od "${OLD_D}" --arg ou "${OLD_U}" \
+                --arg nd "/usr/local/bin/scripts/sunshine-desktop.sh" --arg nu "/usr/local/bin/scripts/stop-desktop.sh" \
+                '{env, apps: [.apps[]
+                    | if (.detached // []) == [$od] then .detached = [$nd] else . end
+                    | if has("prep-cmd") then .["prep-cmd"] |= map(if .undo == $ou then .undo = $nu else . end) else . end]}' \
+                "${CONF_DIR}/apps.json" > "${CONF_DIR}/apps.json.new" \
+                && mv "${CONF_DIR}/apps.json.new" "${CONF_DIR}/apps.json" \
+                && echo "[init_sunshine] migration v15 : bureau Moonlight sous Plasma (sauvegarde .bak-migration-v15)"
+        fi
     fi
 fi
 
