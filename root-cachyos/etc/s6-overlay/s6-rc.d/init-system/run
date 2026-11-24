@@ -60,6 +60,11 @@ rm -rf "${XDG_RUNTIME_DIR}" /run/seatd.sock /tmp/.X* 2>/dev/null || true
 mkdir -p "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
 chown "${PUID}:${PGID}" "${XDG_RUNTIME_DIR}"
+# Dossier des sockets X recréé en root 1777 (24/11) : effacé ci-dessus avec
+# /tmp/.X*, il était recréé en 0755 par le premier Xwayland lancé en arcade,
+# et KWin refuse alors ses sockets X (« no sticky bit ») — plus aucun
+# Xwayland sous KWin, ni sur le bureau ni sur le streaming.
+install -d -m 1777 -o root -g root /tmp/.X11-unix
 
 # Écrite dans container_environment (audit F2, 05/09), mais AUCUN service
 # ne la lit par là : S6_KEEP_ENV=1 rend with-contenv no-op (vérifié le
