@@ -94,10 +94,14 @@ if [ -n "${STREAM_CONNECTOR:-}" ]; then
     # dbus-daemon --fork se détache : s6-svc -d ne l'atteint pas, et chaque
     # relance en laissait un orphelin (environnement d'activation, portails
     # périmés). Son PID est noté (24/11) et tué ici avant de le relancer, mais
-    # seulement si ce PID est encore un dbus-daemon : un PID réutilisé par un
-    # autre processus n'est pas touché, et le bus du bureau (wayland-0) non plus.
+    # seulement si ce PID est un dbus-daemon DONT la ligne de commande porte le
+    # chemin de ce bus (24/11) : un PID réutilisé par le dbus-daemon du bureau
+    # (wayland-0, même nom de processus) n'est pas touché. comm seul ne suffit pas.
     OLD_PID=$(cat "${XDG_RUNTIME_DIR}/bus-stream.pid" 2>/dev/null)
-    if [[ "${OLD_PID}" =~ ^[0-9]+$ ]] && [ "$(cat "/proc/${OLD_PID}/comm" 2>/dev/null)" = dbus-daemon ]; then
+    OLD_CMD=$(tr '\0' ' ' < "/proc/${OLD_PID:-0}/cmdline" 2>/dev/null)
+    if [[ "${OLD_PID}" =~ ^[0-9]+$ ]] \
+        && [ "$(cat "/proc/${OLD_PID}/comm" 2>/dev/null)" = dbus-daemon ] \
+        && [[ "${OLD_CMD}" == *"unix:path=${XDG_RUNTIME_DIR}/bus-stream "* ]]; then
         kill "${OLD_PID}" 2>/dev/null
         TIMEOUT=50
         while [ -d "/proc/${OLD_PID}" ] && [ "${TIMEOUT}" -gt 0 ]; do
