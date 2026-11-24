@@ -14,22 +14,11 @@ ROMS_DIR="${GAMES_ROMS_DIR:-${GAMES_DIR}/roms}"
 BIOS_DIR="${GAMES_BIOS_DIR:-${GAMES_DIR}/bios}"
 SAVES_DIR="${GAMES_SAVES_DIR:-${GAMES_DIR}/saves}"
 
-# Résolution du bureau headless (noVNC), LARGEURxHAUTEUR[@Hz] (22/11).
-DESKTOP_RESOLUTION="${DESKTOP_RESOLUTION:-1920x1080}"
-
-# Clavier (XKB) : bureau labwc, clavier virtuel Sunshine (evdev-bridge) et
-# VNC (wayvnc). Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
+# Clavier (XKB) : écrit dans ~/.config/kxkbrc à chaque démarrage du bureau
+# (plasma-session.sh), lu par les deux KWin (bureau Plasma et streaming,
+# même HOME). Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-us}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
-# VNC_MAC_ISO_KEYS=1 : noVNC depuis un Mac à clavier ISO (« @ » et « < »
-# inversés) — échange ces deux touches pour wayvnc seul (svc-wayvnc).
-# Activé par défaut avec la variante mac : qui choisit un AZERTY Mac tape
-# depuis un Mac ; 0 pour le forcer à l'arrêt.
-if [ "${KEYBOARD_VARIANT}" = mac ]; then
-    VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-1}"
-else
-    VNC_MAC_ISO_KEYS="${VNC_MAC_ISO_KEYS:-0}"
-fi
 
 # Langue : variable standard LANG du conteneur (ex. fr_FR.UTF-8, avec
 # LANGUAGE=fr_FR:fr), lue telle quelle par le bureau et les applis ;
@@ -126,6 +115,19 @@ stream_display() {
     local d
     d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-display" 2>/dev/null)
     echo "${d:-:1}"
+}
+
+# socket_live <chemin> : vrai si un socket Unix accepte une connexion
+# maintenant (24/11) — un wayland-N resté après la mort de son compositeur
+# n'est qu'un fichier, que -S ne distingue pas d'un socket vivant.
+socket_live() {
+    python3 -I -c 'import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(0.5)
+try:
+    s.connect(sys.argv[1])
+except OSError:
+    sys.exit(1)' "$1" 2>/dev/null
 }
 
 # stream_compositor : « kwin » si le KWin de streaming tourne sur le dongle,

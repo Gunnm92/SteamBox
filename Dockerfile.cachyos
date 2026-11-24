@@ -350,7 +350,7 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       gvfs gvfs-smb smbclient \
       xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
       kwin xdg-desktop-portal-kde libkscreen systemsettings kscreen \
-      wayvnc python-pip wlr-randr \
+      python-pip wlr-randr \
       gtk3 \
       xorg-xwayland wayland libxkbcommon \
       mesa vulkan-icd-loader vulkan-tools \
@@ -1195,61 +1195,19 @@ RUN --mount=type=secret,id=github_token \
 # dans le labwc headless de Sunshine. Le KWin de streaming (seul depuis le
 # 24/11, dongle obligatoire) les lit lui-même par libinput.
 
-# ── 1c. noVNC — fichiers statiques (pas de paquet Arch/CachyOS, AUR-only) ────
-# wayvnc sert le RFB brut (5900, interne, voir svc-wayvnc) ; websockify (pip,
-# absent des dépôts Arch/CachyOS) fait le pont websocket->RFB pour un accès
-# navigateur direct sans client VNC, ET sert les fichiers statiques noVNC sur
-# le même port via --web (voir svc-websockify) — même montage que l'ancien
-# Dockerfile webstation/labwc, où wayvnc fonctionnait déjà (KWin n'était pas
-# encore dans l'équation à l'époque).
-RUN pip install --break-system-packages --no-cache-dir websockify
-
-ARG NOVNC_TAG=""
-# Contrôles ajoutés (22/09) : une URL vide (rate-limit API) ou un tarball
-# tronqué laissaient passer le build avec un noVNC vide ou partiel — le
-# bureau navigateur (seul accès d'administration) cassé sans aucun signal
-# avant le premier déploiement.
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    NOVNC_URL=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "https://api.github.com/repos/novnc/noVNC/releases/${NOVNC_TAG:+tags/}${NOVNC_TAG:-latest}" \
-      | grep -oE '"tarball_url": *"[^"]*"' | cut -d'"' -f4) && \
-    [ -n "${NOVNC_URL}" ] || { echo "FATAL: NOVNC_URL vide"; exit 1; } && \
-    mkdir -p /usr/share/webapps/novnc && \
-    curl -fSL --retry 3 -o /tmp/novnc.tar.gz "${NOVNC_URL}" && \
-    tar -xzf /tmp/novnc.tar.gz -C /usr/share/webapps/novnc --strip-components=1 && \
-    [ -f /usr/share/webapps/novnc/vnc.html ] || { echo "FATAL: vnc.html absent après extraction noVNC"; exit 1; } && \
-    rm -f /tmp/novnc.tar.gz
-
-# La racine ("/") du serveur noVNC affiche par défaut une liste de fichiers
-# (aucun index.html fourni), et vnc.html seul n'a ni host ni port pré-remplis
-# — redirection en JS avec l'hôte déduit dynamiquement (window.location.hostname)
-# et le port websockify (même port que la page grâce à --web).
-# resize=remote (22/11) : le bureau, headless, prend la taille de la fenêtre
-# du navigateur (wayvnc redimensionne une sortie headless à la demande du
-# client) — net, sans mise à l'échelle ; DESKTOP_RESOLUTION n'est que la
-# taille de départ. resize=scale ne faisait qu'étirer l'image.
-RUN printf '<!doctype html><title>SteamBox</title><link rel="icon" type="image/png" href="steam.png">\n<script>location.replace("vnc.html?host=" + location.hostname + "&port=" + location.port + "&autoconnect=true&resize=remote&reconnect=true");</script>\n' \
-      > /usr/share/webapps/novnc/index.html
-
-# Habillage SteamBox (01/11) : l'onglet affichait « WayVNC - noVNC » (noVNC
-# préfixe PAGE_TITLE du nom de bureau RFB, « WayVNC » par défaut ; wayvnc
-# reçoit désormais -n SteamBox, voir svc-wayvnc) avec le favicon noVNC. ui.js
-# garde un titre fixe « SteamBox » (sinon « SteamBox - SteamBox »), et les <link> d'icônes de vnc.html
-# (favicon + apple-touch-icon) sont remplacés par l'icône de Steam (paquet
-# steam, 256 px). Chaque sed est vérifié : une release noVNC qui renommerait
-# ces lignes ferait échouer le build au lieu de revenir en silence à
-# l'habillage d'origine.
-RUN cd /usr/share/webapps/novnc && \
-    cp /usr/share/icons/hicolor/256x256/apps/steam.png steam.png && \
-    sed -i 's/^const PAGE_TITLE = "noVNC";/const PAGE_TITLE = "SteamBox";/' app/ui.js && \
-    sed -i 's/document\.title = e\.detail\.name + " - " + PAGE_TITLE;/document.title = PAGE_TITLE;/' app/ui.js && \
-    grep -q '^const PAGE_TITLE = "SteamBox";' app/ui.js || { echo "FATAL: PAGE_TITLE noVNC non patché"; exit 1; } && \
-    ! grep -q 'e\.detail\.name + " - "' app/ui.js || { echo "FATAL: titre nom de bureau noVNC non patché"; exit 1; } && \
-    sed -i -e 's|<title>noVNC</title>|<title>SteamBox</title>|' \
-           -e '/rel="\(icon\|apple-touch-icon\)"/d' \
-           -e 's|<title>SteamBox</title>|&\n    <link rel="icon" type="image/png" href="steam.png">\n    <link rel="apple-touch-icon" type="image/png" href="steam.png">|' vnc.html && \
-    grep -q '<title>SteamBox</title>' vnc.html || { echo "FATAL: <title> vnc.html non patché"; exit 1; } && \
-    [ "$(grep -c 'novnc.*\.\(ico\|png\)' vnc.html)" = 0 ] || { echo "FATAL: icônes noVNC encore présentes dans vnc.html"; exit 1; }
+# ── 1c. Selkies — bureau navigateur (24/11, remplace wayvnc + noVNC) ─────────
+# Selkies fait tourner son propre compositeur Wayland (pixelflux, encodage
+# NVENC, curseur envoyé au navigateur) ; Plasma s'y imbrique (svc-plasma).
+# Avec wayvnc sur un labwc headless, le pointeur était peint dans l'image ET
+# dessiné par le navigateur (deux pointeurs, essai du 24/11). Venv à part
+# (pip, absent des dépôts Arch/CachyOS) ; versions épinglées : composant
+# d'infrastructure, la reproductibilité prime (comme s6-overlay).
+ARG SELKIES_VERSION=2.2.1
+ARG PIXELFLUX_VERSION=2.2.3
+RUN python3 -m venv /opt/selkies && \
+    /opt/selkies/bin/pip install --no-cache-dir "selkies==${SELKIES_VERSION}" "pixelflux==${PIXELFLUX_VERSION}" && \
+    [ -x /opt/selkies/bin/selkies ] || { echo "FATAL: /opt/selkies/bin/selkies absent"; exit 1; } && \
+    /opt/selkies/bin/python -c "import pixelflux, selkies" || { echo "FATAL: selkies/pixelflux non importables"; exit 1; }
 
 # ── 2. Driver NVIDIA userspace — matché à la version du host au démarrage ────
 # Le paquet Arch nvidia-utils suit la dernière release, pas forcément celle du

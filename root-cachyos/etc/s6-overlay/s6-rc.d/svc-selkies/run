@@ -1,0 +1,63 @@
+#!/command/with-contenv bash
+# Bureau navigateur (24/11) : Selkies sert le bureau sur le port 6080 et fait
+# tourner son propre compositeur Wayland (pixelflux, wayland-0), dans lequel
+# Plasma s'imbrique (svc-plasma). Remplace wayvnc + noVNC sur labwc headless :
+# le pointeur y était peint dans l'image capturée ET dessiné par le navigateur
+# (deux pointeurs, essai du 24/11). Ici KWin donne la forme du curseur à
+# Selkies, qui la fait afficher par le navigateur : un seul pointeur, sans
+# latence. Le bureau prend la taille de la fenêtre du navigateur.
+XDG_RUNTIME_DIR="/run/user/$(id -u arcade)"
+# shellcheck source=../../../../scripts/steambox-env.sh
+. /usr/local/bin/scripts/steambox-env.sh
+
+# wayland-0 réservé à Selkies : pixelflux prend le premier wayland-N libre, et
+# svc-plasma attend wayland-0. Un socket resté d'un compositeur mort est
+# retiré ; un socket vivant (autre compositeur) : refus, s6 relance.
+if [ -e "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+    if socket_live "${XDG_RUNTIME_DIR}/wayland-0"; then
+        echo "[selkies] wayland-0 déjà tenu par un autre compositeur — refus de démarrer, s6 va relancer."
+        exit 1
+    fi
+    rm -f "${XDG_RUNTIME_DIR}/wayland-0" "${XDG_RUNTIME_DIR}/wayland-0.lock"
+fi
+
+# Certificat auto-signé créé au premier démarrage (persistant dans /config) :
+# HTTPS est requis par le navigateur pour le décodage vidéo (WebCodecs) et le
+# presse-papiers. À accepter une fois dans le navigateur.
+CERT_DIR=/config/selkies
+mkdir -p "${CERT_DIR}"
+if [ ! -s "${CERT_DIR}/cert.pem" ] || [ ! -s "${CERT_DIR}/key.pem" ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=SteamBox \
+        -keyout "${CERT_DIR}/key.pem" -out "${CERT_DIR}/cert.pem" 2>/dev/null || {
+        echo "[selkies] certificat HTTPS non créé — s6 va relancer."
+        exit 1
+    }
+fi
+chown -R arcade: "${CERT_DIR}"
+chmod 600 "${CERT_DIR}/key.pem"
+
+# DESKTOP_PASSWORD (24/11) : mot de passe de l'authentification basique ;
+# vide = accès libre (LAN de confiance, comme noVNC avant).
+AUTH=(SELKIES_ENABLE_BASIC_AUTH=false)
+if [ -n "${DESKTOP_PASSWORD:-}" ]; then
+    AUTH=(SELKIES_ENABLE_BASIC_AUTH=true "SELKIES_BASIC_AUTH_PASSWORD=${DESKTOP_PASSWORD}")
+fi
+
+# Pile limitée à 8 Mo (30/09), comme les autres compositeurs : Docker sur
+# Unraid hérite d'une pile illimitée (disposition mémoire « legacy » qui
+# casse proton-cachyos et les jeux 32 bits) ; hérité par tout le bureau.
+ulimit -S -s 8192 2>/dev/null || true
+
+# Audio coupé (24/11) : Selkies ferait de son puits virtuel la sortie par
+# défaut du PipeWire partagé, et détournerait le son de Sunshine.
+# env -u WAYLAND_DISPLAY/DISPLAY : hérités de l'ENV du Dockerfile, ils
+# feraient passer Selkies pour un client d'un autre compositeur.
+exec runuser -u arcade -- env -u WAYLAND_DISPLAY -u DISPLAY \
+    HOME=/home/arcade USER=arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    SELKIES_WAYLAND=true SELKIES_PORT=6080 SELKIES_ADDR=0.0.0.0 \
+    SELKIES_ENABLE_HTTPS=true \
+    SELKIES_HTTPS_CERT="${CERT_DIR}/cert.pem" SELKIES_HTTPS_KEY="${CERT_DIR}/key.pem" \
+    SELKIES_ENABLE_CURSORS=true SELKIES_USE_BROWSER_CURSORS=true \
+    SELKIES_AUDIO_ENABLED=false \
+    "${AUTH[@]}" \
+    /opt/selkies/bin/selkies
