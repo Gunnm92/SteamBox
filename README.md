@@ -1,8 +1,8 @@
 # SteamBox 🎮
 
-Console de jeu conteneurisée (Unraid ou tout hôte Docker Linux) : **CachyOS + session Wayland réelle
-(labwc/XFCE) + Steam**, streamée par **Sunshine/Moonlight** avec résolution
-dynamique, et administrable au navigateur via **noVNC**.
+Console de jeu conteneurisée (Unraid ou tout hôte Docker Linux) : **CachyOS + KDE Plasma/KWin
+(Wayland) + Steam**, streamée par **Sunshine/Moonlight** avec résolution
+dynamique, et administrable au navigateur via **Selkies**.
 
 Successeur d'ArcadeBox (X11) puis Waybox — l'historique complet des
 architectures essayées et des raisons de chaque pivot vit en tête de
@@ -13,53 +13,61 @@ est commenté avec sa date et sa validation (« confirmé en direct »).
 
 ## Architecture
 
-Deux compositeurs labwc (wlroots) tournent côte à côte, pour séparer le
-bureau d'administration du flux de jeu :
+Deux bureaux tournent côte à côte, pour séparer le bureau d'administration
+du flux de jeu :
 
 ```
                     ┌────────────────────────── conteneur SteamBox ─────────────────────────┐
                     │                                                                       │
- Navigateur ──────► │ noVNC/websockify :6080 ─► wayvnc ─► labwc BUREAU (wayland-0, headless)│
- (admin LAN)        │                                     └─ XFCE : panel, Thunar, menu     │
+ Navigateur ──────► │ Selkies :6080 (HTTPS) ─► compositeur Selkies (wayland-0)              │
+ (admin LAN)        │                            └─ KWin imbriqué (wayland-1) ─► Plasma     │
                     │                                                                       │
- Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin/labwc STREAM (wayland-1)        │
+ Moonlight ───────► │ Sunshine :47984-48010 ──► KMS ─► KWin STREAM (wayland-stream, dongle) │
  (jeu)              │      │                               └─ Steam gamepadui, jeux, Proton │
-                    │      └─ clavier/souris virtuels ─► libinput (evdev-bridge sans dongle)│
+                    │      └─ clavier/souris virtuels ─► libinput de KWin                   │
                     │      └─ uinput/uhid : manettes virtuelles ─► SDL/hidraw (Steam Input) │
                     │                                                                       │
                     │ s6-overlay supervise le tout (voir root-cachyos/etc/s6-overlay/)      │
                     └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Bureau d'administration** (`svc-labwc`, `wayland-0`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-desktop-display`, en principe `:0`) :
-  session XFCE **headless** (jamais d'écran), capturée par wayvnc pour l'accès
-  navigateur (noVNC). Il prend la taille de la fenêtre du navigateur
-  (redimensionnement distant de noVNC) ; `DESKTOP_RESOLUTION` (1920×1080 par
-  défaut) n'est que sa taille de départ.
+- **Bureau d'administration** (`svc-selkies` + `svc-plasma`) : Selkies sert le
+  bureau sur `https://<hôte>:6080` (certificat auto-signé à accepter une fois)
+  et fait tourner son propre compositeur (`wayland-0`, encodage NVENC) ;
+  **Plasma** s'y imbrique (`startplasma-wayland`, son KWin sur `wayland-1`,
+  Xwayland à la demande). Le bureau prend la taille de la fenêtre du
+  navigateur, et le pointeur est dessiné par le navigateur (un seul pointeur,
+  sans latence). L'environnement de la session (`DISPLAY`, `WAYLAND_DISPLAY`,
+  bus, `XAUTHORITY`) est publié dans `$XDG_RUNTIME_DIR/steambox-desktop-session.env`.
   Sert à l'administration (fichiers, réglages, lancement manuel des apps).
-- **Session streaming** (`svc-labwc-stream`, `wayland-1`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
-  compositeur dédié à Sunshine, **KWin** (`kwin_wayland --drm`) avec un
-  **dongle HDMI factice** branché sur le GPU (détecté, ou `STREAM_OUTPUT`),
-  **labwc** headless sans dongle (voir [Session streaming](#session-streaming)).
-  Avec le dongle, il pilote la sortie en DRM et Sunshine la capture en **KMS**
+- **Session streaming** (`svc-kwin-stream`, `wayland-stream`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
+  **KWin** (`kwin_wayland --drm`) sur un **dongle HDMI factice** branché sur
+  le GPU (détecté, ou `STREAM_OUTPUT`). **Le dongle est obligatoire** : sans
+  sortie branchée, ni KWin de streaming ni Sunshine (KWin en `--virtual` ne
+  lit aucune entrée). KWin pilote la sortie en DRM et Sunshine la capture en **KMS**
   (seule capture qui transmet le HDR). Sa résolution s'adapte **au client Moonlight
   connecté** (`prep-cmd` → [set-resolution.sh](root-cachyos/scripts/set-resolution.sh),
-  parmi les modes du dongle : la plus grande définition qui tient dans celle
-  du client, le pilote NVIDIA refusant les modes sur mesure). L'invariant « wayland-1 » est garanti : le
-  service refuse de démarrer tant que le bureau n'a pas créé `wayland-0`.
-- **Session Steam HDR** (« Mode SteamOS (Gamescope) », dongle branché) : le
+  `kscreen-doctor`, parmi les modes du dongle : la plus grande définition qui
+  tient dans celle du client, le pilote NVIDIA refusant les modes sur mesure).
+  Le socket a un nom non numéroté pour que Selkies ne le confonde jamais avec
+  le KWin de Plasma.
+- **Session Steam HDR** (« Mode SteamOS (Gamescope) ») : le
   `prep-cmd` ([steam-gamescope-session.sh](root-cachyos/scripts/steam-gamescope-session.sh))
-  arrête le labwc de Sunshine, lance gamescope, qui pilote seul le dongle en
+  arrête le KWin de streaming, lance gamescope, qui pilote seul le dongle en
   DRM, HDR actif, et attend qu'il y affiche une image
   ([drm-output-fb.py](root-cachyos/scripts/drm-output-fb.py)) avant que
-  Sunshine ne commence la capture ; à la fermeture, labwc reprend la sortie. Sunshine capture en KMS
+  Sunshine ne commence la capture ; à la fermeture, KWin reprend la sortie. Sunshine capture en KMS
   dans les deux cas. Dongle dont l'EDID n'annonce pas le BT.2020 : profil
   Lua dans `~/.config/gamescope/scripts/` (`supported = true`,
   `eotf = gamescope.eotf.pq`, colorimétrie BT.2020, `matches` sur
   marque/modèle de l'EDID).
-- **Entrées Moonlight** : clavier/souris lus par libinput quand le labwc de
-  Sunshine pilote le dongle, sinon par [evdev-bridge](evdev-bridge/bridge.c)
-  (protocoles wlroots, session headless) ; les manettes
+- **Xwayland** : les deux KWin en ont un. `/tmp/.X11-unix` est recréé en
+  `1777` au démarrage (sans le sticky bit, KWin refuse ses sockets X), et le
+  KWin de streaming passe par [kwin-launch.py](root-cachyos/scripts/kwin-launch.py),
+  qui prépare les sockets X comme `kwin_wayland_wrapper` tout en gardant un
+  nom de socket Wayland fixe.
+- **Entrées Moonlight** : clavier/souris lus par la libinput du KWin de
+  streaming ; les manettes
   par les devices virtuels uinput/uhid de Sunshine, lus par SDL et par Steam
   Input (hidraw — voir la règle udev
   [99-steambox-hidraw-fallback.rules](root-cachyos/etc/udev/rules.d/99-steambox-hidraw-fallback.rules)).
@@ -78,8 +86,8 @@ Définies dans `apps.json` (généré/migré par
 
 | App Moonlight | Contenu |
 |---|---|
-| **Desktop** | La session headless nue — lancer Steam depuis le menu |
-| **Steam Big Picture** | `steam -gamepadui` directement sur wayland-1/Xwayland (`steam-bigpicture-launch.sh`, jeux Wine en X11) |
+| **Desktop** | Le bureau Plasma (`plasmashell`) sur le KWin de streaming — lancer Steam depuis le menu |
+| **Steam Big Picture** | `steam -gamepadui` directement sur le KWin de streaming/Xwayland (`steam-bigpicture-launch.sh`, jeux Wine en X11) |
 | **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope à la résolution du client (scaling FSR, changement de résolution in-game), avec son propre `XDG_RUNTIME_DIR` sans socket Wayland du bureau |
 
 Chaque app applique la résolution du client à la connexion et revient à
@@ -88,18 +96,22 @@ Chaque app applique la résolution du client à la connexion et revient à
 
 ## Session streaming
 
-Le compositeur de la session streamée dépend du dongle HDMI factice (détecté
-au démarrage de `svc-labwc-stream`, marqueur `steambox-stream-compositor`) :
+Le compositeur de la session streamée est KWin en DRM sur le dongle HDMI
+factice (détecté au démarrage de `svc-kwin-stream`, marqueur
+`steambox-stream-compositor`) :
 
-| | Avec le dongle | Sans dongle |
-|---|---|---|
-| Compositeur | `kwin_wayland --drm` (KWin, 24/11) | labwc headless (`WLR_BACKENDS=headless`) |
-| Capture Sunshine | KMS (transmet le HDR) | wlr |
-| D-Bus | bus dédié `bus-stream`, noté dans `steambox-stream-session.env` | inchangé |
-| Portails | `xdg-desktop-portal-kde` (RemoteDesktop pré-autorisé, ScreenCast) | `xdg-desktop-portal-wlr` |
-| Réglages d'écran | « Réglages de l'écran (KDE) » (`systemsettings kcm_kscreen`), `kscreen-doctor` pour la résolution | notification (`kde-settings.sh`), `wlr-randr` pour la résolution |
+| | |
+|---|---|
+| Compositeur | `kwin_wayland --drm` par `kwin-launch.py`, socket `wayland-stream` |
+| Capture Sunshine | KMS (transmet le HDR) |
+| D-Bus | bus dédié `bus-stream`, noté dans `steambox-stream-session.env` |
+| Portails | `xdg-desktop-portal-kde` (RemoteDesktop pré-autorisé, ScreenCast) |
+| Réglages d'écran | « Réglages de l'écran (KDE) » (`systemsettings kcm_kscreen`), `kscreen-doctor` pour la résolution |
 
-Sous KWin, Sunshine et Steam Link utilisent le bus de KWin ; `set-resolution.sh`
+Sans dongle, `svc-kwin-stream` et `svc-sunshine` restent en attente (message
+« dongle HDMI requis » dans `docker logs`) ; le bureau navigateur fonctionne.
+
+Sunshine et Steam Link utilisent le bus de KWin ; `set-resolution.sh`
 règle la résolution du dongle avec `kscreen-doctor`. Le HDR du dongle passe
 par `KWIN_FORCE_ASSUME_HDR_SUPPORT=1` : son EDID (« LLV F0501-4K ») annonce le
 PQ sans le BT.2020 qu'exige KWin. Les jeux Proton ne proposent le HDR que
@@ -161,8 +173,8 @@ Précisions (24/11, KWin) :
   MAME, snes9x, mGBA, melonDS, Flycast, Dolphin, PPSSPP, Beetle PSX/PCE,
   mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
-- **Bureau** : XFCE (panel avec icône de volume — greffon PulseAudio, ajouté une fois aux panneaux existants, plafonné à 100 % —, pavucontrol pour le volume par canal (dosage du surround des sorties Sunshine), Thunar avec miniatures et accès aux partages réseau `smb://`, terminal, notifications xfce4-notifyd), thème, icônes et curseur WhiteSur sombres (style macOS, GTK 2/3/4 et libadwaita),
-  même disposition clavier partout (local, VNC, Moonlight — `KEYBOARD_LAYOUT`).
+- **Bureau** : KDE Plasma (Dolphin avec miniatures et accès aux partages réseau `smb://`, Konsole, Kate, volume par plasma-pa, pavucontrol pour le volume par canal — dosage du surround des sorties Sunshine —, notifications de Plasma), thème GTK, icônes et curseur WhiteSur sombres pour les applis GTK (GTK 2/3/4 et libadwaita),
+  même disposition clavier partout (navigateur, Moonlight — `KEYBOARD_LAYOUT`/`KEYBOARD_VARIANT`, écrits dans `kxkbrc`).
 - **Divers** : Steam ROM Manager, Flips, Google Chrome, AppManager (gestion des AppImage).
 
 ## Déploiement
@@ -190,8 +202,8 @@ make lint                  # shellcheck + hadolint (via Docker, rien à installe
 
 ### Composants précompilés
 
-evdev-bridge, Sunshine (DualSense USB), Batocera EmulationStation,
-xfce-panel-launcher et freeimage ne sont **plus compilés à chaque
+Sunshine (DualSense USB), Batocera EmulationStation et freeimage ne sont
+**plus compilés à chaque
 `make push`**. [Dockerfile.prebuilt](Dockerfile.prebuilt) les construit à la
 demande, et ils sont publiés en release GitHub du dépôt (`prebuilt-AAAAMMJJ-HHMM`).
 L'image télécharge la dernière release
@@ -199,25 +211,23 @@ L'image télécharge la dernière release
 
 ```bash
 make prebuilt-check        # compare la dernière release à l'amont (dernier tag
-                           # Sunshine, HEAD d'ES et du lanceur XFCE, AUR
-                           # freeimage, evdev-bridge/)
+                           # Sunshine, HEAD d'ES, AUR freeimage)
 make prebuilt              # compile tout dans prebuilt/out/ (aucun registre)
 make prebuilt-publish      # publie prebuilt/out/ en release GitHub (gh)
 make push                  # l'image prend la nouvelle release
 make push PREBUILT_TAG=prebuilt-…   # revenir à une release précédente
 ```
 
-À relancer quand `prebuilt-check` signale une nouvelle version, après une
-modification de `evdev-bridge/`, ou si un build de l'image échoue sur
+À relancer quand `prebuilt-check` signale une nouvelle version, ou si un build de l'image échoue sur
 « bibliothèque manquante … relancer make prebuilt ». CachyOS est une distribution rolling : une
 bibliothèque peut changer de soname. Surcharges possibles : `ES_REF`,
-`SUNSHINE_TAG`, `XFCE_LAUNCHER_REF`. Les deux Dockerfile partent de
+`SUNSHINE_TAG`. Les deux Dockerfile partent de
 `cachyos/cachyos-v3:latest`, revérifiée à chaque build (`--pull`).
 
 `wsquashfs-launcher` n'est pas dans l'image : il vit dans `/config/.local/bin`
 (le home persistant), installé par l'installeur de son dépôt, et son updater
 le met à jour, pas un redémarrage du conteneur.
-Les `.wsquashfs` sont reconnus par leur extension sous XFCE (type
+Les `.wsquashfs` sont reconnus par leur extension sur le bureau (type
 `application/x-wsquashfs`) : un double-clic les ouvre avec le lanceur.
 
 Les systèmes d'arcade PC (segare, segarw, segaalls, segaer, seganu, typex,
@@ -264,7 +274,7 @@ souvent absent sur la ludothèque.
 
 | Service | Port | Authentification |
 |---|---|---|
-| noVNC (bureau navigateur) | `6080` | **aucune** — LAN de confiance uniquement |
+| Selkies (bureau navigateur, HTTPS auto-signé) | `6080` | aucune par défaut ; `DESKTOP_PASSWORD` active l'authentification basique (identifiant `arcade`) |
 | Sunshine Web UI | `47990` | compte Sunshine (appairage PIN Moonlight) |
 | Flux Moonlight | `47984-48010` | appairage Sunshine |
 | decky-loader | `1337` | écoute sur `127.0.0.1` uniquement (utilisé par Steam, pas joignable du LAN) |
@@ -273,7 +283,8 @@ souvent absent sur la ludothèque.
 
 **Le conteneur n'est pas une frontière de sécurité.** C'est une console de
 salon : les devices d'entrée sont en `666`, le binaire Sunshine porte
-`cap_sys_admin` (capture KMS), et noVNC n'a pas de mot de passe. `/dev/input`
+`cap_sys_admin` (capture KMS), et le bureau navigateur n'a pas de mot de
+passe sauf `DESKTOP_PASSWORD`. `/dev/input`
 est un bind mount du répertoire de l'**hôte** : les règles udev du conteneur
 (permissions des manettes virtuelles Sunshine) s'appliquent donc aussi aux
 nœuds côté Unraid. Ce qui le
@@ -294,12 +305,11 @@ profiles/
   example/                  # modèle de profil commenté
   unraid-gunnm/             # déploiement réel : override, env, compat wsquashfs
 root-cachyos/
-  etc/s6-overlay/           # services s6 (labwc ×2, sunshine, wayvnc, evdev-bridge…)
+  etc/s6-overlay/           # services s6 (selkies, plasma, kwin-stream, sunshine…)
   etc/udev/rules.d/         # règles manettes (hidraw fallback)
-  scripts/                  # session Wayland, init_*, lanceurs, steambox-env.sh (variables)
+  scripts/                  # sessions Plasma/KWin, init_*, lanceurs, steambox-env.sh (variables)
   build/                    # outils de build (gh-asset-url, install-appimage, prebuilt-fetch)
   usr/local/bin/            # install driver NVIDIA userspace (matché à l'hôte)
-evdev-bridge/               # pont uinput→Wayland pour l'input Sunshine (C, vendored, précompilé)
 Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignorée par git)
 ```
 
@@ -311,20 +321,19 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
 - **Manette PlayStation détectée mais boutons morts** → vérifier la règle
   cgroup `c 242:* rmw` (voir docker-compose.yml) et l'existence de
   `/dev/hidrawN` dans le conteneur.
-- **Clavier Moonlight muet après un changement de fenêtre** → réglé par le
-  focus-follows-mouse de labwc (rc.xml généré par labwc-session.sh) ;
-  contournement : re-changer de fenêtre.
-- **Panneau ou fond d'écran disparus** → chaque composant du
-  bureau visible est un service s6 relancé automatiquement :
-  `svc-xfce4-panel`, `svc-xfdesktop`, `svc-xfsettingsd`.
-- **Appli de `~/.config/autostart` jamais lancée** → labwc ne lit pas
-  l'autostart XDG : c'est `xdg-autostart.sh` (dex), lancé par `labwc -s`
-  dans labwc-session.sh, qui s'en charge au démarrage du bureau (wayland-0
-  seulement, pas dans la session headless de Sunshine). Il attend d'abord la
-  zone de notification de xfce4-panel (60 s au plus) : sans elle, une icône
-  comme `wsquashfs-launcher --tray` quitte aussitôt. Seul
-  `~/.config/autostart` est lu : `/etc/xdg/autostart` doublerait les services
-  s6 (xfsettingsd). Voir son lancement dans les logs de `svc-labwc`.
+- **Deux pointeurs, ou touches non ASCII perdues (« @ », « € », accents) dans
+  le navigateur** → Selkies n'a pas trouvé le KWin de Plasma : son journal
+  (`docker logs`) dit « Multiple candidate app-compositor sockets ». Il ne
+  doit y avoir que `wayland-0` (Selkies) et `wayland-1` (Plasma) comme
+  sockets `wayland-<chiffres>` dans `/run/user/<uid>` ; le streaming est sur
+  `wayland-stream`.
+- **Bureau navigateur vide ou figé** → `s6-svc -r /run/service/svc-plasma`
+  (la session Plasma) ; `svc-selkies` relance aussi Plasma derrière lui.
+- **Appli de `~/.config/autostart` jamais lancée** → Plasma lit l'autostart
+  XDG lui-même ; une AppImage Qt sans greffon Wayland passe en X11
+  (`QT_QPA_PLATFORM="wayland;xcb"` dans la session).
+- **Moonlight : « dongle HDMI requis » dans les logs** → aucune sortie
+  branchée sur le GPU du conteneur : Sunshine ne démarre pas sans dongle.
 - **Émulateur Qt (Lichii, Eden…) qui se ferme aussitôt dans Steam gamepadui** →
   journal de l'émulateur : « Failed to initialize Wayland surface ». La session
   gamescope (`steam-gamescope-launch.sh`) force `QT_QPA_PLATFORM=xcb` ; sur une
@@ -332,8 +341,8 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   de lancement du raccourci.
 - **Jeu Wine (.wsquashfs) qui plante aussitôt dans Steam gamepadui** (Unreal :
   « CreateSwapChainResult failed », log Steam : « [Gamescope WSI] Failed to get
-  Wayland objects », fenêtre d'erreur visible sur noVNC) → Wine s'était ouvert
-  en Wayland sur le bureau (wayland-0) au lieu de gamescope. La session
+  Wayland objects », fenêtre d'erreur visible sur le bureau) → Wine s'était ouvert
+  en Wayland sur le bureau au lieu de gamescope. La session
   gamescope a désormais son propre `XDG_RUNTIME_DIR`
   (`/run/user/<uid>/gamescope-session`, liens vers bus, PipeWire, Pulse…, sans
   `wayland-*`) : les jeux passent en X11 dans gamescope. Sur une image plus
@@ -365,10 +374,10 @@ Heroic Launcher/            # sauvegarde locale de bibliothèque Heroic (ignoré
   (journal dans `docker logs`, préfixe `[pad-hotkeys]`) ; le jeu en cours
   est décrit dans `$XDG_RUNTIME_DIR/steambox-game` par `game-launch.sh`.
   Relance manuelle :
-  `s6-svc -r /run/service/svc-xfce4-panel`.
+  `s6-svc -r /run/service/svc-pad-hotkeys`.
 - **Chrome refuse de démarrer** (« profile in use by another computer ») →
   verrou `SingletonLock` d'un ancien hostname, nettoyé à chaque démarrage de
   session depuis le 31/08.
-- **Bureau et flux Moonlight inversés** → course wayland-0/1, impossible
-  depuis l'audit C1 ; si observé quand même, `docker restart` et ouvrir un
-  ticket avec les logs `svc-labwc-stream`.
+- **Bureau et flux Moonlight inversés** → impossible depuis le 24/11 : le
+  streaming a un nom de socket fixe (`wayland-stream`), le bureau ceux de
+  Selkies et de Plasma.

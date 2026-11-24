@@ -30,10 +30,13 @@ fi
 ulimit -S -s 8192 2>/dev/null || true
 
 # exec : s6 signale directement la chaîne runuser → startplasma.
+# QT_QPA_PLATFORM="wayland;xcb" : repli X11 pour les AppImage Qt livrées sans
+# greffon Wayland (AppManager, autostart : « no Qt platform plugin could be
+# initialized », essai du 24/11).
 exec runuser -u arcade -- env \
     HOME=/home/arcade USER=arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
     KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT}" KEYBOARD_VARIANT="${KEYBOARD_VARIANT}" \
-    QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=KDE \
+    "QT_QPA_PLATFORM=wayland;xcb" XDG_CURRENT_DESKTOP=KDE \
     SDL_VIDEODRIVER=wayland,x11 SDL_JOYSTICK_DISABLE_UDEV=1 \
     PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
     /usr/local/bin/scripts/plasma-session.sh

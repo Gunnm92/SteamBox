@@ -1,5 +1,7 @@
 # Deux KWin à la place des deux labwc — conception
 
+> **24/11 : phase 2 remplacée** par `2026-11-24-selkies-plasma-design.md` (Selkies + Plasma, krfb et noVNC abandonnés, labwc et XFCE retirés).
+
 Date : 24/11/2026 · Statut : à valider
 
 ## Pourquoi

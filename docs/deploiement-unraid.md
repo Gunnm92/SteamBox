@@ -46,7 +46,7 @@ propre certificat (`nas.local`) ; Nginx Proxy Manager écoute en 18443.
 | `NVIDIA_VISIBLE_DEVICES` | `GPU-993ff90a-304b-da13-1287-c533c1073ab4` | UUID de la RTX 3090 dédiée |
 | `NVIDIA_DRIVER_CAPABILITIES` | `all` | NVENC + graphique + compute |
 | `GAMES_DIR` | `/home/arcade/games/Batocera` | Ludothèque Batocera (roms/, bios/, saves/ s'en déduisent) — variable seule, aucun montage en plus |
-| `KEYBOARD_LAYOUT` | `fr` | Clavier bureau / Moonlight / VNC |
+| `KEYBOARD_LAYOUT` | `fr` | Clavier bureau navigateur / Moonlight |
 | `KEYBOARD_VARIANT` | `mac` | AZERTY Mac |
 | `LANG` | `fr_FR.UTF-8` | Langue du bureau, d'ES et de Sunshine |
 | `LANGUAGE` | `fr_FR:fr` | |
@@ -111,7 +111,7 @@ disposition mémoire « legacy » (bibliothèques vers `0x14…` au lieu de
 émulation seccomp tue les processus enfants chargés sous
 `0x7001_0000_0000` : `wineboot` en SIGSYS), et les jeux 32 bits sous
 wine-tkg n'obtiennent plus leurs grosses réservations mémoire (GTI Club,
-450 Mo). Les services de session (labwc, Sunshine) et wsquashfs-launcher
+450 Mo). Les services de session (Plasma, KWin, Sunshine) et wsquashfs-launcher
 ramènent déjà la pile à 8 Mo ; ce paramètre l'applique à tout le conteneur.
 Vérification : `docker exec SteamBox bash -c 'ulimit -s'` doit afficher
 `8192`.

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# SteamBox (ex-Waybox, ex-ArcadeBox) — variante CachyOS + labwc/XFCE (session Wayland réelle).
+# SteamBox (ex-Waybox, ex-ArcadeBox) — variante CachyOS + KDE Plasma/KWin (Wayland), bureau navigateur Selkies.
 #
 # Historique des architectures essayées sur cette branche, chacune abandonnée
 # pour une raison concrète, testée en direct :
@@ -145,6 +145,22 @@
 #    si PROTON_ENABLE_WAYLAND=1 et PROTON_ENABLE_HDR=1 sont posés (en X11, pas
 #    de HDR).
 #    Réglages d'écran KDE : systemsettings/kscreen-doctor sous KWin seulement.
+#
+# 9. Selkies + Plasma pour le bureau d'administration, KWin seul pour le
+#    streaming (24/11) — labwc, XFCE, wayvnc/noVNC et evdev-bridge retirés.
+#    wayvnc sur labwc headless donnait deux pointeurs dans le navigateur
+#    (pointeur peint dans l'image + pointeur du navigateur). Selkies fait
+#    tourner son compositeur (pixelflux, wayland-0) et Plasma s'y imbrique
+#    (startplasma-wayland) : le blocage du point 1 a disparu, Plasma 6.8
+#    retombe sur ksmserver sans systemd (il manquait seulement plasma-desktop,
+#    sans lequel plasmashell quitte : « invalid corona »). Le compositeur de
+#    Selkies n'a pas de Xwayland : KWin reste nécessaire. Constats du 24/11 :
+#    /tmp/.X11-unix sans sticky bit empêchait tout Xwayland sous KWin ;
+#    kwin_wayland lancé seul ne crée pas ses sockets X (c'est le wrapper, qui
+#    ignore --socket — d'où kwin-launch.py) ; Selkies perd les touches non
+#    ASCII s'il voit plus d'un autre socket wayland-<chiffres>, d'où le nom
+#    wayland-stream du streaming. KWin --virtual ne lisant aucune entrée,
+#    le dongle HDMI devient obligatoire pour Moonlight.
 
 # Base "latest" (15/11), plus épinglée par digest (audit H2, 05/09) : le
 # build fait de toute façon un pacman -Syyu complet (Mesa, wlroots…), le

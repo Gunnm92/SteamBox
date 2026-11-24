@@ -6,7 +6,7 @@
 # (roms/, bios/, saves/ s'en déduisent).
 GAMES_DIR=/home/arcade/games/Batocera
 
-# AZERTY Mac (bureau labwc, clavier Moonlight via evdev-bridge, VNC).
+# AZERTY Mac (bureau navigateur Plasma, clavier Moonlight par KWin).
 KEYBOARD_LAYOUT=fr
 KEYBOARD_VARIANT=mac
 

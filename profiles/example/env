@@ -9,13 +9,14 @@
 # GAMES_BIOS_DIR=/config/games/bios
 # GAMES_SAVES_DIR=/config/games/saves
 
-# ── Clavier (XKB) : bureau, clavier Moonlight, VNC ───────────────────────────
+# ── Clavier (XKB) : bureau navigateur, clavier Moonlight ─────────────────────
 # KEYBOARD_LAYOUT=us
 # KEYBOARD_VARIANT=
 # Ex. AZERTY : KEYBOARD_LAYOUT=fr ; AZERTY Mac : + KEYBOARD_VARIANT=mac
-# noVNC depuis un Mac à clavier ISO : « @ » et « < » remis en place (1 par
-# défaut avec KEYBOARD_VARIANT=mac, 0 sinon)
-# VNC_MAC_ISO_KEYS=
+
+# ── Bureau navigateur (Selkies, https://<hôte>:6080) ─────────────────────────
+# Mot de passe (identifiant arcade) ; vide = sans authentification.
+# DESKTOP_PASSWORD=
 
 # ── Langue ───────────────────────────────────────────────────────────────────
 # Locales disponibles dans l'image : en_US et EXTRA_LOCALES du Dockerfile
