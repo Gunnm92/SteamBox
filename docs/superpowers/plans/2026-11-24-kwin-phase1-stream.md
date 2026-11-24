@@ -145,10 +145,22 @@ libkscreen (`kscreen-doctor`), Sunshine (`capture=kms`).
 **Files :**
 - Modify : `Dockerfile.cachyos`
 - Modify : `README.md`
+- Create : `root-cachyos/scripts/kde-settings.sh`
 
-- [ ] **Étape 1 :** Dockerfile : ajouter `kwin xdg-desktop-portal-kde libkscreen`
-  à la liste de paquets qui contient déjà `xdg-desktop-portal-wlr` (ligne ~328),
-  avec un commentaire (24/11). Wrapper `/usr/local/bin/steam` (ligne ~692) :
+- [ ] **Étape 1 :** Dockerfile : ajouter `kwin xdg-desktop-portal-kde libkscreen
+  systemsettings kscreen` à la liste de paquets qui contient déjà
+  `xdg-desktop-portal-wlr` (ligne ~328), avec un commentaire (24/11 :
+  `systemsettings`/`kscreen` = réglages d'écran de KWin, demande utilisateur).
+  `systemsettings.desktop` porte `OnlyShowIn=KDE` (invisible dans le menu
+  XFCE) : ajouter, dans le style des autres `.desktop` écrits par le
+  Dockerfile (`printf … > /usr/share/applications/…`), une entrée
+  `steambox-reglages-ecran.desktop` (`Name=Réglages de l'écran (KDE)`,
+  `Icon=preferences-desktop-display`, `Categories=Settings;`) dont `Exec` lance
+  `/usr/local/bin/scripts/kde-settings.sh`. Créer ce script
+  (`root-cachyos/scripts/kde-settings.sh`) : si `stream_compositor` = `kwin`,
+  `stream_session_env` puis `exec systemsettings kcm_kscreen` ; sinon message
+  `notify-send` « Réglages KDE disponibles seulement avec le dongle (KWin) » et
+  sortie 1. Wrapper `/usr/local/bin/steam` (ligne ~692) :
   `-pipewire -pipewire-dmabuf` ; compléter son commentaire. Ajouter un point 7
   à l'historique en tête de fichier : « KWin (Wayland, DRM) pour le seul bureau
   de streaming, 24/11 » avec les causes levées (udev réglé, wayvnc non
