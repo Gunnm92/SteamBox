@@ -128,6 +128,29 @@ stream_display() {
     echo "${d:-:1}"
 }
 
+# stream_compositor : compositeur du streaming en cours, « kwin » ou « labwc »
+# (24/11, phase 1 KWin). Écrit au démarrage de svc-labwc-stream dans le
+# marqueur steambox-stream-compositor ; labwc si le marqueur manque (avant
+# KWin, ou service jamais démarré depuis le redémarrage).
+stream_compositor() {
+    local c
+    c=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-compositor" 2>/dev/null)
+    echo "${c:-labwc}"
+}
+
+# stream_session_env : exporte les variables de la session KWin de streaming
+# (steambox-stream-session.env, écrit par kwin-stream-session.sh). Retour 1
+# s'il n'existe pas. Lu ligne à ligne, sans évaluation du contenu.
+stream_session_env() {
+    local f="${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-session.env" k v
+    [[ -r "${f}" ]] || return 1
+    while IFS='=' read -r k v; do
+        if [[ -n "${k}" ]]; then
+            export "${k}=${v}"
+        fi
+    done < "${f}"
+}
+
 # fit_resolution <largeur> <hauteur> : parmi les définitions « LxH » lues
 # sur l'entrée standard (modes d'une sortie DRM), la plus grande qui tient
 # dans celle du client — à surface égale, le format le plus proche ; aucune

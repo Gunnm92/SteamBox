@@ -1,5 +1,6 @@
 #!/command/with-contenv bash
-# Deuxième compositeur labwc — dédié à Sunshine/Moonlight. Headless à
+# Deuxième compositeur — dédié à Sunshine/Moonlight (labwc ; KWin en DRM depuis
+# le 24/11, voir plus bas). Headless à
 # l'origine (svc-labwc-headless, renommé svc-labwc-stream le 22/11) ; en DRM
 # sur le dongle HDMI s'il est branché (voir plus bas), indépendant du bureau XFCE visible
 # en local/VNC (svc-labwc, wayland-0). Ajouté le 30/08 suite à l'échec
@@ -81,13 +82,41 @@ chown arcade "${XDG_RUNTIME_DIR}/steambox-stream-output"
 # labwc pour libérer la sortie, puis le relance (steam-gamescope-session.sh).
 s6-svperms -O arcade -E arcade . 2>/dev/null || true
 
+# Sortie branchée : KWin la pilote en DRM au lieu de labwc (24/11, phase 1 KWin),
+# sur le même bus et les mêmes noms (wayland-1, steambox-stream-display). Le
+# marqueur steambox-stream-compositor dit aux autres services lequel tourne
+# (stream_compositor, steambox-env.sh). Les restes d'une session KWin morte
+# (env, DISPLAY, socket de bus) sont retirés avant : dbus-daemon refuse un
+# socket existant, et les applis ne doivent pas lire un DISPLAY périmé.
 if [ -n "${STREAM_CONNECTOR:-}" ]; then
-    echo "[labwc-stream] sortie ${STREAM_CONNECTOR} pilotée en DRM (${STREAM_CARD}), capture KMS"
-    BACKEND_ENV=(LIBSEAT_BACKEND=seatd WLR_DRM_DEVICES="${STREAM_CARD}" WLR_LIBINPUT_NO_DEVICES=1)
-else
-    echo "[labwc-stream] aucune sortie branchée : headless, capture wlr"
-    BACKEND_ENV=(LIBSEAT_BACKEND=noop WLR_BACKENDS=headless)
+    echo "[kwin-stream] sortie ${STREAM_CONNECTOR} pilotée en DRM par KWin (${STREAM_CARD}), capture KMS"
+    printf '%s' kwin > "${XDG_RUNTIME_DIR}/steambox-stream-compositor"
+    rm -f "${XDG_RUNTIME_DIR}/steambox-stream-session.env" \
+          "${XDG_RUNTIME_DIR}/steambox-stream-display" \
+          "${XDG_RUNTIME_DIR}/bus-stream"
+    # Bus de session propre à ce compositeur (24/11) : KWin et les applis
+    # lancées depuis Sunshine s'y connectent, et non au bus du bureau.
+    runuser -u arcade -- env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        dbus-daemon --session --address="unix:path=${XDG_RUNTIME_DIR}/bus-stream" --fork
+    # env -u : WAYLAND_DISPLAY et DISPLAY hérités de l'ENV du Dockerfile
+    # feraient croire à KWin qu'il est un client (même piège que labwc, voir
+    # plus haut) ; KWIN_*_NO_PERMISSION_CHECKS : KWin ne demande pas
+    # d'autorisation de capture ou de saisie (personne pour répondre à la
+    # fenêtre dans ce conteneur, sans écran).
+    exec runuser -u arcade -- \
+        env -u WAYLAND_DISPLAY -u DISPLAY HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus-stream" \
+        XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland \
+        KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 \
+        KWIN_DRM_DEVICES="${STREAM_CARD}" KWIN_FORCE_ASSUME_HDR_SUPPORT=1 \
+        kwin_wayland --drm --xwayland --socket wayland-1 --no-lockscreen --exit-with-session \
+        /usr/local/bin/scripts/kwin-stream-session.sh
 fi
+
+# Pas de sortie : labwc headless, comme avant (24/11 : le marqueur le dit).
+echo "[labwc-stream] aucune sortie branchée : headless, capture wlr"
+printf '%s' labwc > "${XDG_RUNTIME_DIR}/steambox-stream-compositor"
+BACKEND_ENV=(LIBSEAT_BACKEND=noop WLR_BACKENDS=headless)
 # DISPLAY de son Xwayland noté par note-display.sh (22/11, stream_display) ;
 # l'ancien fichier est retiré d'abord pour qu'aucune appli ne lise un
 # numéro périmé.
