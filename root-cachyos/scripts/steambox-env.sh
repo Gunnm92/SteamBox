@@ -111,6 +111,23 @@ desktop_display() {
     d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-desktop-display" 2>/dev/null)
     echo "${d:-:0}"
 }
+# desktop_session_env : exporte les variables de la session Plasma du bureau
+# (steambox-desktop-session.env, écrit par desktop-session.sh : DISPLAY,
+# WAYLAND_DISPLAY, bus, XAUTHORITY — le Xwayland de Plasma exige son
+# xauth). Retour 1 si le fichier manque ou si son socket Wayland est mort
+# (session en cours de redémarrage). Lu ligne à ligne, sans évaluation.
+desktop_session_env() {
+    local d="${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}" k v w
+    local f="${d}/steambox-desktop-session.env"
+    [[ -r "${f}" ]] || return 1
+    w=$(sed -n 's/^WAYLAND_DISPLAY=//p' "${f}")
+    [[ -n "${w}" && -S "${d}/${w}" ]] || return 1
+    while IFS='=' read -r k v; do
+        if [[ -n "${k}" ]]; then
+            export "${k}=${v}"
+        fi
+    done < "${f}"
+}
 stream_display() {
     local d
     d=$(cat "${XDG_RUNTIME_DIR:-/run/user/$(id -u arcade)}/steambox-stream-display" 2>/dev/null)

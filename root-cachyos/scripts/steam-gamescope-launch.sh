@@ -26,7 +26,7 @@ set -e
 # (statistiques de perf, contrôle de la résolution depuis Steam).
 #
 # Résolution/fréquence pilotées par le client (audit M7, 05/09) : ce script
-# sert deux appelants — le raccourci "Steam" du bureau XFCE local (aucune
+# sert deux appelants — le raccourci "Steam" du bureau Plasma (aucune
 # variable SUNSHINE_CLIENT_* définie, replis 2560x1440@120 ci-dessous
 # inchangés) ET l'entrée apps.json "Mode SteamOS (Gamescope)" lancée par
 # Sunshine (qui exporte SUNSHINE_CLIENT_WIDTH/HEIGHT/FPS dans l'environnement
@@ -83,9 +83,9 @@ chmod 0700 "${SESSION_RUNTIME}"
 for entry in bus dbus-1 pipewire-0 pipewire-0-manager pulse dconf at-spi doc; do
     ln -sfn "${RUNTIME}/${entry}" "${SESSION_RUNTIME}/${entry}"
 done
-case "${WAYLAND_DISPLAY:-wayland-0}" in
+case "${WAYLAND_DISPLAY:-wayland-1}" in
     /*) ;;
-    *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-0}" ;;
+    *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-1}" ;;
 esac
 # Forcés (24/11) : lancé depuis Sunshine sous KWin, le script hériterait du bus
 # bus-stream et de XDG_CURRENT_DESKTOP=KDE, ceux d'un KWin arrêté pendant la

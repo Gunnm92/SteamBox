@@ -322,35 +322,29 @@ RUN sed -i '/^\[options\]/a DisableSandboxNetwork' /etc/pacman.conf && \
 # Thunar et sur le bureau. Sans tumbler, aucun service org.freedesktop.
 # thumbnails.Thumbnailer1 : pas de miniatures et « Thumbnailer Proxy Failed »
 # en boucle dans le journal.
-# xfce4-notifyd (01/11) : démon de notifications, absent depuis le passage à
-# labwc + XFCE (30/08, mako retiré avec Hyprland) — tous les notify-send
-# (lanceurs de jeux, applis) partaient dans le vide. Démarré à la demande
-# par D-Bus, comme Thunar : le bus de session porte WAYLAND_DISPLAY=wayland-0
-# (bureau), et la session « Desktop » de Moonlight a son propre bus sur
-# wayland-1. Affichage par gtk-layer-shell (labwc le gère).
 # rsync + rclone (14/11) : mise à jour du pack RGS (rgs-update.sh) — rclone
 # lit le serveur HTTP de RGS comme son rgs_theme_upgrade, rsync fusionne le
 # loader d'arcade en gardant les réglages SteamBox.
 # kwin + xdg-desktop-portal-kde + libkscreen + systemsettings + kscreen
-# (24/11, demande utilisateur — réglages d'écran KDE) : KWin ne sert qu'au bureau
-# de streaming avec le dongle (svc-labwc-stream, kwin-stream-session.sh), pas au
-# bureau d'administration. systemsettings (module kcm_kscreen) et kscreen-doctor
-# (set-resolution.sh) y règlent la sortie ; xdg-desktop-portal-kde fournit le
-# portail RemoteDesktop/ScreenCast de ce bus, que Steam Link utilise
-# (ScreenCast) ; Moonlight passe par la capture KMS de Sunshine. xdg-desktop-portal-wlr reste pour labwc, sans dongle.
-# dex (16/11) : lance l'autostart XDG (~/.config/autostart) au démarrage de
-# labwc, qui ne le fait pas lui-même (voir xdg-autostart.sh).
+# (24/11) : KWin pilote le dongle pour le streaming (svc-kwin-stream) ;
+# kcm_kscreen et kscreen-doctor (set-resolution.sh) y règlent la sortie ;
+# xdg-desktop-portal-kde fournit le ScreenCast/RemoteDesktop que Steam Link
+# utilise. plasma-desktop + dolphin + konsole + kate + plasma-pa (24/11) :
+# bureau navigateur Plasma, imbriqué dans Selkies (svc-plasma), à la place
+# de labwc + XFCE (Thunar, Mousepad, xfce4-terminal, greffon son, notifyd :
+# plasmashell affiche lui-même les notifications). Sans plasma-desktop,
+# plasmashell quitte aussitôt (« starting invalid corona
+# org.kde.plasma.desktop », essai du 24/11).
 # pavucontrol (18/11) : volume par canal des sorties Sunshine (dosage du
-# surround 5.1/7.1), que le greffon son du panneau ne règle pas.
+# surround 5.1/7.1).
 RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
       seatd libinput \
-      labwc xfdesktop xfce4-panel xfce4-settings xfce4-appfinder xfce4-terminal \
-      thunar mousepad xfce4-taskmanager xfce4-pulseaudio-plugin pavucontrol \
-      tumbler ffmpegthumbnailer xfce4-notifyd wl-clipboard xclip dex \
+      plasma-desktop dolphin konsole kate plasma-pa pavucontrol \
+      ffmpegthumbs wl-clipboard xclip \
       gvfs gvfs-smb smbclient \
-      xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
+      xdg-desktop-portal-gtk \
       kwin xdg-desktop-portal-kde libkscreen systemsettings kscreen \
-      python-pip wlr-randr \
+      python-pip \
       gtk3 \
       xorg-xwayland wayland libxkbcommon \
       mesa vulkan-icd-loader vulkan-tools \
@@ -391,8 +385,8 @@ RUN PKGS="sudo vim openssh curl wget tar xz git jq unzip rsync rclone \
     rm -rf /var/cache/pacman/pkg/* && \
     mkdir -p /etc/samba && printf '[global]\n' > /etc/samba/smb.conf && \
     update-ca-trust && \
-    { find /usr/share/dbus-1/services -name '*notifyd*' | grep -q . \
-      || { echo "FATAL: activation D-Bus de xfce4-notifyd absente"; exit 1; }; } && \
+    { [ -d /usr/share/plasma/shells/org.kde.plasma.desktop ] \
+      || { echo "FATAL: shell org.kde.plasma.desktop absent (plasma-desktop)"; exit 1; }; } && \
     rm -f /usr/share/dbus-1/system-services/org.freedesktop.login1.service \
           /usr/share/dbus-1/system-services/org.freedesktop.home1.service && \
     { [ ! -e /usr/share/dbus-1/system-services/org.freedesktop.UDisks2.service ] \
@@ -659,25 +653,9 @@ RUN update-mime-database /usr/share/mime
 # pourtant fonctionnelle (confirmé en direct le 24/09).
 RUN setcap cap_net_raw+p /usr/bin/ping && getcap /usr/bin/ping | grep -q cap_net_raw
 
-# ── 1a3c'. Config xdg-desktop-portal — sans elle, ScreenCast (Steam Link,
-# PipeWire) n'est JAMAIS enregistré, même avec xdg-desktop-portal-wlr
-# installé et un WAYLAND_DISPLAY correct (confirmé en direct 07/09, voir
-# scripts/steam-link-launch.sh pour l'historique complet du diagnostic).
-# xdg-desktop-portal choisit son backend par interface selon un fichier
-# nommé d'après $XDG_CURRENT_DESKTOP (ex: xfce-portals.conf pour "XFCE",
-# la valeur que ce projet utilise partout — voir wayland-session.sh) ; le
-# paquet xdg-desktop-portal-wlr ne fournit que wlr-portals.conf (nom "wlr",
-# jamais chargé puisque XDG_CURRENT_DESKTOP ne vaut jamais littéralement
-# "wlr" ici). Sans fichier correspondant, AUCUN backend n'est choisi pour
-# ScreenCast/Screenshot — ni gtk (qui ne les implémente pas) ni wlr (jamais
-# sélectionné) — l'interface disparaît purement et simplement de l'objet
-# org.freedesktop.portal.Desktop, confirmé par une introspection D-Bus
-# directe et par le log Steam ("L'interface org.freedesktop.portal.
-# ScreenCast n'existe pas"). Testé en direct avec ce fichier + XDG_CURRENT_
-# DESKTOP=XFCE exporté avant le lancement du portail : "XDP: Using
-# wlr.portal for org.freedesktop.impl.portal.ScreenCast (default config)".
-RUN mkdir -p /etc/xdg-desktop-portal && \
-    printf '[preferred]\ndefault=wlr\n' > /etc/xdg-desktop-portal/xfce-portals.conf
+# ── 1a3c'. Config xdg-desktop-portal-wlr (xfce-portals.conf) retirée le 24/11 :
+# plus de bureau XFCE ni de labwc. Les deux KWin utilisent kde-portals.conf,
+# fourni par xdg-desktop-portal-kde (XDG_CURRENT_DESKTOP=KDE).
 
 # ── 1a3c. steam toujours avec -pipewire — Remote Play/Steam Link a besoin de
 # ce flag pour la capture vidéo (sinon : "Unable to capture video:
@@ -720,23 +698,6 @@ RUN mkdir -p /etc/xdg-desktop-portal && \
 # NVENC HEVC » après une autorisation de partage d'écran donnée une fois.
 RUN printf '#!/bin/sh\nexec env SDL_JOYSTICK_HIDAPI_PS5_RUMBLE=1 /usr/bin/steam -pipewire -pipewire-dmabuf -steamos3 -steampal -steamdeck "$@"\n' > /usr/local/bin/steam && \
     chmod +x /usr/local/bin/steam
-
-# ── 1a3d. xfdesktop-settings forcé sur Xwayland (30/08) — sous labwc/
-# Wayland natif, sa détection de sortie échoue et il écrit ses réglages
-# (fond d'écran) sur "monitorUnknown" au lieu du vrai connecteur
-# "monitorHDMI-A-1" que le xfdesktop réellement affiché lit — un changement
-# fait depuis le dialogue (clic droit bureau > Réglages du bureau) restait
-# donc sans aucun effet visible, confirmé en direct. Forcer GDK_BACKEND=x11
-# fait passer sa détection de sortie par XRandR (Xwayland), qui remonte le
-# vrai nom de connecteur — écrit alors correctement sur monitorHDMI-A-1.
-#
-# DISPLAY=:0 en dur retiré (22/09, même motif que fc1f70a) : DISPLAY est
-# désormais ambiant dans les deux bureaux (wayland-session.sh côté visible,
-# sunshine-desktop-xfce.sh côté Moonlight) — ouvert depuis l'app "Desktop"
-# de Moonlight, le dialogue s'affichait sur le VNC au lieu du stream.
-RUN printf '#!/bin/sh\nexec env GDK_BACKEND=x11 /usr/sbin/xfdesktop-settings "$@"\n' \
-      > /usr/local/bin/xfdesktop-settings && \
-    chmod +x /usr/local/bin/xfdesktop-settings
 
 # ── 1a6. DXVK — injecte les DLL dans les préfixes Wine (dxvk-mingw-git ne le
 # fait pas tout seul, contrairement à un vrai paquet dxvk-bin ; setup.sh doit
@@ -959,19 +920,6 @@ RUN git clone -q https://github.com/vinceliuice/WhiteSur-icon-theme.git /tmp/wsi
     [ -f /usr/share/icons/WhiteSur-cursors/index.theme ] \
       || { echo "FATAL: curseur WhiteSur non installé"; exit 1; } && \
     cd / && rm -rf /tmp/wsi /tmp/wsc
-
-# ── 1a7d. Lanceur plein écran du panneau XFCE (25/09, demande utilisateur) —
-# novik133/xfce-panel-launcher, façon Launchpad macOS : plugin C du panneau
-# (GPL-2), ni paquet Arch ni AUR, compilé depuis les sources avec son
-# Makefile simple, précompilé dans Dockerfile.prebuilt (dernier commit de
-# main). Seul
-# gtk_window_fullscreen côté fenêtre, rien de propre à X11 : fonctionne sous
-# labwc. À ajouter au panneau par clic droit > Panneau > Ajouter des éléments.
-RUN --mount=type=secret,id=github_token \
-    /usr/local/lib/steambox-build/prebuilt-fetch xfce-launcher && \
-    if ldd /usr/lib/xfce4/panel/plugins/libxfce-launcher.so | grep -q "not found"; then \
-      echo "FATAL: bibliothèque manquante pour libxfce-launcher.so (soname changé côté CachyOS : relancer make prebuilt)"; exit 1; \
-    fi
 
 # ── 1a7e. Sunshine en DualSense USB (02/10) — binaire précompilé à la place
 # de celui du paquet, gardé pour ses dépendances seules. Depuis le 22/11, il
@@ -1423,17 +1371,22 @@ RUN pacman -Q > /etc/steambox-packages.txt
 # LC_ALL absent volontairement (audit F5, 05/09) : primait auparavant sur
 # TOUTE variable LC_*, empêchant de passer un jeu/outil précis en anglais
 # sans le retirer globalement.
+# WAYLAND_DISPLAY=wayland-1 et XDG_CURRENT_DESKTOP=KDE (24/11) : le bureau
+# Plasma, pour ce qui est lancé hors session (docker exec). wayland-0 est le
+# compositeur de Selkies (sans gestion de fenêtres ni Xwayland) ; le KWin de
+# Plasma prend toujours le premier nom libre suivant (wayland-1), le
+# streaming ayant un nom non numéroté (wayland-stream).
 # LANG en_US par défaut et LIBVA_DRIVER_NAME retiré (25/09) : langue et
 # pilote VA-API NVIDIA se règlent au lancement (LANG/LANGUAGE,
 # LIBVA_DRIVER_NAME=nvidia dans l'env du profil, voir profiles/) — l'image
 # sert aussi aux GPU AMD/Intel, où libva trouve seule son pilote.
-ENV WAYLAND_DISPLAY=wayland-0 \
+ENV WAYLAND_DISPLAY=wayland-1 \
     SEATD_VTBOUND=0 \
     LIBSEAT_BACKEND=seatd \
     QT_QPA_PLATFORM=wayland \
     SDL_VIDEODRIVER=wayland,x11 \
     SDL_JOYSTICK_DISABLE_UDEV=1 \
-    XDG_CURRENT_DESKTOP=XFCE \
+    XDG_CURRENT_DESKTOP=KDE \
     XDG_SESSION_TYPE=wayland \
     NVD_BACKEND=direct \
     LANG=en_US.UTF-8 \

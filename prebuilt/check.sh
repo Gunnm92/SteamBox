@@ -35,11 +35,6 @@ up=$(git ls-remote https://github.com/batocera-linux/batocera-emulationstation.g
 h=${rec%% *}
 report batocera-es "${rec}" "${up:0:7}" "$([ -n "${h}" ] && [ "${up#"${h}"}" != "${up}" ] && echo 1 || echo 0)"
 
-# xfce-launcher : HEAD de main ; enregistré = hash complet.
-rec=$(recorded xfce-launcher)
-up=$(git ls-remote https://github.com/novik133/xfce-panel-launcher.git HEAD | cut -f1)
-report xfce-launcher "${rec:0:7}" "${up:0:7}" "$([ -n "${rec}" ] && [ "${rec}" = "${up}" ] && echo 1 || echo 0)"
-
 # freeimage : version du paquet AUR ; enregistré "freeimage-<ver>-<rel>-<arch>".
 rec=$(recorded freeimage)
 up=$(curl -fsSL 'https://aur.archlinux.org/rpc/v5/info?arg%5B%5D=freeimage' \

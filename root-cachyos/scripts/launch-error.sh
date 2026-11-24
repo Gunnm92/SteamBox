@@ -6,12 +6,12 @@
 # /tmp/launch_error.log, le supprime et affiche son texte dans une boîte
 # « UNE ERREUR S'EST PRODUITE ». C'est l'interface d'ES elle-même : le
 # message s'affiche aussi dans le flux Moonlight (wayland-stream), alors qu'une
-# notification irait sur le bus de session du bureau visible (wayland-0).
+# notification irait sur le bus de session du bureau navigateur.
 # Mécanisme vérifié dans le binaire /opt/batocera-es/emulationstation le
 # 01/11.
 #
 # launch_error <message> : message sur stderr (journal du lancement), dans
-# le fichier lu par ES et en notification (xfce4-notifyd : utile hors ES,
+# le fichier lu par ES et en notification (Plasma : utile hors ES,
 # et trace visible sur le bureau), puis sortie en 250. Le code remonte jusqu'à ES
 # parce que game-launch.sh lance la commande du jeu par exec et que les
 # lanceurs propagent le code de l'émulateur.

@@ -1,8 +1,0 @@
-#!/command/with-contenv bash
-# Démon de réglages XFCE du bureau visible : applique thème, icônes, police
-# et curseur (XSETTINGS) à la session. Réglages par défaut posés juste avant,
-# seulement s'ils sont absents (xfce-defaults.sh).
-# shellcheck source=../../../../scripts/desktop-env.sh
-. /usr/local/bin/scripts/desktop-env.sh
-# HEADLESS-1 : le bureau noVNC est headless depuis le 22/11.
-desktop_exec /usr/local/bin/scripts/xfce-defaults.sh HEADLESS-1 -- xfsettingsd

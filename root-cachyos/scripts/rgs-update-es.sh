@@ -17,8 +17,9 @@ if [[ -s "${entry}" ]]; then
     [[ -n "${args}" ]] || args="all"
 fi
 
-# --disable-server : le terminal ne rend la main qu'une fois fermé, ES attend
-# la fin de la mise à jour (et le reprend ensuite, thèmes rechargés).
-exec xfce4-terminal --disable-server --fullscreen --hide-menubar --hide-toolbar \
-    --title "Mise à jour RGS" \
-    -x bash -c "rgs-update ${args}; echo; read -r -t 60 -p 'Terminé. Fermeture dans 60 s (Entrée pour fermer).' || true"
+# Konsole (24/11, xfce4-terminal retiré avec XFCE). --separate : processus
+# à part, le terminal ne rend la main qu'une fois fermé — ES attend la fin de
+# la mise à jour (et le reprend ensuite, thèmes rechargés).
+exec konsole --separate --fullscreen --hide-menubar --hide-tabbar \
+    -p tabtitle="Mise à jour RGS" \
+    -e bash -c "rgs-update ${args}; echo; read -r -t 60 -p 'Terminé. Fermeture dans 60 s (Entrée pour fermer).' || true"

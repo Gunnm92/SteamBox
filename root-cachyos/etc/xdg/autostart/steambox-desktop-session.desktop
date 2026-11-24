@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=SteamBox : environnement du bureau
+Comment=Publie DISPLAY, WAYLAND_DISPLAY et le bus du bureau Plasma pour les scripts SteamBox
+Exec=/usr/local/bin/scripts/desktop-session.sh
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=0

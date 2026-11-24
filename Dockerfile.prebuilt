@@ -78,31 +78,11 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     mkdir -p /out && tar --zstd -cf /out/batocera-es.tar.zst -C /pkg . && \
     echo "batocera-es ${ver}" > /out/batocera-es.version
 
-# ── xfce-panel-launcher — lanceur plein écran façon Launchpad macOS
-# (novik133, plugin C du panneau XFCE, GPL-2), ni paquet Arch ni AUR.
-# Dernier commit de main, comme le reste (figé sur un commit jusqu'au 15/11,
-# par simple prudence). novik133 est le compte actif de l'auteur, qui a perdu
-# l'accès à l'ancien (Axis0S). XFCE_LAUNCHER_REF : commit/branche/tag
-# imposé, vide = main.
-FROM base AS xfce-launcher
-ARG XFCE_LAUNCHER_REF=""
-RUN --mount=type=cache,target=/var/cache/pacman/pkg \
-    pacman -S --needed --noconfirm --noprogressbar gtk3 xfce4-panel libxfce4util xfconf && \
-    git clone -q https://github.com/novik133/xfce-panel-launcher.git /src && \
-    cd /src && { [ -z "${XFCE_LAUNCHER_REF}" ] || git checkout -q "${XFCE_LAUNCHER_REF}"; } && \
-    ver=$(git rev-parse HEAD) && \
-    make && make install DESTDIR=/pkg PREFIX=/usr && \
-    [ -f /pkg/usr/lib/xfce4/panel/plugins/libxfce-launcher.so ] \
-      || { echo "FATAL: libxfce-launcher.so absent de l'installation"; exit 1; } && \
-    mkdir -p /out && tar --zstd -cf /out/xfce-launcher.tar.zst -C /pkg . && \
-    echo "xfce-launcher ${ver}" > /out/xfce-launcher.version
-
 # ── Export : tous les /out/* + versions.txt (notes de la release GitHub,
 # lu par make prebuilt-check).
 FROM base AS collect
 COPY --from=freeimage     /out/ /out/
 COPY --from=batocera-es   /out/ /out/
-COPY --from=xfce-launcher /out/ /out/
 RUN cat /out/*.version > /out/versions.txt && cat /out/versions.txt
 
 FROM scratch
