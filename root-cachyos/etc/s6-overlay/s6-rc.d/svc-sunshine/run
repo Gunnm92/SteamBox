@@ -86,6 +86,34 @@ while [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-display" ] && [ "${TIMEOUT}" -g
     sleep 0.5
     TIMEOUT=$((TIMEOUT - 1))
 done
+# Sous KWin de streaming (24/11, phase 1 KWin) : Sunshine et les applis qu'il
+# lance (Steam, EmulationStation) doivent voir le bus et l'environnement de la
+# session KWin, pas ceux du labwc headless — sinon elles s'ouvrent sur un bus
+# sans KWin ni portail. stream_session_env relit ce que kwin-stream-session.sh
+# a publié (écrit avant steambox-stream-display, donc déjà attendu plus haut ;
+# 10 s au plus ici). Sans ce fichier : refus de démarrer, s6 relance. Sous
+# labwc, KWIN_ENV reste vide : la commande finale est alors inchangée.
+KWIN_ENV=()
+if [ "$(stream_compositor)" = kwin ]; then
+    TIMEOUT=20
+    while [ ! -r "${XDG_RUNTIME_DIR}/steambox-stream-session.env" ] && [ "${TIMEOUT}" -gt 0 ]; do
+        sleep 0.5
+        TIMEOUT=$((TIMEOUT - 1))
+    done
+    if ! stream_session_env; then
+        echo "[sunshine] steambox-stream-session.env absent après 10s — refus de démarrer, s6 va relancer."
+        exit 1
+    fi
+    # DBUS_SESSION_BUS_ADDRESS vient du fichier (bus-stream) ; XDG_CURRENT_DESKTOP=KDE
+    # comme la session validée à la main le 24/11 ; KWIN_WAYLAND_NO_PERMISSION_CHECKS
+    # pour que KWin ne demande pas d'autorisation de capture à une appli sans écran.
+    KWIN_ENV=(
+        "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}"
+        XDG_CURRENT_DESKTOP=KDE
+        KWIN_WAYLAND_NO_PERMISSION_CHECKS=1
+    )
+fi
+
 # DualSense USB/IP (ds5-usbip, via le Sunshine de sunshine-ds) : activée par
 # défaut ; repli automatique sur uhid si vhci-hcd n'est pas monté en écriture.
 # Haptiques vers le client : LIBVIRTUALHID_DUALSENSE_HAPTICS_RTP=ip:port dans
@@ -93,4 +121,5 @@ done
 export LIBVIRTUALHID_DUALSENSE_USBIP="${LIBVIRTUALHID_DUALSENSE_USBIP:-1}"
 exec s6-setuidgid arcade \
     env HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" WAYLAND_DISPLAY=wayland-1 DISPLAY="$(stream_display)" \
+    "${KWIN_ENV[@]}" \
     sunshine /config/.config/sunshine/sunshine.conf "${CAPTURE[@]}"

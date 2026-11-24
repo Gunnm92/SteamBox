@@ -7,6 +7,14 @@
 # certains cas), donc lancer Steam sur le compositeur headless (wayland-1)
 # d'une manière compatible avec le flux vidéo propre à Steam Link.
 #
+# ÉTAT CONNU (24/11) : Steam Link MARCHE sous KWin (le compositeur de streaming
+# en DRM, phase 1 KWin) — essai validé à la main le 24/11 : Steam lancé sur le
+# bus de streaming (bus-stream, portail KDE) avec XDG_CURRENT_DESKTOP=KDE. Ce
+# script reproduit cette session quand stream_compositor vaut kwin (pas de
+# dbus-run-session : le bus est celui de KWin, publié dans
+# steambox-stream-session.env). Sous labwc, le comportement ci-dessous, daté du
+# 07/09, est inchangé. Le noir du 07/09 concernait le labwc headless.
+#
 # ÉTAT CONNU (07/09) : la connexion Steam Link, l'audio et le protocole de
 # stream fonctionnent (bitrate adaptatif, pas de perte de frames anormale —
 # confirmé en direct dans les logs Steam), mais le JEU s'affiche en écran
@@ -70,7 +78,14 @@ export XDG_RUNTIME_DIR
 . /usr/local/bin/scripts/steambox-env.sh
 DISPLAY="$(stream_display)"
 export DISPLAY
-export XDG_CURRENT_DESKTOP=XFCE
+# Bureau annoncé à Steam : KDE sous KWin de streaming (24/11, le portail KDE
+# répond sur le bus de streaming), XFCE sous labwc comme avant.
+COMPOSITOR="$(stream_compositor)"
+if [ "${COMPOSITOR}" = kwin ]; then
+    export XDG_CURRENT_DESKTOP=KDE
+else
+    export XDG_CURRENT_DESKTOP=XFCE
+fi
 
 PIDFILE="${XDG_RUNTIME_DIR}/steam-link-launch.pid"
 
@@ -82,5 +97,19 @@ if [ -f "${PIDFILE}" ] && kill -0 "$(cat "${PIDFILE}" 2>/dev/null)" 2>/dev/null;
     exit 0
 fi
 echo "$$" > "${PIDFILE}"
+
+# Sous KWin de streaming (24/11) : Steam part directement sur le bus de KWin.
+# dbus-run-session créerait un bus privé, sans le portail KDE ni la session
+# publiée par kwin-stream-session.sh. stream_session_env fixe
+# DBUS_SESSION_BUS_ADDRESS (bus-stream) ; refus franc si le fichier manque, pour
+# ne pas lancer Steam sur un bus périmé.
+if [ "${COMPOSITOR}" = kwin ]; then
+    if ! stream_session_env; then
+        echo "[steam-link] session KWin absente (steambox-stream-session.env) — relance après le démarrage du compositeur." >&2
+        exit 1
+    fi
+    export XDG_CURRENT_DESKTOP=KDE
+    exec steam -gamepadui
+fi
 
 exec dbus-run-session -- steam -gamepadui
