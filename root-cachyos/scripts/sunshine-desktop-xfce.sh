@@ -47,9 +47,21 @@ echo "$$" > "${PIDFILE}"
 mkdir -p "${HOME}/.config" "${HOME}/.local/share"
 cd "${HOME}" || exit 1
 
-# Sortie du labwc de Sunshine (22/11) : HDMI-A-1 quand il pilote le dongle
-# en DRM (capture KMS, HDR), HEADLESS-1 en headless.
-DESKTOP_OUTPUT=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {print $1; exit}')
+# Bureau XFCE : sous KWin (dongle), Sunshine passe XDG_CURRENT_DESKTOP=KDE à
+# ses applis (svc-sunshine/run) ; garcon cacherait alors les entrées
+# OnlyShowIn=XFCE (Paramètres XFCE). Ce script a son propre bus (dbus-run-session) :
+# on remet la valeur du bureau XFCE (24/11).
+export XDG_CURRENT_DESKTOP=XFCE
+
+# Sortie du compositeur de streaming (22/11) : HDMI-A-1 quand il pilote le
+# dongle en DRM (capture KMS, HDR), HEADLESS-1 en headless. Sous KWin (24/11),
+# wlr-randr ne fonctionne pas : le connecteur est lu dans le marqueur écrit par
+# svc-labwc-stream (steambox-stream-output).
+if [[ "$(stream_compositor)" == kwin ]]; then
+    DESKTOP_OUTPUT=$(cat "${XDG_RUNTIME_DIR}/steambox-stream-output" 2>/dev/null)
+else
+    DESKTOP_OUTPUT=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {print $1; exit}')
+fi
 export DESKTOP_OUTPUT="${DESKTOP_OUTPUT:-HEADLESS-1}"
 
 exec dbus-run-session -- bash -c '

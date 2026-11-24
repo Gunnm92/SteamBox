@@ -87,7 +87,11 @@ case "${WAYLAND_DISPLAY:-wayland-0}" in
     /*) ;;
     *) export WAYLAND_DISPLAY="${RUNTIME}/${WAYLAND_DISPLAY:-wayland-0}" ;;
 esac
-export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=${RUNTIME}/bus}"
+# Forcés (24/11) : lancé depuis Sunshine sous KWin, le script hériterait du bus
+# bus-stream et de XDG_CURRENT_DESKTOP=KDE, ceux d'un KWin arrêté pendant la
+# session gamescope. Valeurs d'avant la branche : bus du bureau, XFCE.
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus"
+export XDG_CURRENT_DESKTOP=XFCE
 
 # --stream (entrée Sunshine, 22/11) avec le dongle HDMI branché
 # (steambox-stream-output, voir svc-labwc-stream) : gamescope pilote seul

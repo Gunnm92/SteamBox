@@ -5,8 +5,8 @@
 #
 # Dongle HDMI branché (steambox-stream-output non vide, voir
 # svc-labwc-stream) : gamescope pilote seul la sortie en DRM, avec le HDR
-# (steam-gamescope-launch.sh --stream). start arrête le labwc de Sunshine
-# pour libérer la sortie — un seul maître DRM à la fois — et stop ferme
+# (steam-gamescope-launch.sh --stream). start arrête le compositeur de
+# streaming de Sunshine (KWin avec le dongle, 24/11 ; labwc avant) pour libérer la sortie — un seul maître DRM à la fois — et stop ferme
 # Steam et gamescope puis relance labwc pour les autres applis (Desktop,
 # EmulationStation, Big Picture). Sunshine capture la sortie en KMS dans les
 # deux cas, sans changer de méthode.
@@ -22,6 +22,12 @@
 set -uo pipefail
 
 RUNTIME="/run/user/$(id -u)"
+# Sous KWin (24/11), Sunshine passe à ses prep-cmd le bus bus-stream et
+# XDG_CURRENT_DESKTOP=KDE : or start arrête KWin, et Steam (portail KDE vers un
+# wayland-1 mort) ne doit rien en hériter. Valeurs d'avant la branche : bus du
+# bureau et XFCE (ENV du Dockerfile). Tout ce que lance cette session les reprend.
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus"
+export XDG_CURRENT_DESKTOP=XFCE
 SVC=/run/service/svc-labwc-stream
 CONNECTOR=$(cat "${RUNTIME}/steambox-stream-output" 2>/dev/null)
 
