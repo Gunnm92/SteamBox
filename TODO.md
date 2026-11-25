@@ -24,7 +24,7 @@ Petits chantiers à reprendre, à compléter au fur et à mesure.
 
 ## Outils
 
-- [ ] **Application de gestion des wsquashfs (vraie interface graphique)** — en développement dans le dépôt `wsquashfs-manager` (`/config/workspace/wsquashfs-manager`, depuis le 01/10 ; dernier ajout le 21/11 : retouches en place sans reconstruire l'image, sauvegardes versionnées). But : créer / modifier un ou plusieurs `.wsquashfs` (extraction, ajout de fichiers, repack), générer et éditer les `autorun.cmd` (`WINE=`, `HIDRAW`, `GAME_VERSION`…), à la place des scripts faits à la main — gérer les images est aujourd'hui beaucoup trop long. Application à part : le lanceur (`wsquashfs-launcher`) reste tel quel, il convient parfaitement. Spec : `docs/wsquashfs-manager.md` du dépôt wsquashfs-launcher (9ce861c), points à décider en section 7.
+- [x] **Application de gestion des wsquashfs (vraie interface graphique)** — terminée (validée le 25/11) : dépôt `wsquashfs-manager` (`/config/workspace/wsquashfs-manager`), conteneur `WS-manager`. Création / modification des `.wsquashfs`, édition des `autorun.cmd`, retouches en place et sauvegardes versionnées ; le lanceur (`wsquashfs-launcher`) reste tel quel. Spec : `docs/wsquashfs-manager.md` du dépôt wsquashfs-launcher.
 
 ## Déjà repérés
 
