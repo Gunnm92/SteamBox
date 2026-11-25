@@ -39,7 +39,12 @@ du flux de jeu :
   navigateur, et le pointeur est dessiné par le navigateur (un seul pointeur,
   sans latence). L'environnement de la session (`DISPLAY`, `WAYLAND_DISPLAY`,
   bus, `XAUTHORITY`) est publié dans `$XDG_RUNTIME_DIR/steambox-desktop-session.env`.
-  Sert à l'administration (fichiers, réglages, lancement manuel des apps).
+  Sert à l'administration (fichiers, réglages, lancement manuel des apps),
+  ou de stream web direct, **son compris** : Selkies capture le puits virtuel
+  `selkies` (créé par pipewire-pulse, sortie par défaut hors session
+  Moonlight). Le micro du navigateur est coupé (il changerait la sortie par
+  défaut et détournerait le son de Sunshine). Pendant une session Moonlight,
+  le son va à Sunshine et le navigateur n'en a pas.
 - **Session streaming** (`svc-kwin-stream`, socket `$XDG_RUNTIME_DIR/stream/wayland-stream`, `DISPLAY` noté dans `$XDG_RUNTIME_DIR/steambox-stream-display`, lu par Sunshine et `stream-exec.sh`) :
   **KWin** (`kwin_wayland --drm`) sur un **dongle HDMI factice** branché sur
   le GPU (détecté, ou `STREAM_OUTPUT`). **Le dongle est obligatoire** : sans

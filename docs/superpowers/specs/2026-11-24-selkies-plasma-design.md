@@ -59,3 +59,8 @@ Date : 24/11/2026. Remplace la phase 2 de
 - Bureau de Moonlight (« Desktop ») : plasmashell seul sur le KWin du
   streaming, à la place du trio XFCE.
 - Selkies installé en venv épinglé (`/opt/selkies`, `selkies==2.2.1`).
+- Son (25/11, d'abord coupé) : Selkies capture `selkies.monitor`, puits
+  virtuel créé par pipewire-pulse (`50-steambox-selkies.conf`), sortie par
+  défaut hors session Moonlight. Micro de Selkies coupé : c'est lui, pas la
+  capture, qui change la sortie par défaut du PipeWire partagé. Pendant une
+  session Moonlight, le son va au puits de Sunshine.

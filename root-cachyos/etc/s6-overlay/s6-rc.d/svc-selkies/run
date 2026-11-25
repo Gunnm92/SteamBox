@@ -50,8 +50,13 @@ fi
 # casse proton-cachyos et les jeux 32 bits) ; hérité par tout le bureau.
 ulimit -S -s 8192 2>/dev/null || true
 
-# Audio coupé (24/11) : Selkies ferait de son puits virtuel la sortie par
-# défaut du PipeWire partagé, et détournerait le son de Sunshine.
+# Son (25/11) : Selkies capture le moniteur du puits « selkies », créé par
+# pipewire-pulse (/etc/pipewire/pipewire-pulse.conf.d/50-steambox-selkies.conf)
+# et sortie par défaut hors session Moonlight. La capture ne change jamais la
+# sortie par défaut ; seul le micro de Selkies le fait (il basculerait tout
+# le PipeWire partagé sur son puits et détournerait le son de Sunshine) :
+# micro coupé. Pendant une session Moonlight, le son va au puits de Sunshine
+# et le navigateur n'en a pas.
 # env -u WAYLAND_DISPLAY/DISPLAY : hérités de l'ENV du Dockerfile, ils
 # feraient passer Selkies pour un client d'un autre compositeur.
 exec runuser -u arcade -- env -u WAYLAND_DISPLAY -u DISPLAY \
@@ -60,6 +65,7 @@ exec runuser -u arcade -- env -u WAYLAND_DISPLAY -u DISPLAY \
     SELKIES_ENABLE_HTTPS=true \
     SELKIES_HTTPS_CERT="${CERT_DIR}/cert.pem" SELKIES_HTTPS_KEY="${CERT_DIR}/key.pem" \
     SELKIES_ENABLE_CURSORS=true SELKIES_USE_BROWSER_CURSORS=true \
-    SELKIES_AUDIO_ENABLED=false \
+    SELKIES_AUDIO_ENABLED=true SELKIES_AUDIO_DEVICE_NAME=selkies.monitor \
+    SELKIES_MICROPHONE_ENABLED=false \
     "${AUTH[@]}" \
     /opt/selkies/bin/selkies

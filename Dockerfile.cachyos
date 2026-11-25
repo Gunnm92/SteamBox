@@ -1162,7 +1162,9 @@ RUN --mount=type=secret,id=github_token \
 # Selkies fait tourner son propre compositeur Wayland (pixelflux, encodage
 # NVENC, curseur envoyé au navigateur) ; Plasma s'y imbrique (svc-plasma).
 # Avec wayvnc sur un labwc headless, le pointeur était peint dans l'image ET
-# dessiné par le navigateur (deux pointeurs, essai du 24/11). Venv à part
+# dessiné par le navigateur (deux pointeurs, essai du 24/11). Son (25/11) :
+# capture du puits « selkies » de pipewire-pulse (root-cachyos/etc/pipewire),
+# micro coupé (svc-selkies/run). Venv à part
 # (pip, absent des dépôts Arch/CachyOS) ; versions épinglées : composant
 # d'infrastructure, la reproductibilité prime (comme s6-overlay).
 ARG SELKIES_VERSION=2.2.1
