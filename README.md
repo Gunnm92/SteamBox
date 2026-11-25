@@ -93,7 +93,7 @@ Définies dans `apps.json` (généré/migré par
 |---|---|
 | **Desktop** | Le bureau Plasma (`plasmashell`) sur le KWin de streaming — lancer Steam depuis le menu |
 | **Steam Big Picture** | `steam -gamepadui` directement sur le KWin de streaming/Xwayland (`steam-bigpicture-launch.sh`, jeux Wine en X11) |
-| **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope à la résolution du client (scaling FSR, changement de résolution in-game), avec son propre `XDG_RUNTIME_DIR` sans socket Wayland du bureau |
+| **Mode SteamOS (Gamescope)** | gamepadui niché dans gamescope à la résolution du client (scaling FSR, changement de résolution in-game), avec son propre `XDG_RUNTIME_DIR` sans socket Wayland du bureau. « Basculer vers le bureau » de Steam termine la session comme la fermeture de l'appli (Steam et gamescope fermés, KWin de streaming relancé) ; si Sunshine tombe pendant la session, il fait de même à son redémarrage |
 
 Chaque app applique la résolution du client à la connexion et revient à
 1920×1080 à la déconnexion. Jaquettes Moonlight dans le style de Wolf

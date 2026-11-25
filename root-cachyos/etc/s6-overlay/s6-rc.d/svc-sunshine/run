@@ -25,6 +25,20 @@ if [ ! -s "${XDG_RUNTIME_DIR}/steambox-stream-output" ]; then
     exec sleep infinity
 fi
 
+# Session Gamescope terminée sans son undo (25/11) : son prep-cmd start
+# arrête le KWin de streaming, son undo (stop) le relance. Si Sunshine meurt
+# pendant la session (vu le 25/11 : gamescope et Steam fermés, Sunshine
+# tombé à la réinitialisation de sa capture HDR), l'undo ne passe jamais :
+# KWin reste arrêté, et Sunshine bouclait ici sur « wayland-stream absent »,
+# Moonlight injoignable. Au démarrage de Sunshine, KWin arrêté = cet undo
+# manquant : on le joue (ferme Steam et gamescope s'il en reste — personne
+# n'y est plus connecté —, relance KWin), en arcade comme un prep-cmd.
+if [ "$(/command/s6-svstat -o up /run/service/svc-kwin-stream 2>/dev/null)" = false ]; then
+    echo "[sunshine] KWin de streaming arrêté sans session : fin de la session Gamescope (undo manqué), relance de KWin"
+    runuser -u arcade -- env HOME=/home/arcade \
+        /usr/local/bin/scripts/steam-gamescope-session.sh stop
+fi
+
 # Attend que le socket de KWin existe réellement (s6 déclare le service
 # "up" dès le fork du script) — Sunshine échouerait sa capture sinon.
 # Échec franc (audit M1, 05/09) : exit 1 et s6 relance, jamais de démarrage
