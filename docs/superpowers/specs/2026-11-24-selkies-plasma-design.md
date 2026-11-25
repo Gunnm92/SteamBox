@@ -51,7 +51,7 @@ Date : 24/11/2026. Remplace la phase 2 de
 - Plasma sur le bus de session principal (`/run/user/99/bus`, svc-dbus-session) :
   le streaming a déjà son bus (`bus-stream`).
 - Selkies sur le port **6080** (celui de noVNC), HTTPS auto-signé (certificat
-  créé au premier démarrage dans `/config/selkies/`), sans mot de passe par
+  créé au premier démarrage dans `/config/.config/selkies/`, `/config/selkies/` avant le 26/11), sans mot de passe par
   défaut ; `DESKTOP_PASSWORD` active l'authentification basique.
 - Disposition clavier : `KEYBOARD_LAYOUT`/`KEYBOARD_VARIANT` écrits dans
   `kxkbrc` à chaque démarrage (25/11 : abandonné — imposée au Plasma de

@@ -32,7 +32,7 @@ du flux de jeu :
 ```
 
 - **Bureau d'administration** (`svc-selkies` + `svc-plasma`) : Selkies sert le
-  bureau sur `https://<hôte>:6080` (certificat auto-signé à accepter une fois)
+  bureau sur `https://<hôte>:6080` (certificat auto-signé dans `~/.config/selkies`, à accepter une fois)
   et fait tourner son propre compositeur (`wayland-1`, encodage NVENC) ;
   **Plasma** s'y imbrique (`startplasma-wayland`, son KWin sur le premier `wayland-N` libre,
   Xwayland à la demande). Le bureau prend la taille de la fenêtre du

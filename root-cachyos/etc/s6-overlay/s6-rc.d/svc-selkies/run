@@ -23,10 +23,16 @@ if [ -e "${XDG_RUNTIME_DIR}/wayland-1" ]; then
     rm -f "${XDG_RUNTIME_DIR}/wayland-1" "${XDG_RUNTIME_DIR}/wayland-1.lock"
 fi
 
-# Certificat auto-signé créé au premier démarrage (persistant dans /config) :
-# HTTPS est requis par le navigateur pour le décodage vidéo (WebCodecs) et le
-# presse-papiers. À accepter une fois dans le navigateur.
-CERT_DIR=/config/selkies
+# Certificat auto-signé créé au premier démarrage (persistant dans le home,
+# ~/.config/selkies) : HTTPS est requis par le navigateur pour le décodage
+# vidéo (WebCodecs) et le presse-papiers. À accepter une fois dans le
+# navigateur. Ancien emplacement /config/selkies (24/11, à la racine du
+# home) : déplacé tel quel (26/11), le certificat déjà accepté reste valable.
+CERT_DIR=/config/.config/selkies
+if [ -d /config/selkies ] && [ ! -e "${CERT_DIR}" ]; then
+    mkdir -p /config/.config
+    mv /config/selkies "${CERT_DIR}"
+fi
 mkdir -p "${CERT_DIR}"
 if [ ! -s "${CERT_DIR}/cert.pem" ] || [ ! -s "${CERT_DIR}/key.pem" ]; then
     openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj /CN=SteamBox \
