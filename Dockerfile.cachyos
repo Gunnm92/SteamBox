@@ -993,18 +993,23 @@ RUN update-mime-database /usr/share/mime && \
 # 32 bits n'a aucun pilote d'affichage quand explorer.exe (64 bits) a pris
 # Wayland — "no driver could be loaded" (Virtua Tennis 4). Pas de lib32-sdl2 dans
 # multilib : manettes via le backend udev/hidraw de winebus dans ce cas.
+# Version (25/11) : WINE32_TAG épingle un tag ; vide = la release la plus
+# récente qui publie l'archive staging-tkg-amd64. Pas « releases/latest » :
+# Kron4ek publie aussi des releases Proton (proton-11.0-3) sans cette
+# archive, d'où un 404. Le motif exclut la variante -wow64.
 ARG WINE32_TAG=""
 RUN --mount=type=secret,id=github_token \
     GITHUB_TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true) && \
-    WINE32_VERSION=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} -X GET "https://api.github.com/repos/Kron4ek/Wine-Builds/releases/${WINE32_TAG:+tags/}${WINE32_TAG:-latest}" \
-      | grep -oE '"tag_name": *"[^"]*"' | cut -d'"' -f4) && \
-    [ -n "${WINE32_VERSION}" ] || { echo "FATAL: WINE32_VERSION vide"; exit 1; } && \
-    curl -fSL --retry 3 -o /tmp/wine32.tar.xz \
-      "https://github.com/Kron4ek/Wine-Builds/releases/download/${WINE32_VERSION}/wine-${WINE32_VERSION}-staging-tkg-amd64.tar.xz" && \
+    if [ -n "${WINE32_TAG}" ]; then API="releases/tags/${WINE32_TAG}"; else API="releases?per_page=30"; fi && \
+    WINE32_URL=$(curl -sL ${GITHUB_TOKEN:+-H "Authorization: Bearer ${GITHUB_TOKEN}"} "https://api.github.com/repos/Kron4ek/Wine-Builds/${API}" \
+      | grep -oE '"browser_download_url": *"[^"]*/wine-[^/"]*-staging-tkg-amd64\.tar\.xz"' | head -n1 | cut -d'"' -f4) && \
+    { [ -n "${WINE32_URL}" ] || { echo "FATAL: aucune archive staging-tkg-amd64 (WINE32_TAG=${WINE32_TAG:-vide})"; exit 1; }; } && \
+    echo "Wine 32 bits : ${WINE32_URL}" && \
+    curl -fSL --retry 3 -o /tmp/wine32.tar.xz "${WINE32_URL}" && \
     mkdir -p /opt/wine-tkg && \
     tar -xf /tmp/wine32.tar.xz -C /opt/wine-tkg --strip-components=1 && \
     rm -f /tmp/wine32.tar.xz && \
-    [ -d /opt/wine-tkg/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; } && \
+    { [ -d /opt/wine-tkg/lib/wine/i386-unix ] || { echo "FATAL: build Wine sans i386-unix"; exit 1; }; } && \
     /opt/wine-tkg/bin/wine --version && \
     ln -sf /opt/wine-tkg/bin/wine /usr/bin/wine
 # wine-staging (Arch) n'est plus installé : /usr/bin/wine pointe sur wine-tkg,

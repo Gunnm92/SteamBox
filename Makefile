@@ -68,6 +68,12 @@ endif
 ifneq ($(PREBUILT_TAG),)
 BUILD_ARGS   += --build-arg PREBUILT_TAG=$(PREBUILT_TAG)
 endif
+# Wine 32 bits (wine-tkg de Kron4ek/Wine-Builds) : vide = release la plus
+# récente qui publie l'archive staging-tkg-amd64 ; make push WINE32_TAG=11.20
+# pour en fixer une.
+ifneq ($(WINE32_TAG),)
+BUILD_ARGS   += --build-arg WINE32_TAG=$(WINE32_TAG)
+endif
 # Surcharges du build précompilé : ES_REF (branche/tag d'ES). Sunshine : voir
 # SUNSHINE_DS_TAG (release de Gunnm92/sunshine-ds).
 PREBUILT_ARGS = --build-arg BUILD_DATE="$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -181,4 +187,5 @@ help:
 	@echo "  GITHUB_TOKEN   (non defini si vide)"
 	@echo "  PREBUILT_REPO  $(PREBUILT_REPO)  (releases des composants precompiles)"
 	@echo "  PREBUILT_TAG   $(if $(PREBUILT_TAG),$(PREBUILT_TAG),(derniere release))"
+	@echo "  WINE32_TAG     $(if $(WINE32_TAG),$(WINE32_TAG),(derniere release staging-tkg))"
 	@echo "  ES_REF                      surcharge de make prebuilt ; SUNSHINE_DS_TAG : release sunshine-ds"
