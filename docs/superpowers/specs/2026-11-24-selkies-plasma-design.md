@@ -54,7 +54,9 @@ Date : 24/11/2026. Remplace la phase 2 de
   créé au premier démarrage dans `/config/selkies/`), sans mot de passe par
   défaut ; `DESKTOP_PASSWORD` active l'authentification basique.
 - Disposition clavier : `KEYBOARD_LAYOUT`/`KEYBOARD_VARIANT` écrits dans
-  `kxkbrc` à chaque démarrage. `VNC_MAC_ISO_KEYS` et le keycodes XKB
+  `kxkbrc` à chaque démarrage (25/11 : abandonné — imposée au Plasma de
+  Selkies, elle retraduisait les caractères du navigateur ; désormais
+  `XKB_DEFAULT_*` du seul KWin de streaming). `VNC_MAC_ISO_KEYS` et le keycodes XKB
   `steambox` (spécifiques à wayvnc) disparaissent.
 - Bureau de Moonlight (« Desktop ») : plasmashell seul sur le KWin du
   streaming, à la place du trio XFCE.

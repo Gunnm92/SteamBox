@@ -22,11 +22,12 @@ for _ in $(seq 1 60); do
 done
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 
-# Disposition clavier (KEYBOARD_LAYOUT/VARIANT) écrite à chaque démarrage
-# dans kxkbrc (write_kxkbrc, steambox-env.sh).
+# Pas de disposition clavier imposée à ce Plasma (25/11) : le navigateur
+# envoie déjà les caractères tapés. Ancienne disposition écrite par SteamBox
+# retirée une fois (clear_kxkbrc_layout, steambox-env.sh).
 # shellcheck source=steambox-env.sh
 . /usr/local/bin/scripts/steambox-env.sh
-write_kxkbrc
+clear_kxkbrc_layout
 
 # Verrouillage d'écran coupé (24/11, relecture) : kscreenlocker verrouille
 # après 5 min par défaut, et arcade n'a pas de mot de passe — le bureau

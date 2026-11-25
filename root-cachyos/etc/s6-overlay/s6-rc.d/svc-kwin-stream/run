@@ -59,9 +59,12 @@ fi
 s6-svperms -O arcade -E arcade . 2>/dev/null || true
 
 echo "[kwin-stream] sortie ${STREAM_CONNECTOR} pilotée en DRM par KWin (${STREAM_CARD}), capture KMS"
-# Disposition clavier de Moonlight (24/11, relecture) : kxkbrc écrit ici
-# aussi, ce KWin démarrant en parallèle du bureau Plasma.
-write_kxkbrc
+# Disposition clavier de Moonlight (25/11) : XKB_DEFAULT_LAYOUT/VARIANT
+# (exec plus bas), que KWin applique quand kxkbrc n'a pas de disposition.
+# Plus écrite dans kxkbrc : elle s'appliquait aussi au Plasma de Selkies.
+# Le nettoyage de l'ancienne valeur est fait par plasma-session.sh seul
+# (deux kwriteconfig6 en parallèle sur le même fichier s'écraseraient) ;
+# tant qu'elle reste, elle vaut KEYBOARD_LAYOUT/VARIANT, donc sans effet ici.
 printf '%s' kwin > "${XDG_RUNTIME_DIR}/steambox-stream-compositor"
 # dbus-daemon --fork se détache : s6-svc -d ne l'atteint pas, et chaque
 # relance en laissait un orphelin (environnement d'activation, portails
@@ -110,6 +113,7 @@ exec runuser -u arcade -- \
     env -u WAYLAND_DISPLAY -u DISPLAY HOME=/home/arcade XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus-stream" \
     XDG_CURRENT_DESKTOP=KDE XDG_SESSION_TYPE=wayland \
+    XKB_DEFAULT_LAYOUT="${KEYBOARD_LAYOUT:-us}" XKB_DEFAULT_VARIANT="${KEYBOARD_VARIANT:-}" \
     KWIN_WAYLAND_NO_PERMISSION_CHECKS=1 KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 \
     KWIN_DRM_DEVICES="${STREAM_CARD}" KWIN_FORCE_ASSUME_HDR_SUPPORT=1 \
     /usr/local/bin/scripts/kwin-launch.py --drm --xwayland --socket "${XDG_RUNTIME_DIR}/stream/wayland-stream" \

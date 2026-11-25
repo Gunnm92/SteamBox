@@ -9,7 +9,7 @@
 # GAMES_BIOS_DIR=/config/games/bios
 # GAMES_SAVES_DIR=/config/games/saves
 
-# ── Clavier (XKB) : bureau navigateur, clavier Moonlight ─────────────────────
+# ── Clavier (XKB) du clavier Moonlight (le bureau navigateur n'en a pas besoin)
 # KEYBOARD_LAYOUT=us
 # KEYBOARD_VARIANT=
 # Ex. AZERTY : KEYBOARD_LAYOUT=fr ; AZERTY Mac : + KEYBOARD_VARIANT=mac

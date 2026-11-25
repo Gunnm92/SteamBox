@@ -179,7 +179,7 @@ Précisions (24/11, KWin) :
   mupen64plus…).
 - **Frontends** : Steam gamepadui (jeux PC), Batocera EmulationStation (jeux rétro/arcade, entrée Moonlight « EmulationStation »).
 - **Bureau** : KDE Plasma (Dolphin avec miniatures et accès aux partages réseau `smb://`, Konsole, Kate, volume par plasma-pa, pavucontrol pour le volume par canal — dosage du surround des sorties Sunshine —, notifications de Plasma), thème GTK, icônes et curseur WhiteSur sombres pour les applis GTK (GTK 2/3/4 et libadwaita),
-  même disposition clavier partout (navigateur, Moonlight — `KEYBOARD_LAYOUT`/`KEYBOARD_VARIANT`, écrits dans `kxkbrc`).
+  disposition clavier : `KEYBOARD_LAYOUT`/`KEYBOARD_VARIANT` pour Moonlight (passés au KWin de streaming en `XKB_DEFAULT_LAYOUT`/`VARIANT`) ; le bureau navigateur n'en impose aucune, le navigateur envoyant déjà les caractères tapés (un choix fait dans les Paramètres de Plasma est gardé).
 - **Divers** : Steam ROM Manager, Flips, Google Chrome, AppManager (gestion des AppImage).
 
 ## Déploiement

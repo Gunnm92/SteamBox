@@ -14,9 +14,10 @@ ROMS_DIR="${GAMES_ROMS_DIR:-${GAMES_DIR}/roms}"
 BIOS_DIR="${GAMES_BIOS_DIR:-${GAMES_DIR}/bios}"
 SAVES_DIR="${GAMES_SAVES_DIR:-${GAMES_DIR}/saves}"
 
-# Clavier (XKB) : écrit dans ~/.config/kxkbrc à chaque démarrage du bureau
-# (plasma-session.sh), lu par les deux KWin (bureau Plasma et streaming,
-# même HOME). Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
+# Clavier (XKB) du KWin de streaming (Moonlight) seulement, passé en
+# XKB_DEFAULT_LAYOUT/VARIANT (svc-kwin-stream). Le bureau Plasma de Selkies
+# n'a pas de disposition imposée : le navigateur lui envoie déjà les
+# caractères tapés. Ex. fr + mac pour un AZERTY Mac, us + vide pour un QWERTY.
 KEYBOARD_LAYOUT="${KEYBOARD_LAYOUT:-us}"
 KEYBOARD_VARIANT="${KEYBOARD_VARIANT:-}"
 
@@ -134,16 +135,26 @@ stream_display() {
     echo "${d:-:1}"
 }
 
-# write_kxkbrc : écrit KEYBOARD_LAYOUT/VARIANT dans ~/.config/kxkbrc (24/11),
-# lu par les deux KWin (même HOME). Appelée par chacun avant de démarrer —
-# ils démarrent en parallèle, aucun ne doit dépendre de l'autre. En arcade
-# (runuser si root). Le modèle (Model) reste celui choisi dans les Paramètres.
-write_kxkbrc() {
+# clear_kxkbrc_layout (25/11) : retire une seule fois de ~/.config/kxkbrc la
+# disposition qu'écrivait write_kxkbrc (24/11) à chaque démarrage. Elle
+# s'appliquait aussi au Plasma de Selkies, qui reçoit déjà du navigateur les
+# caractères tapés : une seconde traduction (fr/mac par-dessus) donnait de
+# mauvaises touches, jusqu'à suppression de la disposition dans les
+# Paramètres, revenue au démarrage suivant. Retirée seulement si elle vaut
+# KEYBOARD_LAYOUT/VARIANT (un choix différent fait dans les Paramètres reste),
+# puis marqueur [SteamBox] LayoutCleared : plus jamais touchée ensuite. Sans
+# disposition dans kxkbrc, le KWin de streaming prend XKB_DEFAULT_*. En
+# arcade (runuser si root).
+clear_kxkbrc_layout() {
     local run=()
     [[ "$(id -u)" == 0 ]] && run=(runuser -u arcade -- env HOME=/home/arcade)
-    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key Use true
-    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key LayoutList "${KEYBOARD_LAYOUT:-us}"
-    "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key VariantList "${KEYBOARD_VARIANT:-}"
+    [[ "$("${run[@]}" kreadconfig6 --file kxkbrc --group SteamBox --key LayoutCleared)" == true ]] && return 0
+    if [[ "$("${run[@]}" kreadconfig6 --file kxkbrc --group Layout --key LayoutList)" == "${KEYBOARD_LAYOUT:-us}" &&
+          "$("${run[@]}" kreadconfig6 --file kxkbrc --group Layout --key VariantList)" == "${KEYBOARD_VARIANT:-}" ]]; then
+        "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key LayoutList --delete
+        "${run[@]}" kwriteconfig6 --file kxkbrc --group Layout --key VariantList --delete
+    fi
+    "${run[@]}" kwriteconfig6 --file kxkbrc --group SteamBox --key LayoutCleared true
 }
 
 # socket_live <chemin> : vrai si un socket Unix accepte une connexion

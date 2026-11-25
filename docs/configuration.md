@@ -36,7 +36,7 @@ facultatives :
 |---|---|---|
 | `GAMES_DIR` | `/config/games` | Ludothèque au format Batocera : `roms/<système>/`, `bios/`, `saves/` |
 | `GAMES_ROMS_DIR`, `GAMES_BIOS_DIR`, `GAMES_SAVES_DIR` | `$GAMES_DIR/…` | Chaque dossier séparément |
-| `KEYBOARD_LAYOUT`, `KEYBOARD_VARIANT` | `us`, vide | Disposition XKB (ex. `fr` + `mac`), écrite dans `kxkbrc` à chaque démarrage du bureau (Plasma et KWin de streaming) |
+| `KEYBOARD_LAYOUT`, `KEYBOARD_VARIANT` | `us`, vide | Disposition XKB du clavier Moonlight (ex. `fr` + `mac`), passée au KWin de streaming en `XKB_DEFAULT_LAYOUT`/`XKB_DEFAULT_VARIANT`. Rien n'est écrit dans `kxkbrc` : le bureau navigateur (Selkies) reçoit déjà les caractères tapés et n'a pas de disposition imposée |
 | `STREAM_OUTPUT` | `auto` | Sortie streamée par Sunshine : `auto` (première sortie branchée du GPU, ex. dongle HDMI → DRM + capture KMS + HDR), `headless` (aucune sortie : streaming désactivé), ou un connecteur (`HDMI-A-1`). Le dongle est obligatoire pour Moonlight/Remote Play |
 | `DESKTOP_PASSWORD` | vide | Mot de passe du bureau navigateur (Selkies, port 6080, identifiant `arcade`) ; vide = sans authentification |
 | `LANG`, `LANGUAGE` | `en_US.UTF-8` | Langue du bureau, d'EmulationStation et de Sunshine |
